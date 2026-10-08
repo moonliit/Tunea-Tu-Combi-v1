@@ -1,0 +1,22 @@
+# Compilation artifacts
+/build/
+/obj/
+/dep/
+
+# LSP/Tooling config files
+compile_commands.json
+.clangd/
+.cache/
+
+# Dev envs and local SDKs
+/emsdk/
+
+# OS and IDEs
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Keep assets folder even if its empty
+!/assets/.gitkeep
