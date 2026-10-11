@@ -11,7 +11,7 @@ native_dir   := build_dir + "/native"
 web_dir      := build_dir + "/web"
 
 # List library subdirectories here (space-separated)
-include_libs := "raylib raylib-cpp"
+include_libs := "raylib raylib-cpp box2d"
 
 # Expands include_libs into -I./include/raylib -I./include/raylib-cpp
 lib_flags    := if include_libs != "" { "-I./" + include_dir + "/" + replace(include_libs, " ", " -I./" + include_dir + "/") } else { "" }
@@ -23,10 +23,14 @@ cxx          := "g++"
 cxxflags     := "-std=c++23 -Wall -g -O0 " + incflags
 ldflags      := "-lraylib -lGL -lm -lpthread -ldl -lrt -lX11"
 
+# Native compilation settings
+box2d_native := "lib/native/libbox2d.a"
+
 # Web compilation settings
 emcxx        := "em++"
 emflags      := "-std=c++23 -Wall -O2 " + incflags
 raylib_wasm  := "lib/web/libraylib.web.a"
+box2d_web    := "lib/web/"
 emlink       := "-s USE_GLFW=3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -s FORCE_FILESYSTEM=1"
 
 # Default target
@@ -38,8 +42,8 @@ _prepare:
 
 # Direct native build step
 build: _prepare
-	@echo "Building {{appname}} (native)..."
-	@find {{src_dir}} -name '*.cpp' | xargs {{cxx}} {{cxxflags}} {{ldflags}} -o {{native_dir}}/{{appname}}
+    @echo "Building {{appname}} (native)..."
+    {{cxx}} {{cxxflags}} `find {{src_dir}} -name '*.cpp'` {{box2d_native}} {{ldflags}} -o {{native_dir}}/{{appname}}
 
 # Builds and runs the native binary
 run: build

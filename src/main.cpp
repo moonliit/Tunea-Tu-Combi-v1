@@ -2,6 +2,7 @@
 #include "raylib.h"
 #include <memory>
 #include <iostream>
+#include <raylib.h>
 
 Vector2 Vector2DToRaylib(Vector2D v) {
     return Vector2{ static_cast<float>(v.x), static_cast<float>(v.y) };
@@ -22,19 +23,25 @@ int main() {
     // Floor (Static Box)
     Vector2D floorPos = {400.0f, 520.0f};
     Vector2D floorSize = {700.0f, 40.0f};
-    auto floor = physics->CreateBox(floorPos, 0, floorSize, 0.0f, BodyType::Static);
+    float floorAngle = 5 * DEG2RAD;
+    auto floor = physics->CreateBox(floorPos, floorAngle, floorSize, 0.0f, BodyType::Static);
 
     // Falling Box (Dynamic Box)
-    Vector2D boxSize = {50.0f, 50.0f};
-    auto box = physics->CreateBox(Vector2D{350.0f, 150.0f}, 45, boxSize, 1.0f, BodyType::Dynamic);
+    Vector2D boxSize = {150.0f, 50.0f};
+    float angle = 0 * DEG2RAD;
+    auto box = physics->CreateBox(Vector2D{350.0f, 150.0f}, angle, boxSize, 1.0f, BodyType::Dynamic);
 
     // Rolling Wheel (Dynamic Circle)
-    float wheelRadius = 15.0f;
-    auto wheel = physics->CreateCircle(Vector2D{450.0f, 200.0f}, wheelRadius, 1.0f, BodyType::Dynamic);
+    float wheelRadius = 20.0f;
+    auto wheel = physics->CreateCircle(Vector2D{300.0f, 210.0f}, wheelRadius, 1.0f, BodyType::Dynamic);
+
+    float wheelRadius2 = 20.0f;
+    auto wheel2 = physics->CreateCircle(Vector2D{400.0f, 210.0f}, wheelRadius2, 1.0f, BodyType::Dynamic);
 
     // Optional: Joint linking the box and the wheel together to test constraints
     // (Anchor point halfway between them)
-    auto joint = physics->CreateRevoluteJoint(box, wheel, Vector2D{400.0f, 150.0f});
+    auto joint1 = physics->CreateRevoluteJoint(box, wheel, wheel->GetPosition());
+    auto joint2 = physics->CreateRevoluteJoint(box, wheel2, wheel2->GetPosition());
 
     // 4. Main Game Loop
     while (!WindowShouldClose()) {
@@ -46,6 +53,7 @@ int main() {
         // Fetch current synced positions from physics engine
         Vector2D boxPos   = box->GetPosition();
         Vector2D wheelPos = wheel->GetPosition();
+        Vector2D wheelPos2 = wheel2->GetPosition();
         Vector2D fPos     = floor->GetPosition();
         Vector2D fSize    = floor->GetSize();
 
@@ -57,11 +65,18 @@ int main() {
         DrawText("Testing Box2D-Lite Adapter: Boxes, Circles & Joints", 20, 20, 20, DARKGRAY);
 
         // Draw Floor
-        DrawRectangle(
-            static_cast<int>(fPos.x - fSize.x / 2.0f),
-            static_cast<int>(fPos.y - fSize.y / 2.0f),
-            static_cast<int>(fSize.x),
-            static_cast<int>(fSize.y),
+        DrawRectanglePro(
+            Rectangle {
+                static_cast<float>(fPos.x),
+                static_cast<float>(fPos.y),
+                static_cast<float>(fSize.x),
+                static_cast<float>(fSize.y),
+            },
+            Vector2 {
+                static_cast<float>(fSize.x/2),
+                static_cast<float>(fSize.y/2),
+            },
+            floor->GetRotation() * RAD2DEG,
             DARKGRAY
         );
 
@@ -77,7 +92,7 @@ int main() {
                 static_cast<float>(boxSize.x/2),
                 static_cast<float>(boxSize.y/2),
             },
-            box->GetRotation(),
+            box->GetRotation() * RAD2DEG,
             BLUE
         );
 
@@ -89,10 +104,23 @@ int main() {
             RED
         );
 
+        DrawCircle(
+            static_cast<int>(wheelPos2.x),
+            static_cast<int>(wheelPos2.y),
+            wheelRadius2,
+            RED
+        );
+
         // Draw line representing the joint anchor connection
         DrawLineV(
             Vector2DToRaylib(boxPos), // helper or direct conversion
             Vector2DToRaylib(wheelPos),
+            GREEN
+        );
+
+        DrawLineV(
+            Vector2DToRaylib(boxPos), // helper or direct conversion
+            Vector2DToRaylib(wheelPos2),
             GREEN
         );
 

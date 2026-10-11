@@ -1,87 +1,134 @@
 #include "physics/Box2DPhysics.hpp"
-#include <box2d-lite/World.h>
-#include <box2d-lite/Joint.h>
-#include <box2d-lite/Body.h>
-#include <cfloat>
+#include "id.h"
+#include <box2d/box2d.h>
+#include <box2d/types.h>
 
 // --- RigidBody Implementation ---
-Box2DRigidBody::Box2DRigidBody(Body* body, Vector2D size)
-    : m_body(body), m_isCircle(false), m_size(size), m_radius(0.0f) {}
+Box2DRigidBody::Box2DRigidBody(b2BodyId bodyId, Vector2D size)
+    : m_bodyId(bodyId), m_isCircle(false), m_size(size), m_radius(0.0f) {}
 
-Box2DRigidBody::Box2DRigidBody(Body* body, float radius)
-    : m_body(body), m_isCircle(true), m_size{radius * 2.0f, radius * 2.0f}, m_radius(radius) {}
+Box2DRigidBody::Box2DRigidBody(b2BodyId bodyId, float radius)
+    : m_bodyId(bodyId), m_isCircle(true), m_size{radius * 2.0f, radius * 2.0f}, m_radius(radius) {}
 
 Vector2D Box2DRigidBody::GetPosition() const {
-    // Assuming box2d-lite body stores position as a Vec2 (position.x, position.y)
-    return Vector2D{ m_body->position.x, m_body->position.y };
+    b2Vec2 pos = b2Body_GetPosition(m_bodyId);
+    return Vector2D{ pos.x, pos.y };
 }
 
 float Box2DRigidBody::GetRotation() const {
-    return m_body->rotation; // Assuming angle/rotation field
+    // Box2D 3.x returns rotation as a b2Rot (cosine/sine pair), get angle in radians via b2Rot_GetAngle or b2Rot
+    b2Rot rot = b2Body_GetRotation(m_bodyId);
+    return b2Rot_GetAngle(rot);
 }
 
 // --- Joint Implementation ---
-Box2DJoint::Box2DJoint(Joint* joint) : m_joint(joint) {}
+Box2DJoint::Box2DJoint(b2JointId jointId) : m_jointId(jointId) {}
 
 // --- World Implementation ---
-Box2DWorld::Box2DWorld(Vector2D gravity, int iterations)
-    : m_world(new World(Vec2(gravity.x, gravity.y), iterations)) {}
+Box2DWorld::Box2DWorld(Vector2D gravity, int subStepCount) {
+    b2WorldDef worldDef = b2DefaultWorldDef();
+    worldDef.gravity = {
+        static_cast<float>(gravity.x),
+        static_cast<float>(gravity.y)
+    };
+    m_worldId = b2CreateWorld(&worldDef);
+}
 
 Box2DWorld::~Box2DWorld() {
-    if (m_world) delete m_world;
+    if (B2_IS_NON_NULL(m_worldId)) {
+        b2DestroyWorld(m_worldId); // Destroys all bodies, shapes, and joints automatically
+    }
 }
 
 void Box2DWorld::Step(float deltaTime) {
-    m_world->Step(deltaTime);
+    // Box2D v3 uses subStepCount instead of velocity/position iteration counts
+    float timeStep = deltaTime > 0.0f ? deltaTime : (1.0f / 60.0f);
+    b2World_Step(m_worldId, timeStep, 4);
 }
 
 std::shared_ptr<IRigidBody> Box2DWorld::CreateBox(Vector2D position, float rotation, Vector2D size, float mass, BodyType type) {
-    auto* body = new Body();
+    b2BodyDef bodyDef = b2DefaultBodyDef();
+    bodyDef.type = (type == BodyType::Static) ? b2_staticBody : b2_dynamicBody;
+    bodyDef.position = {
+        static_cast<float>(position.x),
+        static_cast<float>(position.y)
+    };
+    bodyDef.rotation = b2MakeRot(rotation);
 
+    b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
+
+    // Box2D 3.x shape definitions
+    b2Polygon boxPolygon = b2MakeBox(size.x / 2.0f, size.y / 2.0f);
+
+    b2ShapeDef shapeDef = b2DefaultShapeDef();
     if (type == BodyType::Static) {
-        body->Set(Vec2(size.x, size.y), FLT_MAX);
-        body->position.Set(position.x, position.y);
-        body->rotation = rotation;
+        shapeDef.density = 0.0f;
     } else {
-        body->Set(Vec2(size.x, size.y), mass);
-        body->position.Set(position.x, position.y);
-        body->rotation = rotation;
+        shapeDef.density = (mass > 0.0f) ? mass / (size.x * size.y) : 1.0f;
     }
+    // shapeDef.friction = 0.3f;
 
-    m_world->Add(body);
-    return std::make_shared<Box2DRigidBody>(body, size);
+    b2CreatePolygonShape(bodyId, &shapeDef, &boxPolygon);
+
+    return std::make_shared<Box2DRigidBody>(bodyId, size);
 }
 
 std::shared_ptr<IRigidBody> Box2DWorld::CreateCircle(Vector2D position, float radius, float mass, BodyType type) {
-    auto* body = new Body();
+    b2BodyDef bodyDef = b2DefaultBodyDef();
+    bodyDef.type = (type == BodyType::Static) ? b2_staticBody : b2_dynamicBody;
+    bodyDef.position = {
+        static_cast<float>(position.x),
+        static_cast<float>(position.y)
+    };
 
-    // In box2d-lite, circles are often instantiated by passing width/height equal to diameter,
-    // or via a shape flag depending on the fork. Adjust if your fork has a dedicated circle Set method.
-    float diameter = radius * 2.0f;
+    b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
+
+    b2Circle circle;
+    circle.radius = radius;
+    circle.center = {0.0f, 0.0f};
+
+    b2ShapeDef shapeDef = b2DefaultShapeDef();
     if (type == BodyType::Static) {
-        body->Set(Vec2(diameter, diameter), FLT_MAX);
+        shapeDef.density = 0.0f;
     } else {
-        body->Set(Vec2(diameter, diameter), mass);
+        float area = B2_PI * radius * radius;
+        shapeDef.density = (mass > 0.0f) ? mass / area : 1.0f;
     }
-    body->position.Set(position.x, position.y);
+    // shapeDef.friction = 0.3f;
 
-    m_world->Add(body);
-    return std::make_shared<Box2DRigidBody>(body, radius);
+    b2CreateCircleShape(bodyId, &shapeDef, &circle);
+
+    return std::make_shared<Box2DRigidBody>(bodyId, radius);
 }
 
 std::shared_ptr<IJoint> Box2DWorld::CreateRevoluteJoint(
     std::shared_ptr<IRigidBody> bodyA,
     std::shared_ptr<IRigidBody> bodyB,
-    Vector2D worldAnchor
+    Vector2D anchor
 ) {
     auto bA = std::dynamic_pointer_cast<Box2DRigidBody>(bodyA);
     auto bB = std::dynamic_pointer_cast<Box2DRigidBody>(bodyB);
 
     if (!bA || !bB) return nullptr;
 
-    auto* joint = new Joint();
-    joint->Set(bA->GetInternalBody(), bB->GetInternalBody(), Vec2(worldAnchor.x, worldAnchor.y));
+    b2BodyId idA = bA->GetInternalId();
+    b2BodyId idB = bB->GetInternalId();
 
-    m_world->Add(joint); // Assuming m_world has an Add(Joint*) method in your box2d-lite version
-    return std::make_shared<Box2DJoint>(joint);
+    b2RevoluteJointDef jointDef = b2DefaultRevoluteJointDef();
+    jointDef.base.bodyIdA = idA;
+    jointDef.base.bodyIdB = idB;
+
+    // In v3, you can define local anchors or use helper initializations depending on world anchor translation
+    // Here we define the world anchor point directly:
+    b2Vec2 worldAnchor = {
+        static_cast<float>(anchor.x),
+        static_cast<float>(anchor.y)
+    };
+    jointDef.base.localFrameA.p = b2Body_GetLocalPoint(idA, worldAnchor);
+    jointDef.base.localFrameB.p = b2Body_GetLocalPoint(idB, worldAnchor);
+
+    jointDef.base.collideConnected = false;
+
+    b2JointId jointId = b2CreateRevoluteJoint(m_worldId, &jointDef);
+    return std::make_shared<Box2DJoint>(jointId);
 }

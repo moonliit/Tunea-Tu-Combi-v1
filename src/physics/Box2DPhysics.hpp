@@ -2,47 +2,42 @@
 #define BOX2D_PHYSICS_HPP
 
 #include "IPhysics.hpp"
+#include <box2d/box2d.h>
 
-class Body;
-class Joint;
-class World;
-
-// Concrete body wrapper for box2d-lite
 class Box2DRigidBody : public IRigidBody {
 private:
-    Body* m_body = nullptr; // Pointer to underlying box2d-lite body
+    b2BodyId m_bodyId;
     bool m_isCircle;
     Vector2D m_size;
     float m_radius;
 
 public:
-    explicit Box2DRigidBody(Body* body, Vector2D size);
-    explicit Box2DRigidBody(Body* body, float radius);
+    explicit Box2DRigidBody(b2BodyId bodyId, Vector2D size);
+    explicit Box2DRigidBody(b2BodyId bodyId, float radius);
 
     Vector2D GetPosition() const override;
     float GetRotation() const override;
     Vector2D GetSize() const override { return m_size; }
     float GetRadius() const override { return m_radius; }
 
-    Body* GetInternalBody() const { return m_body; }
+    b2BodyId GetInternalId() const { return m_bodyId; }
 };
 
 class Box2DJoint : public IJoint {
 private:
-    Joint* m_joint;
+    b2JointId m_jointId;
 public:
-    explicit Box2DJoint(Joint* joint);
-    Joint* GetInternalJoint() const { return m_joint; }
+    explicit Box2DJoint(b2JointId jointId);
+    b2JointId GetInternalId() const { return m_jointId; }
 };
 
-// Concrete world wrapper for box2d-lite
 class Box2DWorld : public IPhysicsWorld {
 private:
-    World* m_world = nullptr;
+    b2WorldId m_worldId;
 
 public:
-    explicit Box2DWorld(Vector2D gravity, int iterations = 10);
-    ~Box2DWorld();
+    explicit Box2DWorld(Vector2D gravity, int subStepCount = 4);
+    ~Box2DWorld() override;
     void Step(float deltaTime) override;
 
     std::shared_ptr<IRigidBody> CreateBox(Vector2D position, float rotation, Vector2D size, float mass, BodyType type) override;
