@@ -1,54 +1,104 @@
-#include "physics/Box2DPhysics.hpp"
-#include "physics/IPhysics.hpp"
-#include <raylib-cpp/raylib-cpp.hpp>
+#include "physics/Box2DPhysics.hpp" // Or whatever your header is named
+#include "raylib.h"
+#include <memory>
+#include <iostream>
+
+Vector2 Vector2DToRaylib(Vector2D v) {
+    return Vector2{ static_cast<float>(v.x), static_cast<float>(v.y) };
+}
 
 int main() {
-    // 1. Initialize Raylib window
-    raylib::Window window(800, 600, "Raylib + Adapter Physics");
+    // 1. Initialize Raylib Window
+    const int screenWidth = 800;
+    const int screenHeight = 600;
+    InitWindow(screenWidth, screenHeight, "Box2D-Lite Adapter Test - C++23");
     SetTargetFPS(60);
 
-    // 2. Initialize Physics via Interface
-    double gravity = 9.8f * 40;
+    // 2. Initialize Physics World via Interface (Gravity pulling down)
+    float gravity = 9.8f * 35;
     std::unique_ptr<IPhysicsWorld> physics = std::make_unique<Box2DWorld>(Vector2D{0.0f, gravity});
 
-    // 3. Keep references to both bodies
-    Vector2D floorPos = {400.0f, 550.0f};
-    Vector2D floorSize = {600.0f, 40.0f};
-    auto floor = physics->CreateBox(floorPos, floorSize, 1.0f, BodyType::Static);
+    // 3. Create Scene Elements
+    // Floor (Static Box)
+    Vector2D floorPos = {400.0f, 520.0f};
+    Vector2D floorSize = {700.0f, 40.0f};
+    auto floor = physics->CreateBox(floorPos, 0, floorSize, 0.0f, BodyType::Static);
 
+    // Falling Box (Dynamic Box)
     Vector2D boxSize = {50.0f, 50.0f};
-    auto box   = physics->CreateBox(Vector2D{400.0f, 100.0f}, boxSize, 1.0f, BodyType::Dynamic);
+    auto box = physics->CreateBox(Vector2D{350.0f, 150.0f}, 45, boxSize, 1.0f, BodyType::Dynamic);
 
-    // 4. Game Loop
-    while (!window.ShouldClose()) {
-        // Step physics simulation
-        physics->Step(GetFrameTime());
+    // Rolling Wheel (Dynamic Circle)
+    float wheelRadius = 15.0f;
+    auto wheel = physics->CreateCircle(Vector2D{450.0f, 200.0f}, wheelRadius, 1.0f, BodyType::Dynamic);
 
-        // Get live positions from the physics engine
-        Vector2D currentBoxPos   = box->GetPosition();
-        Vector2D currentFloorPos = floor->GetPosition();
-        Vector2D currentFloorSize = floor->GetSize();
+    // Optional: Joint linking the box and the wheel together to test constraints
+    // (Anchor point halfway between them)
+    auto joint = physics->CreateRevoluteJoint(box, wheel, Vector2D{400.0f, 150.0f});
 
-        // Render with Raylib
+    // 4. Main Game Loop
+    while (!WindowShouldClose()) {
+        // Step physics simulation using fixed or frame time (capped safely)
+        float dt = GetFrameTime();
+        if (dt > 0.033f) dt = 0.033f; // Cap max delta time
+        physics->Step(dt);
+
+        // Fetch current synced positions from physics engine
+        Vector2D boxPos   = box->GetPosition();
+        Vector2D wheelPos = wheel->GetPosition();
+        Vector2D fPos     = floor->GetPosition();
+        Vector2D fSize    = floor->GetSize();
+
+        // --- Render ---
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
-        // Draw falling box (centered offset)
+        // Draw instructions
+        DrawText("Testing Box2D-Lite Adapter: Boxes, Circles & Joints", 20, 20, 20, DARKGRAY);
+
+        // Draw Floor
         DrawRectangle(
-            (int)(currentBoxPos.x - boxSize.x / 2.0f),
-            (int)(currentBoxPos.y - boxSize.y / 2.0f),
-            (int)boxSize.x, (int)boxSize.y, BLUE
+            static_cast<int>(fPos.x - fSize.x / 2.0f),
+            static_cast<int>(fPos.y - fSize.y / 2.0f),
+            static_cast<int>(fSize.x),
+            static_cast<int>(fSize.y),
+            DARKGRAY
         );
 
-        // Draw floor (centered offset, perfectly aligned with physics engine)
-        DrawRectangle(
-            (int)(currentFloorPos.x - currentFloorSize.x / 2.0f),
-            (int)(currentFloorPos.y - currentFloorSize.y / 2.0f),
-            (int)currentFloorSize.x, (int)currentFloorSize.y, DARKGRAY
+        // Draw Dynamic Box
+        DrawRectanglePro(
+            Rectangle {
+                static_cast<float>(boxPos.x),
+                static_cast<float>(boxPos.y),
+                static_cast<float>(boxSize.x),
+                static_cast<float>(boxSize.y),
+            },
+            Vector2 {
+                static_cast<float>(boxSize.x/2),
+                static_cast<float>(boxSize.y/2),
+            },
+            box->GetRotation(),
+            BLUE
+        );
+
+        // Draw Dynamic Circle (Wheel)
+        DrawCircle(
+            static_cast<int>(wheelPos.x),
+            static_cast<int>(wheelPos.y),
+            wheelRadius,
+            RED
+        );
+
+        // Draw line representing the joint anchor connection
+        DrawLineV(
+            Vector2DToRaylib(boxPos), // helper or direct conversion
+            Vector2DToRaylib(wheelPos),
+            GREEN
         );
 
         EndDrawing();
     }
 
+    CloseWindow();
     return 0;
 }
