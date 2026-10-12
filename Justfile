@@ -30,7 +30,7 @@ box2d_native := "lib/native/libbox2d.a"
 emcxx        := "em++"
 emflags      := "-std=c++23 -Wall -O2 " + incflags
 raylib_wasm  := "lib/web/libraylib.web.a"
-box2d_web    := "lib/web/"
+box2d_web    := "lib/web/libbox2d.web.a"
 emlink       := "-s USE_GLFW=3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -s FORCE_FILESYSTEM=1"
 
 # Default target
@@ -42,8 +42,8 @@ _prepare:
 
 # Direct native build step
 build: _prepare
-    @echo "Building {{appname}} (native)..."
-    {{cxx}} {{cxxflags}} `find {{src_dir}} -name '*.cpp'` {{box2d_native}} {{ldflags}} -o {{native_dir}}/{{appname}}
+	@echo "Building {{appname}} (native)..."
+	{{cxx}} {{cxxflags}} `find {{src_dir}} -name '*.cpp'` {{box2d_native}} {{ldflags}} -o {{native_dir}}/{{appname}}
 
 # Builds and runs the native binary
 run: build
@@ -58,7 +58,7 @@ compdb: _prepare
 # Builds for WebAssembly via Emscripten into build/web/
 web: _prepare
 	@echo "Building {{appname}} for WebAssembly..."
-	{{emcxx}} {{emflags}} `find {{src_dir}} -name '*.cpp'` {{raylib_wasm}} -o {{web_dir}}/{{appname}}.html {{emlink}} \
+	{{emcxx}} {{emflags}} `find {{src_dir}} -name '*.cpp'` {{box2d_web}} {{raylib_wasm}} -o {{web_dir}}/{{appname}}.html {{emlink}} \
 		$( [ -n "$$(ls -A {{assets_dir}} 2>/dev/null)" ] && echo "--preload-file {{assets_dir}}" )
 
 # Builds and serves to web via emrun on http://localhost:6931

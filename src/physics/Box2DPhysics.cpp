@@ -66,7 +66,7 @@ std::shared_ptr<IRigidBody> Box2DWorld::CreateBox(Vector2D position, float rotat
     } else {
         shapeDef.density = (mass > 0.0f) ? mass / (size.x * size.y) : 1.0f;
     }
-    // shapeDef.friction = 0.3f;
+    shapeDef.material.friction = 0.6f;
 
     b2CreatePolygonShape(bodyId, &shapeDef, &boxPolygon);
 
@@ -81,6 +81,12 @@ std::shared_ptr<IRigidBody> Box2DWorld::CreateCircle(Vector2D position, float ra
         static_cast<float>(position.y)
     };
 
+    // Add damping to simulate air resistance and rolling energy loss
+    if (type != BodyType::Static) {
+        bodyDef.angularDamping = 0.5f; // Adjust this value (e.g., 0.1 to 2.0) to control how fast it stops rolling
+        bodyDef.linearDamping = 0.1f;   // Optional: adds slight air drag
+    }
+
     b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
 
     b2Circle circle;
@@ -94,7 +100,7 @@ std::shared_ptr<IRigidBody> Box2DWorld::CreateCircle(Vector2D position, float ra
         float area = B2_PI * radius * radius;
         shapeDef.density = (mass > 0.0f) ? mass / area : 1.0f;
     }
-    // shapeDef.friction = 0.3f;
+    shapeDef.material.friction = 0.6f;
 
     b2CreateCircleShape(bodyId, &shapeDef, &circle);
 
