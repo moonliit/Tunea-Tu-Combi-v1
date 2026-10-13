@@ -2,6 +2,7 @@
 #define I_PHYSICS_HPP
 
 #include "common/types.hpp"
+#include <vector>
 #include <memory>
 
 enum class BodyType {
@@ -30,10 +31,15 @@ class IPhysicsWorld {
 public:
     virtual ~IPhysicsWorld() = default;
     virtual void Step(float deltaTime) = 0;
+
+    // rigidbody creation
     virtual std::shared_ptr<IRigidBody> CreateBox(Vector2D position, float rotation, Vector2D size, float mass, BodyType type) = 0;
     virtual std::shared_ptr<IRigidBody> CreateCircle(Vector2D position, float radius, float mass, BodyType type) = 0;
 
-    // joints (to connect chasis and wheels)
+    // terrain generation (polylines)
+    virtual std::vector<Vector2D> CreateTerrainChain(const std::vector<Vector2D>& controlPoints, int resolutionPerSegment) = 0;
+
+    // joints creation (to connect chasis and wheels)
     virtual std::shared_ptr<IJoint> CreateRevoluteJoint(
         std::shared_ptr<IRigidBody> bodyA,
         std::shared_ptr<IRigidBody> bodyB,

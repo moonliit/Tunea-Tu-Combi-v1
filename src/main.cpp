@@ -1,5 +1,6 @@
 #include <raylib-cpp/raylib-cpp.hpp>
 #include <box2d/box2d.h>
+#include "Color.hpp"
 #include "physics/Box2DPhysics.hpp"
 
 // Helper to convert adapter Vector2D to raylib-cpp Vector2
@@ -19,11 +20,21 @@ int main() {
     std::unique_ptr<IPhysicsWorld> physics = std::make_unique<Box2DWorld>(Vector2D{0.0f, gravity});
 
     // 3. Create Scene Elements
-    // Floor (Static Box)
-    Vector2D floorPos = {400.0f, 520.0f};
-    Vector2D floorSize = {700.0f, 40.0f};
-    float floorAngle = -5 * DEG2RAD;
-    auto floor = physics->CreateBox(floorPos, floorAngle, floorSize, 0.0f, BodyType::Static);
+    // Smooth terrain based on control points
+    std::vector<Vector2D> terrainPoints = {
+        {0.0f, 250.0f},
+        {50.0f, 450.0f},
+        {250.0f, 480.0f},
+        {450.0f, 400.0f},
+        {650.0f, 520.0f},
+        {750.0f, 520.0f},
+        {850.0f, 450.0f},
+        {950.0f, 480.0f},
+        {1050.0f, 400.0f},
+        {1250.0f, 520.0f},
+        {1500.0f, 520.0f},
+    };
+    std::vector<Vector2D> terrainVertices = physics->CreateTerrainChain(terrainPoints, 15); // 15 subdivisiones por tramo para máxima suavidad
 
     // Falling Box (Dynamic Box)
     Vector2D boxSize = {150.0f, 50.0f};
@@ -51,9 +62,7 @@ int main() {
             auto boxConcrete = std::dynamic_pointer_cast<Box2DRigidBody>(box);
             if (boxConcrete) {
                 float mag = 300;
-                float yVal = mag * sin(floorAngle);
-                float xVal = mag * cos(floorAngle);
-                b2Body_ApplyLinearImpulseToCenter(boxConcrete->GetInternalId(), b2Vec2{xVal, yVal}, true);
+                b2Body_ApplyLinearImpulseToCenter(boxConcrete->GetInternalId(), b2Vec2{mag, 0}, true);
             }
         }
 
@@ -63,23 +72,28 @@ int main() {
         Vector2D boxPos   = box->GetPosition();
         Vector2D wheelPos = wheel->GetPosition();
         Vector2D wheelPos2 = wheel2->GetPosition();
-        Vector2D fPos     = floor->GetPosition();
-        Vector2D fSize    = floor->GetSize();
 
         // --- Render ---
         window.BeginDrawing();
         window.ClearBackground(raylib::Color::RayWhite());
 
         // Draw instructions
-        raylib::DrawText("Testing Box2D Adapter with raylib-cpp", 20, 20, 20, DARKGRAY);
-
-        // Draw Floor using raylib-cpp Rectangle class
-        raylib::Rectangle floorRect(static_cast<float>(fPos.x), static_cast<float>(fPos.y), static_cast<float>(fSize.x), static_cast<float>(fSize.y));
-        floorRect.Draw(
-            raylib::Vector2(static_cast<float>(fSize.x / 2), static_cast<float>(fSize.y / 2)),
-            floor->GetRotation() * RAD2DEG,
+        raylib::DrawText(
+            "Testing Box2D Adapter with raylib-cpp",
+            20,
+            20,
+            20,
             raylib::Color::DarkGray()
         );
+
+        // Draw smooth terrain on screen
+        for (size_t i = 0; i < terrainVertices.size() - 1; ++i) {
+            ToRaylib(terrainVertices[i]).DrawLine(
+                ToRaylib(terrainVertices[i + 1]),
+                4.0f,
+                raylib::Color::DarkGray()
+            );
+        }
 
         // Draw Dynamic Box
         raylib::Rectangle boxRect(static_cast<float>(boxPos.x), static_cast<float>(boxPos.y), static_cast<float>(boxSize.x), static_cast<float>(boxSize.y));

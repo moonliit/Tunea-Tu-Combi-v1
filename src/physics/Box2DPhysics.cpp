@@ -138,3 +138,103 @@ std::shared_ptr<IJoint> Box2DWorld::CreateRevoluteJoint(
     b2JointId jointId = b2CreateRevoluteJoint(m_worldId, &jointDef);
     return std::make_shared<Box2DJoint>(jointId);
 }
+
+// Función auxiliar para evaluar un punto en un segmento de Catmull-Rom
+Vector2D EvaluateCatmullRom(Vector2D p0, Vector2D p1, Vector2D p2, Vector2D p3, float t) {
+    float t2 = t * t;
+    float t3 = t2 * t;
+
+    float x = 0.5f * ((2.0f * p1.x) +
+                      (-p0.x + p2.x) * t +
+                      (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * t2 +
+                      (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * t3);
+
+    float y = 0.5f * ((2.0f * p1.y) +
+                      (-p0.y + p2.y) * t +
+                      (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * t2 +
+                      (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t3);
+
+    return {x, y};
+}
+
+std::vector<b2Vec2> SampleTerrain(const std::vector<Vector2D>& controlPoints, int resolution) {
+    std::vector<b2Vec2> sampledVertices;
+    if (controlPoints.size() < 2) return sampledVertices;
+
+    // Para Catmull-Rom necesitamos duplicar o extender los puntos extremos
+    // para que el primer y último tramo tengan vecinos válidos (p0 y p3).
+    std::vector<Vector2D> extendedPoints = controlPoints;
+
+    // Duplicar el inicio y el final para manejar los extremos con gracia
+    extendedPoints.insert(extendedPoints.begin(), controlPoints.front());
+    extendedPoints.push_back(controlPoints.back());
+
+    for (size_t i = 1; i < extendedPoints.size() - 2; ++i) {
+        Vector2D p0 = extendedPoints[i - 1];
+        Vector2D p1 = extendedPoints[i];
+        Vector2D p2 = extendedPoints[i + 1];
+        Vector2D p3 = extendedPoints[i + 2];
+
+        for (int j = 0; j < resolution; ++j) {
+            float t = static_cast<float>(j) / static_cast<float>(resolution);
+            Vector2D evaluated = EvaluateCatmullRom(p0, p1, p2, p3, t);
+            sampledVertices.push_back({
+                static_cast<float>(evaluated.x),
+                static_cast<float>(evaluated.y),
+            });
+        }
+    }
+
+    // Añadir el punto final exacto
+    sampledVertices.push_back({
+        static_cast<float>(controlPoints.back().x),
+        static_cast<float>(controlPoints.back().y),
+    });
+    return sampledVertices;
+}
+
+std::vector<Vector2D> Box2DWorld::CreateTerrainChain(const std::vector<Vector2D>& controlPoints, int resolutionPerSegment) {
+    // 1. Sample control points into a smooth vertex chain
+    std::vector<b2Vec2> vertices = SampleTerrain(controlPoints, resolutionPerSegment);
+    if (vertices.size() < 2) return {};
+
+    // 2. Create static body for the terrain
+    b2BodyDef bodyDef = b2DefaultBodyDef();
+    bodyDef.type = b2_staticBody;
+    bodyDef.position = {0.0f, 0.0f};
+    b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
+
+    // 3. Configure the chain definition using Box2D v3 fields
+    b2ChainDef chainDef = b2DefaultChainDef();
+    chainDef.points = vertices.data();
+    chainDef.pointCount = static_cast<int>(vertices.size());
+    chainDef.isLoop = false;
+
+    // 4. Compute valid ghost points to prevent NaN/inf errors in open chains.
+    // Ghost 1: Extrapolate backwards from the first two points
+    b2Vec2 p0 = vertices[0];
+    b2Vec2 p1 = vertices[1];
+    chainDef.ghost1 = {p0.x - (p1.x - p0.x), p0.y - (p1.y - p0.y)};
+
+    // Ghost 2: Extrapolate forwards from the last two points
+    b2Vec2 pn_1 = vertices[vertices.size() - 2];
+    b2Vec2 pn = vertices.back();
+    chainDef.ghost2 = {pn.x + (pn.x - pn_1.x), pn.y + (pn.y - pn_1.y)};
+
+    // Set surface material properties (like friction) via b2SurfaceMaterial
+    b2SurfaceMaterial material = b2DefaultSurfaceMaterial();
+    material.friction = 0.6f;
+    chainDef.materials = &material;
+    chainDef.materialCount = 1;
+
+    // Create the chain shape on the body
+    b2CreateChain(bodyId, &chainDef);
+
+    // 4. Convert b2Vec2 back to Vector2D and return for rendering
+    std::vector<Vector2D> resultPoints;
+    resultPoints.reserve(vertices.size());
+    for (const auto& v : vertices) {
+        resultPoints.push_back({v.x, v.y});
+    }
+    return resultPoints;
+}
