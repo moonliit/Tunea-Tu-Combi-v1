@@ -1,7 +1,9 @@
-#ifndef SAFE_REAL_HPP
-#define SAFE_REAL_HPP
+#ifndef MATH_SAFE_REAL_HPP
+#define MATH_SAFE_REAL_HPP
 
 #include <concepts>
+
+namespace Math {
 
 // concept for an arithmetic/number type
 template <typename T>
@@ -68,7 +70,8 @@ private:
 };
 
 using RealNum = SafeReal<double>;
+}
 
-#include "common/SafeReal.tpp"
+#include "math/SafeReal.tpp"
 
 #endif

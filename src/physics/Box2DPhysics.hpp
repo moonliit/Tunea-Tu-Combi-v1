@@ -8,16 +8,17 @@ class Box2DRigidBody : public IRigidBody {
 private:
     b2BodyId m_bodyId;
     bool m_isCircle;
-    Vector2D m_size;
+    Math::    Vector2D m_size;
     float m_radius;
 
 public:
-    explicit Box2DRigidBody(b2BodyId bodyId, Vector2D size);
+    explicit Box2DRigidBody(b2BodyId bodyId, Math::Vector2D size);
     explicit Box2DRigidBody(b2BodyId bodyId, float radius);
+    virtual ~Box2DRigidBody() override;
 
-    Vector2D GetPosition() const override;
+    Math::    Vector2D GetPosition() const override;
     float GetRotation() const override;
-    Vector2D GetSize() const override { return m_size; }
+    Math::    Vector2D GetSize() const override { return m_size; }
     float GetRadius() const override { return m_radius; }
 
     b2BodyId GetInternalId() const { return m_bodyId; }
@@ -36,19 +37,33 @@ private:
     b2WorldId m_worldId;
 
 public:
-    explicit Box2DWorld(Vector2D gravity, int subStepCount = 4);
+    explicit Box2DWorld(Math::Vector2D gravity, int subStepCount = 4);
     ~Box2DWorld() override;
     void Step(float deltaTime) override;
 
-    std::shared_ptr<IRigidBody> CreateBox(Vector2D position, float rotation, Vector2D size, float mass, BodyType type) override;
-    std::shared_ptr<IRigidBody> CreateCircle(Vector2D position, float radius, float mass, BodyType type) override;
+    std::shared_ptr<IRigidBody> CreateBox(
+        Math::Vector2D position,
+        float rotation,
+        Math::Vector2D size,
+        float mass,
+        BodyType type
+    ) override;
+    std::shared_ptr<IRigidBody> CreateCircle(
+        Math::Vector2D position,
+        float radius,
+        float mass,
+        BodyType type
+    ) override;
 
-    std::vector<Vector2D> CreateTerrainChain(const std::vector<Vector2D>& controlPoints, int resolutionPerSegment) override;
+    std::vector<Math::Vector2D> CreateTerrainChain(
+        const std::vector<Math::Vector2D>& controlPoints,
+        int resolutionPerSegment
+    ) override;
 
     std::shared_ptr<IJoint> CreateRevoluteJoint(
         std::shared_ptr<IRigidBody> bodyA,
         std::shared_ptr<IRigidBody> bodyB,
-        Vector2D anchor
+        Math::Vector2D anchor
     ) override;
 };
 

@@ -1,18 +1,25 @@
 #include "physics/Box2DPhysics.hpp"
+#include "math/Spline.hpp"
 #include "id.h"
 #include <box2d/box2d.h>
 #include <box2d/types.h>
 
 // --- RigidBody Implementation ---
-Box2DRigidBody::Box2DRigidBody(b2BodyId bodyId, Vector2D size)
+Box2DRigidBody::Box2DRigidBody(b2BodyId bodyId, Math::Vector2D size)
     : m_bodyId(bodyId), m_isCircle(false), m_size(size), m_radius(0.0f) {}
 
 Box2DRigidBody::Box2DRigidBody(b2BodyId bodyId, float radius)
     : m_bodyId(bodyId), m_isCircle(true), m_size{radius * 2.0f, radius * 2.0f}, m_radius(radius) {}
 
-Vector2D Box2DRigidBody::GetPosition() const {
+Box2DRigidBody::~Box2DRigidBody() {
+    if (b2Body_IsValid(m_bodyId)) {
+        b2DestroyBody(m_bodyId);
+    }
+}
+
+Math::Vector2D Box2DRigidBody::GetPosition() const {
     b2Vec2 pos = b2Body_GetPosition(m_bodyId);
-    return Vector2D{ pos.x, pos.y };
+    return Math::Vector2D{ pos.x, pos.y };
 }
 
 float Box2DRigidBody::GetRotation() const {
@@ -25,7 +32,7 @@ float Box2DRigidBody::GetRotation() const {
 Box2DJoint::Box2DJoint(b2JointId jointId) : m_jointId(jointId) {}
 
 // --- World Implementation ---
-Box2DWorld::Box2DWorld(Vector2D gravity, int subStepCount) {
+Box2DWorld::Box2DWorld(Math::Vector2D gravity, int subStepCount) {
     b2WorldDef worldDef = b2DefaultWorldDef();
     worldDef.gravity = {
         static_cast<float>(gravity.x),
@@ -46,7 +53,7 @@ void Box2DWorld::Step(float deltaTime) {
     b2World_Step(m_worldId, timeStep, 4);
 }
 
-std::shared_ptr<IRigidBody> Box2DWorld::CreateBox(Vector2D position, float rotation, Vector2D size, float mass, BodyType type) {
+std::shared_ptr<IRigidBody> Box2DWorld::CreateBox(Math::Vector2D position, float rotation, Math::Vector2D size, float mass, BodyType type) {
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = (type == BodyType::Static) ? b2_staticBody : b2_dynamicBody;
     bodyDef.position = {
@@ -73,7 +80,7 @@ std::shared_ptr<IRigidBody> Box2DWorld::CreateBox(Vector2D position, float rotat
     return std::make_shared<Box2DRigidBody>(bodyId, size);
 }
 
-std::shared_ptr<IRigidBody> Box2DWorld::CreateCircle(Vector2D position, float radius, float mass, BodyType type) {
+std::shared_ptr<IRigidBody> Box2DWorld::CreateCircle(Math::Vector2D position, float radius, float mass, BodyType type) {
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = (type == BodyType::Static) ? b2_staticBody : b2_dynamicBody;
     bodyDef.position = {
@@ -110,7 +117,7 @@ std::shared_ptr<IRigidBody> Box2DWorld::CreateCircle(Vector2D position, float ra
 std::shared_ptr<IJoint> Box2DWorld::CreateRevoluteJoint(
     std::shared_ptr<IRigidBody> bodyA,
     std::shared_ptr<IRigidBody> bodyB,
-    Vector2D anchor
+    Math::Vector2D anchor
 ) {
     auto bA = std::dynamic_pointer_cast<Box2DRigidBody>(bodyA);
     auto bB = std::dynamic_pointer_cast<Box2DRigidBody>(bodyB);
@@ -139,102 +146,46 @@ std::shared_ptr<IJoint> Box2DWorld::CreateRevoluteJoint(
     return std::make_shared<Box2DJoint>(jointId);
 }
 
-// Función auxiliar para evaluar un punto en un segmento de Catmull-Rom
-Vector2D EvaluateCatmullRom(Vector2D p0, Vector2D p1, Vector2D p2, Vector2D p3, float t) {
-    float t2 = t * t;
-    float t3 = t2 * t;
+std::vector<Math::Vector2D> Box2DWorld::CreateTerrainChain(const std::vector<Math::Vector2D>& controlPoints, int resolutionPerSegment) {
+    // 1. Get pure Math::Vector2D sampled points from decoupled math module
+    std::vector<Math::Vector2D> pureVertices = Math::SampleCatmullRom(controlPoints, resolutionPerSegment);
+    if (pureVertices.size() < 2) return {};
 
-    float x = 0.5f * ((2.0f * p1.x) +
-                      (-p0.x + p2.x) * t +
-                      (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * t2 +
-                      (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * t3);
-
-    float y = 0.5f * ((2.0f * p1.y) +
-                      (-p0.y + p2.y) * t +
-                      (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * t2 +
-                      (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t3);
-
-    return {x, y};
-}
-
-std::vector<b2Vec2> SampleTerrain(const std::vector<Vector2D>& controlPoints, int resolution) {
-    std::vector<b2Vec2> sampledVertices;
-    if (controlPoints.size() < 2) return sampledVertices;
-
-    // Para Catmull-Rom necesitamos duplicar o extender los puntos extremos
-    // para que el primer y último tramo tengan vecinos válidos (p0 y p3).
-    std::vector<Vector2D> extendedPoints = controlPoints;
-
-    // Duplicar el inicio y el final para manejar los extremos con gracia
-    extendedPoints.insert(extendedPoints.begin(), controlPoints.front());
-    extendedPoints.push_back(controlPoints.back());
-
-    for (size_t i = 1; i < extendedPoints.size() - 2; ++i) {
-        Vector2D p0 = extendedPoints[i - 1];
-        Vector2D p1 = extendedPoints[i];
-        Vector2D p2 = extendedPoints[i + 1];
-        Vector2D p3 = extendedPoints[i + 2];
-
-        for (int j = 0; j < resolution; ++j) {
-            float t = static_cast<float>(j) / static_cast<float>(resolution);
-            Vector2D evaluated = EvaluateCatmullRom(p0, p1, p2, p3, t);
-            sampledVertices.push_back({
-                static_cast<float>(evaluated.x),
-                static_cast<float>(evaluated.y),
-            });
-        }
+    // 2. Convert to Box2D's b2Vec2 for internal physics creation
+    std::vector<b2Vec2> b2Vertices;
+    b2Vertices.reserve(pureVertices.size());
+    for (const auto& v : pureVertices) {
+        b2Vertices.push_back({static_cast<float>(v.x), static_cast<float>(v.y)});
     }
 
-    // Añadir el punto final exacto
-    sampledVertices.push_back({
-        static_cast<float>(controlPoints.back().x),
-        static_cast<float>(controlPoints.back().y),
-    });
-    return sampledVertices;
-}
-
-std::vector<Vector2D> Box2DWorld::CreateTerrainChain(const std::vector<Vector2D>& controlPoints, int resolutionPerSegment) {
-    // 1. Sample control points into a smooth vertex chain
-    std::vector<b2Vec2> vertices = SampleTerrain(controlPoints, resolutionPerSegment);
-    if (vertices.size() < 2) return {};
-
-    // 2. Create static body for the terrain
+    // 3. Create static body for terrain
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = b2_staticBody;
     bodyDef.position = {0.0f, 0.0f};
     b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
 
-    // 3. Configure the chain definition using Box2D v3 fields
+    // 4. Configure chain definition
     b2ChainDef chainDef = b2DefaultChainDef();
-    chainDef.points = vertices.data();
-    chainDef.pointCount = static_cast<int>(vertices.size());
+    chainDef.points = b2Vertices.data();
+    chainDef.pointCount = static_cast<int>(b2Vertices.size());
     chainDef.isLoop = false;
 
-    // 4. Compute valid ghost points to prevent NaN/inf errors in open chains.
-    // Ghost 1: Extrapolate backwards from the first two points
-    b2Vec2 p0 = vertices[0];
-    b2Vec2 p1 = vertices[1];
+    // Ghost points for smooth sliding
+    b2Vec2 p0 = b2Vertices[0];
+    b2Vec2 p1 = b2Vertices[1];
     chainDef.ghost1 = {p0.x - (p1.x - p0.x), p0.y - (p1.y - p0.y)};
 
-    // Ghost 2: Extrapolate forwards from the last two points
-    b2Vec2 pn_1 = vertices[vertices.size() - 2];
-    b2Vec2 pn = vertices.back();
+    b2Vec2 pn_1 = b2Vertices[b2Vertices.size() - 2];
+    b2Vec2 pn = b2Vertices.back();
     chainDef.ghost2 = {pn.x + (pn.x - pn_1.x), pn.y + (pn.y - pn_1.y)};
 
-    // Set surface material properties (like friction) via b2SurfaceMaterial
     b2SurfaceMaterial material = b2DefaultSurfaceMaterial();
     material.friction = 0.6f;
     chainDef.materials = &material;
     chainDef.materialCount = 1;
 
-    // Create the chain shape on the body
     b2CreateChain(bodyId, &chainDef);
 
-    // 4. Convert b2Vec2 back to Vector2D and return for rendering
-    std::vector<Vector2D> resultPoints;
-    resultPoints.reserve(vertices.size());
-    for (const auto& v : vertices) {
-        resultPoints.push_back({v.x, v.y});
-    }
-    return resultPoints;
+    // Return the exact same pure vertices so rendering matches physics 1:1
+    return pureVertices;
 }

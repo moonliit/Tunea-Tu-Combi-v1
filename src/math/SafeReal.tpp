@@ -1,4 +1,6 @@
-#include "common/SafeReal.hpp"
+#include "math/SafeReal.hpp"
+
+namespace Math {
 
 // arithmetic
 
@@ -114,4 +116,6 @@ inline int SafeReal<U>::Sign() const {
     if (IsZero()) return 0;
     if (m_value < 0) return -1;
     return 1;
+}
+
 }
