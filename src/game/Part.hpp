@@ -1,9 +1,12 @@
 #ifndef PART_HPP
 #define PART_HPP
 
+#include "math/Vector2D.hpp"
 #include "math/GridCoord.hpp"
 #include "physics/IPhysics.hpp"
 #include <memory>
+
+class EditorGrid;
 
 enum class PartType {
     SquareBlock,
@@ -17,10 +20,11 @@ public:
     Part(Math::GridCoord gridCoord, PartType type);
     bool IsActive() const { return m_physicsBody != nullptr; }
 
-    void SetPhysicsBody(float cellSize, std::unique_ptr<IPhysicsWorld>& physics);
+    void SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<IPhysicsWorld>& physics);
     void ResetPhysicsBody() { m_physicsBody = nullptr; };
 
-    void Render(float cellSize) const;
+    void DrawSelf(const EditorGrid& grid) const;
+    static void DrawGhost(PartType type, Math::GridCoord coord, const EditorGrid& grid);
 
 private:
     Math::GridCoord m_gridCoord;

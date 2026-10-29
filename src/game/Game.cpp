@@ -1,24 +1,29 @@
 #include "game/Game.hpp"
 #include "game/Part.hpp"
+#include "math/GridCoord.hpp"
+#include "math/Vector2D.hpp"
 #include "physics/Box2DPhysics.hpp"
-#include <cmath>
+#include <optional>
+#include <raylib.h>
+#include <format>
 
 using namespace Math;
 
-Game::Game(int width, int height, const std::string& title) :
+Game::Game(int width, int height, const std::string& title, LevelSpecs specs):
     m_screenWidth(width),
     m_screenHeight(height),
-    m_window(width, height, title),
+    m_gravity(9.8f * 40.0f),
     m_currentState(GameState::Edit),
-    m_grid(10, 10, 40.0f), // 40px cell size
-    m_gravity(9.8f * 40.0f)
+    m_currentPartType(std::nullopt),
+    m_level(specs)
 {
-    m_window.SetTargetFPS(60);
+    InitWindow(width, height, title.c_str());
+    SetTargetFPS(60);
 
     // Initialize Camera2D
-    m_camera = raylib::Camera2D(Vector2{0});
-    m_camera.target = {400.0f, 300.0f};
-    m_camera.offset = {static_cast<float>(m_screenWidth) / 2.0f, static_cast<float>(m_screenHeight) / 2.0f};
+    m_camera = Camera2D(Vector2{0});
+    m_camera.target = specs.initialCameraPos.ToRayVec();
+    m_camera.offset = {m_screenWidth / 2.f, m_screenHeight / 2.f};
     m_camera.rotation = 0.0f;
     m_camera.zoom = 1.0f;
 
@@ -26,19 +31,20 @@ Game::Game(int width, int height, const std::string& title) :
     m_physics = std::make_unique<Box2DWorld>(Vector2D{0.0f, m_gravity});
 
     // Setup Terrain Control Points
-    m_terrainControlPoints = {
-        {50.0f, 450.0f},
-        {250.0f, 480.0f},
-        {450.0f, 400.0f},
-        {650.0f, 520.0f},
-        {750.0f, 520.0f}
-    };
-    m_terrainVertices = m_physics->CreateTerrainChain(m_terrainControlPoints, 15);
+    m_terrainVertices = m_physics->CreateTerrainChain(m_level.GetCatmullromPoints());
+}
+
+void Game::SetPartType(PartType type) {
+    if (m_currentPartType.has_value() && m_currentPartType.value() == type) {
+        m_currentPartType = std::nullopt;
+    } else {
+        m_currentPartType = type;
+    }
 }
 
 void Game::Run() {
-    while (!m_window.ShouldClose()) {
-        float dt = raylib::Window::GetFrameTime();
+    while (!WindowShouldClose()) {
+        float dt = GetFrameTime();
         if (dt > 0.033f) dt = 0.033f;
 
         ProcessInput(dt);
@@ -49,7 +55,7 @@ void Game::Run() {
 
 void Game::ProcessInput(float dt) {
     // 1. Toggle State (ENTER)
-    if (raylib::Keyboard::IsKeyPressed(KEY_ENTER)) {
+    if (IsKeyPressed(KEY_ENTER)) {
         if (m_currentState == GameState::Edit) {
             TransitionToPlayMode();
         } else {
@@ -59,10 +65,10 @@ void Game::ProcessInput(float dt) {
 
     // 2. Camera Panning via WASD
     float cameraSpeed = 300.0f * dt;
-    if (raylib::Keyboard::IsKeyDown(KEY_W)) m_camera.target.y -= cameraSpeed;
-    if (raylib::Keyboard::IsKeyDown(KEY_S)) m_camera.target.y += cameraSpeed;
-    if (raylib::Keyboard::IsKeyDown(KEY_A)) m_camera.target.x -= cameraSpeed;
-    if (raylib::Keyboard::IsKeyDown(KEY_D)) m_camera.target.x += cameraSpeed;
+    if (IsKeyDown(KEY_W)) m_camera.target.y -= cameraSpeed;
+    if (IsKeyDown(KEY_S)) m_camera.target.y += cameraSpeed;
+    if (IsKeyDown(KEY_A)) m_camera.target.x -= cameraSpeed;
+    if (IsKeyDown(KEY_D)) m_camera.target.x += cameraSpeed;
 
     // 3. Edit Mode Toolbar & Grid Placement
     if (m_currentState == GameState::Edit) {
@@ -71,21 +77,27 @@ void Game::ProcessInput(float dt) {
         // Toolbar UI Click Checks (Bottom Bar)
         if (mouseScreen.y > 520.0f) {
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                if (mouseScreen.x >= 20 && mouseScreen.x <= 120) m_currentPartType = PartType::SquareBlock;
-                if (mouseScreen.x >= 140 && mouseScreen.x <= 240) m_currentPartType = PartType::CircleWheel;
+                if (mouseScreen.x >= 20 && mouseScreen.x <= 120)
+                    SetPartType(PartType::SquareBlock);
+                if (mouseScreen.x >= 140 && mouseScreen.x <= 240)
+                    SetPartType(PartType::CircleWheel);
             }
-        } else {
+        } else if (m_currentPartType.has_value()) {
             // Workspace Grid Interaction
-            Vector2 mouseWorld = m_camera.GetScreenToWorld(mouseScreen);
-            int gx = static_cast<int>(floor(mouseWorld.x / m_grid.GetCellSize()));
-            int gy = static_cast<int>(floor(mouseWorld.y / m_grid.GetCellSize()));
+            Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, m_camera);
+            auto gridCoordOpt = m_level.GetGrid().WorldToCoord(Math::Vector2D{mouseWorld.x, mouseWorld.y});
 
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                m_grid.PlacePart(gx, gy, m_currentPartType);
+            if (gridCoordOpt.has_value()) {
+                GridCoord coord = gridCoordOpt.value();
+
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    m_level.GetGrid().PlacePart(coord, m_currentPartType.value());
+                }
+                if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+                    m_level.GetGrid().RemovePart(coord);
+                }
             }
-            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-                m_grid.RemovePart(gx, gy);
-            }
+
         }
     }
 }
@@ -99,9 +111,8 @@ void Game::Update(float dt) {
 void Game::TransitionToPlayMode() {
     m_currentState = GameState::Play;
 
-    float cellSize = m_grid.GetCellSize();
-    for (auto& part : m_grid.GetActiveParts()) {
-        part->SetPhysicsBody(cellSize, m_physics);
+    for (auto& part : m_level.GetGrid().GetActiveParts()) {
+        part->SetPhysicsBody(m_level.GetGrid(), m_physics);
     }
 }
 
@@ -109,63 +120,67 @@ void Game::ResetToEditMode() {
     m_currentState = GameState::Edit;
 
     // Re-initialize physics world for clean slate
-    for (auto& part : m_grid.GetActiveParts()) {
+    for (auto& part : m_level.GetGrid().GetActiveParts()) {
         part->ResetPhysicsBody();
     }
     m_physics = std::make_unique<Box2DWorld>(Vector2D{0.0f, m_gravity});
-    m_terrainVertices = m_physics->CreateTerrainChain(m_terrainControlPoints, 15);
+    m_terrainVertices = m_physics->CreateTerrainChain(m_level.GetCatmullromPoints());
 }
 
 void Game::Render() {
-    m_window.BeginDrawing();
-    m_window.ClearBackground(raylib::Color::RayWhite());
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
 
     // --- World Space Rendering ---
-    m_camera.BeginMode();
+    BeginMode2D(m_camera);
 
     // Draw Terrain
     for (size_t i = 0; i < m_terrainVertices.size() - 1; ++i) {
-        m_terrainVertices[i].ToRaylib().DrawLine(
-            m_terrainVertices[i + 1].ToRaylib(),
-            4.0f,
+        DrawLineV(
+            m_terrainVertices[i].ToRayVec(),
+            m_terrainVertices[i+1].ToRayVec(),
             DARKGRAY
         );
     }
 
-    float cellSize = m_grid.GetCellSize();
-
     // If in Edit Mode, render grid items as blueprints
     if (m_currentState == GameState::Edit) {
-        for (const auto& part : m_grid.GetActiveParts()) {
-            part->Render(cellSize);
+        m_level.GetGrid().DrawSelf();
+
+        for (const auto& part : m_level.GetGrid().GetActiveParts()) {
+            part->DrawSelf(m_level.GetGrid());
         }
 
         // Draw Ghost Preview under mouse cursor
         Vector2 mouseScreen = GetMousePosition();
-        if (mouseScreen.y <= 520.0f) {
-            Vector2 mouseWorld = m_camera.GetScreenToWorld(mouseScreen);
-            int gx = static_cast<int>(floor(mouseWorld.x / cellSize));
-            int gy = static_cast<int>(floor(mouseWorld.y / cellSize));
-            float previewX = gx * cellSize;
-            float previewY = gy * cellSize;
+        if (m_currentPartType.has_value() && mouseScreen.y <= 520.0f) {
+            Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, m_camera);
+            auto gridCoordOpt = m_level.GetGrid().WorldToCoord(Math::Vector2D{mouseWorld.x, mouseWorld.y});
 
-            if (m_currentPartType == PartType::SquareBlock) {
-                DrawRectangle(previewX, previewY, cellSize, cellSize, Fade(BLUE, 0.2f));
-                DrawRectangleLines(previewX, previewY, cellSize, cellSize, BLUE);
-            } else {
-                DrawCircle(previewX + cellSize / 2, previewY + cellSize / 2, cellSize / 2, Fade(GREEN, 0.2f));
-                DrawCircleLines(previewX + cellSize / 2, previewY + cellSize / 2, cellSize / 2, GREEN);
+            if (gridCoordOpt.has_value()) {
+                GridCoord coord = gridCoordOpt.value();
+
+                Part::DrawGhost(m_currentPartType.value(), coord, m_level.GetGrid());
+
+                // if (m_currentPartType == PartType::SquareBlock) {
+                //     DrawRectangle(previewX, previewY, cellSize, cellSize, Fade(BLUE, 0.2f));
+                //     DrawRectangleLines(previewX, previewY, cellSize, cellSize, BLUE);
+                // } else {
+                //     DrawCircle(previewX + cellSize / 2, previewY + cellSize / 2, cellSize / 2, Fade(GREEN, 0.2f));
+                //     DrawCircleLines(previewX + cellSize / 2, previewY + cellSize / 2, cellSize / 2, GREEN);
+                // }
             }
+
         }
     }
     // If in Play Mode, render active physics bodies
     else if (m_currentState == GameState::Play) {
-        for (const auto& part : m_grid.GetActiveParts()) {
-            part->Render(cellSize);
+        for (const auto& part : m_level.GetGrid().GetActiveParts()) {
+            part->DrawSelf(m_level.GetGrid());
         }
     }
 
-    m_camera.EndMode();
+    EndMode2D();
 
     // --- Screen Space UI Layer ---
     DrawRectangle(0, 520, m_screenWidth, 80, LIGHTGRAY);
@@ -183,7 +198,29 @@ void Game::Render() {
         ? "MODE: EDIT (Left Click: Place, Right Click: Delete, ENTER: Play)"
         : "MODE: PLAY (Press ENTER to Edit)";
     DrawText(modeStr.c_str(), 20, 20, 18, (m_currentState == GameState::Edit) ? DARKGREEN : MAROON);
-    DrawText("Use WASD to pan camera", 20, 45, 14, DARKGRAY);
 
-    m_window.EndDrawing();
+    Vector2 mouseScreen = GetMousePosition();
+    Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, m_camera);
+    auto coordOpt = m_level.GetGrid().WorldToCoord({mouseWorld.x, mouseWorld.y});
+
+    auto xd = coordOpt.has_value() ?
+                std::format("{}, {}", coordOpt.value().x, coordOpt.value().y)
+                : "none";
+    std::string xdd = "none";
+    if (coordOpt.has_value()) {
+        auto x = m_level.GetGrid().CoordToWorld(coordOpt.value()).x;
+        auto y = m_level.GetGrid().CoordToWorld(coordOpt.value()).y;
+        xdd = std::format("{}, {}", (float)x, (float)y);
+    }
+    // DrawText("Use WASD to pan camera", 20, 45, 14, DARKGRAY);
+
+    DrawText(
+        std::format(
+            "({}, {})\n{}\n{}",
+            mouseWorld.x, mouseWorld.y, xd, xdd
+        ).c_str()
+        , 20, 45, 14, DARKGRAY
+    );
+
+    EndDrawing();
 }

@@ -56,8 +56,7 @@ public:
     ) override;
 
     std::vector<Math::Vector2D> CreateTerrainChain(
-        const std::vector<Math::Vector2D>& controlPoints,
-        int resolutionPerSegment
+        const std::vector<Math::Vector2D>& controlPoints
     ) override;
 
     std::shared_ptr<IJoint> CreateRevoluteJoint(

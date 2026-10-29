@@ -69,7 +69,7 @@ private:
     U m_value;
 };
 
-using RealNum = SafeReal<double>;
+using RealNum = SafeReal<float>;
 }
 
 #include "math/SafeReal.tpp"

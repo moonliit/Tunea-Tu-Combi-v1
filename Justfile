@@ -11,9 +11,9 @@ native_dir   := build_dir + "/native"
 web_dir      := build_dir + "/web"
 
 # List library subdirectories here (space-separated)
-include_libs := "raylib raylib-cpp box2d"
+include_libs := "raylib box2d"
 
-# Expands include_libs into -I./include/raylib -I./include/raylib-cpp
+# Expands include_libs into -I./include/raylib
 lib_flags    := if include_libs != "" { "-I./" + include_dir + "/" + replace(include_libs, " ", " -I./" + include_dir + "/") } else { "" }
 
 # Assembles all include flags

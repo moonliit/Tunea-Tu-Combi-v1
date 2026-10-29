@@ -2,10 +2,11 @@
 #define GAME_HPP
 
 #include "physics/IPhysics.hpp"
-#include "game/EditorGrid.hpp"
+#include "game/Level.hpp"
 #include "game/Part.hpp"
 
-#include <raylib-cpp/raylib-cpp.hpp>
+#include <raylib.h>
+#include <optional>
 #include <memory>
 #include <vector>
 
@@ -18,19 +19,18 @@ class Game {
 private:
     int m_screenWidth;
     int m_screenHeight;
-    raylib::Window m_window;
-    raylib::Camera2D m_camera;
-
-    GameState m_currentState;
-    PartType m_currentPartType;
-    EditorGrid m_grid;
-
-    std::unique_ptr<IPhysicsWorld> m_physics;
-    std::vector<Math::Vector2D> m_terrainControlPoints;
-    std::vector<Math::Vector2D> m_terrainVertices;
-    std::vector<Part> m_activeParts;
+    Camera2D m_camera;
 
     float m_gravity;
+    GameState m_currentState;
+    std::vector<Part> m_activeParts;
+    std::unique_ptr<IPhysicsWorld> m_physics;
+    std::optional<PartType> m_currentPartType;
+    std::vector<Math::Vector2D> m_terrainVertices;
+
+    Level m_level;
+
+    void SetPartType(PartType type);
 
     void ProcessInput(float dt);
     void Update(float dt);
@@ -39,7 +39,7 @@ private:
     void TransitionToPlayMode();
 
 public:
-    Game(int width, int height, const std::string& title);
+    Game(int width, int height, const std::string& title, LevelSpecs specs);
     ~Game() = default;
 
     void Run();

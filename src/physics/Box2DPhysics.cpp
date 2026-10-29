@@ -1,5 +1,4 @@
 #include "physics/Box2DPhysics.hpp"
-#include "math/Spline.hpp"
 #include "id.h"
 #include <box2d/box2d.h>
 #include <box2d/types.h>
@@ -146,15 +145,14 @@ std::shared_ptr<IJoint> Box2DWorld::CreateRevoluteJoint(
     return std::make_shared<Box2DJoint>(jointId);
 }
 
-std::vector<Math::Vector2D> Box2DWorld::CreateTerrainChain(const std::vector<Math::Vector2D>& controlPoints, int resolutionPerSegment) {
+std::vector<Math::Vector2D> Box2DWorld::CreateTerrainChain(const std::vector<Math::Vector2D>& catmullRomPoints) {
     // 1. Get pure Math::Vector2D sampled points from decoupled math module
-    std::vector<Math::Vector2D> pureVertices = Math::SampleCatmullRom(controlPoints, resolutionPerSegment);
-    if (pureVertices.size() < 2) return {};
+    if (catmullRomPoints.size() < 2) return {};
 
     // 2. Convert to Box2D's b2Vec2 for internal physics creation
     std::vector<b2Vec2> b2Vertices;
-    b2Vertices.reserve(pureVertices.size());
-    for (const auto& v : pureVertices) {
+    b2Vertices.reserve(catmullRomPoints.size());
+    for (const auto& v : catmullRomPoints) {
         b2Vertices.push_back({static_cast<float>(v.x), static_cast<float>(v.y)});
     }
 
@@ -187,5 +185,5 @@ std::vector<Math::Vector2D> Box2DWorld::CreateTerrainChain(const std::vector<Mat
     b2CreateChain(bodyId, &chainDef);
 
     // Return the exact same pure vertices so rendering matches physics 1:1
-    return pureVertices;
+    return catmullRomPoints;
 }
