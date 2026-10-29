@@ -3,7 +3,7 @@
 
 #include "math/Vector2D.hpp"
 #include "math/GridCoord.hpp"
-#include "physics/IPhysics.hpp"
+#include "physics/I_Physics.hpp"
 #include <memory>
 
 class EditorGrid;
@@ -12,7 +12,8 @@ enum class PartType {
     SquareBlock,
     CircleWheel,
     TNTBarrel,    // Future item with box collision but custom rendering/behavior
-    Fan           // Future item
+    Fan,          // Capsule shape
+    WindSail      // Triangle shape
 };
 
 class Part {
@@ -20,7 +21,7 @@ public:
     Part(Math::GridCoord gridCoord, PartType type);
     bool IsActive() const { return m_physicsBody != nullptr; }
 
-    void SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<IPhysicsWorld>& physics);
+    void SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics);
     void ResetPhysicsBody() { m_physicsBody = nullptr; };
 
     void DrawSelf(const EditorGrid& grid) const;
@@ -31,7 +32,7 @@ private:
     PartType m_type;
     size_t m_activeCacheIndex;
 
-    std::shared_ptr<IRigidBody> m_physicsBody = nullptr; // Physics handle (only valid when in Play mode)
+    std::shared_ptr<I_RigidBody> m_physicsBody = nullptr; // Physics handle (only valid when in Play mode)
 
     friend class EditorGrid;
 };

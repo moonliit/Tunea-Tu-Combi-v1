@@ -2,18 +2,20 @@
 #include "game/EditorGrid.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
+#include "physics/I_Physics.hpp"
 #include "raylib.h"
+#include "rlgl.h"
 
 using namespace Math;
 
 Part::Part(GridCoord gridCoord, PartType type):
     m_gridCoord(gridCoord), m_type(type), m_activeCacheIndex(0) {}
 
-void Part::SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<IPhysicsWorld>& physics) {
+void Part::SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics) {
     Vector2D worldPos = grid.CoordToWorld(m_gridCoord);
     const float cellSize = grid.GetCellSize();
 
-    std::shared_ptr<IRigidBody> rb = nullptr;
+    std::shared_ptr<I_RigidBody> rb = nullptr;
 
     switch (m_type) {
         case PartType::SquareBlock:
@@ -30,6 +32,19 @@ void Part::SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<IPhysicsWorld>
             break;
         case PartType::TNTBarrel:
             break;
+        case PartType::Fan:
+            rb = physics->CreateCapsule(
+                worldPos, 0.f,
+                cellSize, cellSize / 4.f,
+                1.f, BodyType::Dynamic
+            );
+            break;
+        case PartType::WindSail:
+            rb = physics->CreateTriangle(
+                worldPos, 0.f,
+                Vector2D{cellSize, cellSize}, 1.f, BodyType::Dynamic
+            );
+            break;
         default:
             break;
     }
@@ -37,10 +52,12 @@ void Part::SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<IPhysicsWorld>
     m_physicsBody = rb;
 }
 
+#include "physics/Box2D_Physics.hpp"
+
 void Part::DrawSelf(const EditorGrid& grid) const {
     const float cellSize = grid.GetCellSize();
     Vector2D pos = m_physicsBody ? m_physicsBody->GetPosition() : grid.CoordToWorld(m_gridCoord);
-    float rot = m_physicsBody ? m_physicsBody->GetRotation() * RAD2DEG : 0.f;
+    RealNum rot = m_physicsBody ? m_physicsBody->GetRotation() * RAD2DEG : RealNum {0.f};
 
     switch (m_type) {
         case PartType::SquareBlock:
@@ -67,6 +84,58 @@ void Part::DrawSelf(const EditorGrid& grid) const {
             );
             // DrawText("TNT", pos.x - 15, pos.y - 10, 10, YELLOW);
             break;
+
+        case PartType::Fan: {
+            float capsuleHeight = cellSize;
+            float capsuleRadius = cellSize * 0.25f;
+            if (auto capsuleBody = std::dynamic_pointer_cast<Box2D_CapsuleRigidBody>(m_physicsBody)) {
+                capsuleHeight = capsuleBody->GetHeight();
+                capsuleRadius = capsuleBody->GetRadius();
+            }
+
+            float width = capsuleRadius * 2.0f;
+            float halfHeight = capsuleHeight / 2.0f;
+            float halfSegment = std::max(0.0f, halfHeight - capsuleRadius);
+
+            // Use Raylib's matrix stack to handle rotation and translation as a single unit
+            rlPushMatrix();
+            rlTranslatef(static_cast<float>(pos.x), static_cast<float>(pos.y), 0.0f);
+            rlRotatef(rot, 0.0f, 0.0f, 1.0f); // rot is already in degrees
+
+            // 1. Draw the central connecting rectangle (between the two semi-circle caps)
+            DrawRectangleRec(
+                Rectangle{ -width / 2.0f, -halfSegment, width, halfSegment * 2.0f },
+                ORANGE
+            );
+
+            // 2. Draw the top and bottom circular caps
+            DrawCircle(0.0f, -halfSegment, capsuleRadius, ORANGE);
+            DrawCircle(0.0f,  halfSegment, capsuleRadius, ORANGE);
+
+            rlPopMatrix();
+            break;
+        }
+
+        case PartType::WindSail: {
+            float halfSize = cellSize / 2.0f;
+
+            // Define local vertices relative to the center (0,0)
+            // Matching the physics body: top tip pointing up (-Y), base at the bottom (+Y)
+            Vector2 localV1 = { 0.0f, -halfSize };          // Top tip
+            Vector2 localV2 = { -halfSize, halfSize };      // Bottom-left
+            Vector2 localV3 = {  halfSize, halfSize };      // Bottom-right
+
+            rlPushMatrix();
+            rlTranslatef(static_cast<float>(pos.x), static_cast<float>(pos.y), 0.0f);
+            rlRotatef(rot, 0.0f, 0.0f, 1.0f); // rot is in degrees
+
+            // Draw using local coordinates; rotation is handled by the matrix stack
+            DrawTriangle(localV1, localV2, localV3, YELLOW);
+            DrawTriangleLines(localV1, localV2, localV3, BLACK);
+
+            rlPopMatrix();
+            break;
+        }
 
         default:
             break;

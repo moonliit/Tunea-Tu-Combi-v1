@@ -1,7 +1,7 @@
 #ifndef GAME_HPP
 #define GAME_HPP
 
-#include "physics/IPhysics.hpp"
+#include "physics/I_Physics.hpp"
 #include "game/Level.hpp"
 #include "game/Part.hpp"
 
@@ -24,7 +24,7 @@ private:
     float m_gravity;
     GameState m_currentState;
     std::vector<Part> m_activeParts;
-    std::unique_ptr<IPhysicsWorld> m_physics;
+    std::unique_ptr<I_PhysicsWorld> m_physics;
     std::optional<PartType> m_currentPartType;
     std::vector<Math::Vector2D> m_terrainVertices;
 

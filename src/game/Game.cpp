@@ -2,7 +2,7 @@
 #include "game/Part.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
-#include "physics/Box2DPhysics.hpp"
+#include "physics/Box2D_Physics.hpp"
 #include <optional>
 #include <raylib.h>
 #include <format>
@@ -28,7 +28,7 @@ Game::Game(int width, int height, const std::string& title, LevelSpecs specs):
     m_camera.zoom = 1.0f;
 
     // Initialize Physics World
-    m_physics = std::make_unique<Box2DWorld>(Vector2D{0.0f, m_gravity});
+    m_physics = std::make_unique<Box2D_PhysicsWorld>(Vector2D{0.0f, m_gravity});
 
     // Setup Terrain Control Points
     m_terrainVertices = m_physics->CreateTerrainChain(m_level.GetCatmullromPoints());
@@ -80,7 +80,8 @@ void Game::ProcessInput(float dt) {
                 if (mouseScreen.x >= 20 && mouseScreen.x <= 120)
                     SetPartType(PartType::SquareBlock);
                 if (mouseScreen.x >= 140 && mouseScreen.x <= 240)
-                    SetPartType(PartType::CircleWheel);
+                    // SetPartType(PartType::CircleWheel);
+                    SetPartType(PartType::WindSail);
             }
         } else if (m_currentPartType.has_value()) {
             // Workspace Grid Interaction
@@ -123,7 +124,7 @@ void Game::ResetToEditMode() {
     for (auto& part : m_level.GetGrid().GetActiveParts()) {
         part->ResetPhysicsBody();
     }
-    m_physics = std::make_unique<Box2DWorld>(Vector2D{0.0f, m_gravity});
+    m_physics = std::make_unique<Box2D_PhysicsWorld>(Vector2D{0.0f, m_gravity});
     m_terrainVertices = m_physics->CreateTerrainChain(m_level.GetCatmullromPoints());
 }
 
@@ -216,8 +217,8 @@ void Game::Render() {
 
     DrawText(
         std::format(
-            "({}, {})\n{}\n{}",
-            mouseWorld.x, mouseWorld.y, xd, xdd
+            "({}, {})\n{}\n{}\nActive parts: {}",
+            mouseWorld.x, mouseWorld.y, xd, xdd, m_level.GetGrid().GetActiveParts().size()
         ).c_str()
         , 20, 45, 14, DARKGRAY
     );
