@@ -5,7 +5,9 @@
 
 enum class AppState {
     Build,
-    Play
+    View,
+    Play,
+    Results
 };
 
 class AppStateMachine {
@@ -19,6 +21,10 @@ public:
     AppState GetState() const { return m_currentState; }
     bool IsBuildMode() const { return m_currentState == AppState::Build; }
     bool IsPlayMode() const { return m_currentState == AppState::Play; }
+    bool IsViewMode() const { return m_currentState == AppState::View; }
+    bool IsResultsMode() const {
+        return m_currentState == AppState::Results;
+    }
 
     void EnterPlay() {
         if (!IsBuildMode()) {
@@ -27,11 +33,27 @@ public:
         m_currentState = AppState::Play;
     }
 
+    void EnterView() {
+        if (!IsBuildMode()) {
+            throw std::logic_error("Cannot enter View mode from the current state");
+        }
+        m_currentState = AppState::View;
+    }
+
     void EnterBuild() {
-        if (!IsPlayMode()) {
+        if (!IsPlayMode() && !IsViewMode() && !IsResultsMode()) {
             throw std::logic_error("Cannot enter Build mode from the current state");
         }
         m_currentState = AppState::Build;
+    }
+
+    void EnterResults() {
+        if (!IsPlayMode()) {
+            throw std::logic_error(
+                "Cannot enter Results mode from the current state"
+            );
+        }
+        m_currentState = AppState::Results;
     }
 };
 

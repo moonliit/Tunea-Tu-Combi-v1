@@ -120,7 +120,8 @@ public:
     ) override;
 
     std::vector<Math::Vector2D> CreateTerrainChain(
-        const std::vector<Math::Vector2D>& controlPoints
+        const std::vector<Math::Vector2D>& controlPoints,
+        bool isLoop = false
     ) override;
 
     std::shared_ptr<I_Joint> CreateRevoluteJoint(

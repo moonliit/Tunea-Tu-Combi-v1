@@ -11,7 +11,10 @@ class UiLayout {
 public:
     static std::vector<UiControl> BuildControls(
         AppState state,
-        const ActivationRegistry& activationRegistry
+        const ActivationRegistry& activationRegistry,
+        const EditorGrid& grid,
+        int screenWidth,
+        int screenHeight
     );
 };
 

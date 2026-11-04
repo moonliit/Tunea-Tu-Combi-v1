@@ -20,7 +20,9 @@ public:
         const EditorGrid& grid,
         const PlaySession& playSession,
         const std::optional<PartType>& selectedPartType,
-        PartOrientation selectedOrientation
+        PartOrientation selectedOrientation,
+        const std::optional<PartType>& repositionedPartType,
+        PartOrientation repositionedOrientation
     ) const;
 };
 

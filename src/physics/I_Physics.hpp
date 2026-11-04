@@ -67,7 +67,8 @@ public:
 
     // terrain generation (polylines)
     virtual std::vector<Math::Vector2D> CreateTerrainChain(
-        const std::vector<Math::Vector2D>& controlPoints
+        const std::vector<Math::Vector2D>& controlPoints,
+        bool isLoop = false
     ) = 0;
 
     // joints creation (to connect chasis and wheels)

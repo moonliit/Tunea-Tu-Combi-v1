@@ -20,6 +20,41 @@ ConnectorDirection OppositeDirection(ConnectorDirection direction) {
     );
 }
 
+std::optional<PartOrientation> GetAttachmentOrientation(
+    const EditorGrid& grid,
+    Math::GridCoord coord,
+    PartType type,
+    PartOrientation fallback
+) {
+    if (type != PartType::Fan && type != PartType::WindSail) {
+        return fallback;
+    }
+
+    struct Candidate {
+        Math::GridCoord offset;
+        PartOrientation orientation;
+    };
+    for (const Candidate candidate : {
+             Candidate{{1, 0}, PartOrientation::Up},
+             Candidate{{0, 1}, PartOrientation::Right},
+             Candidate{{-1, 0}, PartOrientation::Down},
+             Candidate{{0, -1}, PartOrientation::Left}
+         }) {
+        const Math::GridCoord neighborCoord{
+            coord.x + candidate.offset.x,
+            coord.y + candidate.offset.y
+        };
+        if (!grid.IsWithinBounds(neighborCoord)) continue;
+        const auto& neighbor = grid.GetPart(neighborCoord);
+        if (neighbor.has_value() &&
+            neighbor->GetType() == PartType::SquareBlock) {
+            return candidate.orientation;
+        }
+    }
+
+    return fallback;
+}
+
 }
 
 bool BuildModel::PlacePart(
@@ -27,7 +62,18 @@ bool BuildModel::PlacePart(
     PartType type,
     PartOrientation orientation
 ) {
-    if (!m_grid.PlacePart(coord, type, orientation, m_nextPartId)) return false;
+    const PartOrientation placementOrientation = GetAttachmentOrientation(
+        m_grid,
+        coord,
+        type,
+        orientation
+    ).value();
+    if (!m_grid.PlacePart(
+            coord,
+            type,
+            placementOrientation,
+            m_nextPartId
+        )) return false;
     ++m_nextPartId;
     return true;
 }
@@ -38,6 +84,14 @@ void BuildModel::RemovePart(Math::GridCoord coord) {
 
 void BuildModel::Clear() {
     m_grid.Clear();
+}
+
+bool BuildModel::CanShiftContents(Math::GridCoord delta) const {
+    return m_grid.CanShiftContents(delta);
+}
+
+bool BuildModel::ShiftContents(Math::GridCoord delta) {
+    return m_grid.ShiftContents(delta);
 }
 
 std::vector<PartPlacement> BuildModel::GetPlacements() const {

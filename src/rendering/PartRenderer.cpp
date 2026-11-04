@@ -4,6 +4,7 @@
 #include "game/PartDefinition.hpp"
 #include "raylib.h"
 #include "rlgl.h"
+#include <print>
 
 #include <algorithm>
 #include <cmath>
@@ -67,13 +68,34 @@ void PartRenderer::Render(const PartRenderState& state) const {
 
     switch (state.type) {
         case PartType::SquareBlock:
-            DrawRectanglePro(
-                Rectangle{position.x, position.y, cellSize, cellSize},
-                Vector2{cellSize / 2.0f, cellSize / 2.0f},
-                rotation_deg,
+            rlPushMatrix();
+            rlTranslatef(position.x, position.y, 0.0f);
+            rlRotatef(rotation_deg, 0.0f, 0.0f, 1.0f);
+            DrawLineEx(
+                {-cellSize / 2.0f, -cellSize / 2.0f},
+                {cellSize / 2.0f, -cellSize / 2.0f},
+                6.0f,
                 BLUE
             );
-            RenderOrientationMarker(position, cellSize, rotation_rad);
+            DrawLineEx(
+                {cellSize / 2.0f, -cellSize / 2.0f},
+                {cellSize / 2.0f, cellSize / 2.0f},
+                6.0f,
+                BLUE
+            );
+            DrawLineEx(
+                {cellSize / 2.0f, cellSize / 2.0f},
+                {-cellSize / 2.0f, cellSize / 2.0f},
+                6.0f,
+                BLUE
+            );
+            DrawLineEx(
+                {-cellSize / 2.0f, cellSize / 2.0f},
+                {-cellSize / 2.0f, -cellSize / 2.0f},
+                6.0f,
+                BLUE
+            );
+            rlPopMatrix();
             break;
         case PartType::CircleWheel:
         {
@@ -179,6 +201,18 @@ void PartRenderer::Render(const PartRenderState& state) const {
     }
 }
 
+void PartRenderer::RenderContained(
+    const Part& part,
+    const EditorGrid& grid,
+    Math::GridCoord containerCoord
+) const {
+    PartRenderState state = part.GetRenderState(grid);
+    state.cellSize = grid.GetCellSize();
+    state.capsuleHeight = state.cellSize;
+    state.capsuleRadius = state.cellSize * 0.25f;
+    Render(state);
+}
+
 void PartRenderer::RenderConnectors(
     const Part& part,
     const EditorGrid& grid
@@ -248,8 +282,16 @@ void PartRenderer::RenderGhost(
     PartOrientation orientation
 ) const {
     const Math::Vector2D anchor = grid.CoordToWorld(coord);
+    RenderGhostAtPosition(type, anchor, grid.GetCellSize(), orientation);
+}
+
+void PartRenderer::RenderGhostAtPosition(
+    PartType type,
+    Math::Vector2D anchor,
+    float cellSize,
+    PartOrientation orientation
+) const {
     Math::Vector2D position = anchor;
-    const float cellSize = grid.GetCellSize();
     const float halfCell = cellSize / 2.0f;
     const float rotation = PartOrientationRadians(orientation) * RAD2DEG;
     const PartDefinition& definition = GetPartDefinition(type);
@@ -273,24 +315,34 @@ void PartRenderer::RenderGhost(
 
     switch (type) {
         case PartType::SquareBlock:
-            DrawRectangleRec(
-                Rectangle{
-                    static_cast<float>(position.x) - halfCell,
-                    static_cast<float>(position.y) - halfCell,
-                    cellSize,
-                    cellSize
-                },
+            rlPushMatrix();
+            rlTranslatef(position.x, position.y, 0.0f);
+            rlRotatef(rotation, 0.0f, 0.0f, 1.0f);
+            DrawLineEx(
+                {-cellSize / 2.0f, -cellSize / 2.0f},
+                {cellSize / 2.0f, -cellSize / 2.0f},
+                6.0f,
                 Fade(BLUE, 0.2f)
             );
             DrawLineEx(
-                Vector2{position.x, position.y},
-                Vector2{
-                    position.x + std::cos(rotation * DEG2RAD) * cellSize * 0.35f,
-                    position.y + std::sin(rotation * DEG2RAD) * cellSize * 0.35f
-                },
-                3.0f,
-                Fade(WHITE, 0.6f)
+                {cellSize / 2.0f, -cellSize / 2.0f},
+                {cellSize / 2.0f, cellSize / 2.0f},
+                6.0f,
+                Fade(BLUE, 0.2f)
             );
+            DrawLineEx(
+                {cellSize / 2.0f, cellSize / 2.0f},
+                {-cellSize / 2.0f, cellSize / 2.0f},
+                6.0f,
+                Fade(BLUE, 0.2f)
+            );
+            DrawLineEx(
+                {-cellSize / 2.0f, cellSize / 2.0f},
+                {-cellSize / 2.0f, -cellSize / 2.0f},
+                6.0f,
+                Fade(BLUE, 0.2f)
+            );
+            rlPopMatrix();
             break;
         case PartType::CircleWheel:
         {

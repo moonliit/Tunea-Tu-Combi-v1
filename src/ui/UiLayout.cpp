@@ -1,5 +1,7 @@
 #include "ui/UiLayout.hpp"
 
+#include "game/EditorGrid.hpp"
+
 namespace {
 
 constexpr float ControlStartX = 20.0f;
@@ -7,6 +9,11 @@ constexpr float ControlStartY = 535.0f;
 constexpr float ControlWidth = 110.0f;
 constexpr float ControlHeight = 50.0f;
 constexpr float ControlGap = 10.0f;
+constexpr float EditorControlStartX = 390.0f;
+constexpr float EditorControlStartY = 20.0f;
+constexpr float EditorControlWidth = 62.0f;
+constexpr float EditorControlHeight = 32.0f;
+constexpr float EditorControlGap = 6.0f;
 
 UiControl MakeToolbarControl(
     int index,
@@ -27,7 +34,45 @@ UiControl MakeToolbarControl(
         .color = color,
         .toolbarPart = part,
         .activationAction = std::nullopt,
+        .editorAction = std::nullopt,
+        .enabled = true,
         .active = false
+    };
+}
+
+UiControl MakeEditorControl(
+    int index,
+    EditorAction action,
+    std::string_view label,
+    Color color,
+    bool enabled,
+    Rectangle bounds = Rectangle{0.0f, 0.0f, 0.0f, 0.0f},
+    int labelFontSize = 12,
+    int labelOffsetX = 8,
+    int labelOffsetY = 15
+) {
+    if (bounds.width == 0.0f) {
+        bounds = {
+            EditorControlStartX + static_cast<float>(index) *
+                (EditorControlWidth + EditorControlGap),
+            EditorControlStartY,
+            EditorControlWidth,
+            EditorControlHeight
+        };
+    }
+    return UiControl{
+        .type = UiControlType::Editor,
+        .bounds = bounds,
+        .label = label,
+        .color = enabled ? color : GRAY,
+        .toolbarPart = std::nullopt,
+        .activationAction = std::nullopt,
+        .editorAction = action,
+        .enabled = enabled,
+        .active = false,
+        .labelFontSize = labelFontSize,
+        .labelOffsetX = labelOffsetX,
+        .labelOffsetY = labelOffsetY
     };
 }
 
@@ -35,12 +80,14 @@ UiControl MakeToolbarControl(
 
 std::vector<UiControl> UiLayout::BuildControls(
     AppState state,
-    const ActivationRegistry& activationRegistry
+    const ActivationRegistry& activationRegistry,
+    const EditorGrid& grid,
+    int screenWidth,
+    int screenHeight
 ) {
     std::vector<UiControl> controls;
     if (state == AppState::Play) {
         const auto actions = activationRegistry.GetVisibleActions();
-        controls.reserve(actions.size());
         for (std::size_t index = 0; index < actions.size(); ++index) {
             const ActivationAction action = actions[index];
             const bool fan = IsFanAction(action);
@@ -57,41 +104,146 @@ std::vector<UiControl> UiLayout::BuildControls(
                 .color = fan ? DARKGRAY : DARKBLUE,
                 .toolbarPart = std::nullopt,
                 .activationAction = action,
+                .editorAction = std::nullopt,
+                .enabled = true,
                 .active = activationRegistry.IsActive(action)
             });
         }
-        return controls;
+    } else if (state == AppState::Build) {
+        constexpr ToolbarPart parts[] = {
+            ToolbarPart::SquareBlock,
+            ToolbarPart::CircleWheel,
+            ToolbarPart::TNTBarrel,
+            ToolbarPart::Fan,
+            ToolbarPart::WindSail
+        };
+        constexpr std::string_view labels[] = {
+            "Square Box",
+            "Wheel",
+            "TNT",
+            "Fan",
+            "Sail"
+        };
+        constexpr Color colors[] = {
+            BLUE,
+            GREEN,
+            MAROON,
+            ORANGE,
+            YELLOW
+        };
+
+        for (int index = 0; index < 5; ++index) {
+            controls.push_back(MakeToolbarControl(
+                index,
+                parts[index],
+                labels[index],
+                colors[index]
+            ));
+        }
+
+        const auto canMoveUp = grid.CanShiftContents({0, -1});
+        const auto canMoveRight = grid.CanShiftContents({1, 0});
+        const auto canMoveDown = grid.CanShiftContents({0, 1});
+        const auto canMoveLeft = grid.CanShiftContents({-1, 0});
+        controls.push_back(MakeEditorControl(
+            0, EditorAction::MoveLeft, "Left", BLUE, canMoveLeft
+        ));
+        controls.push_back(MakeEditorControl(
+            1, EditorAction::MoveDown, "Down", BLUE, canMoveDown
+        ));
+        controls.push_back(MakeEditorControl(
+            2, EditorAction::MoveUp, "Up", BLUE, canMoveUp
+        ));
+        controls.push_back(MakeEditorControl(
+            3, EditorAction::MoveRight, "Right", BLUE, canMoveRight
+        ));
     }
 
-    constexpr ToolbarPart parts[] = {
-        ToolbarPart::SquareBlock,
-        ToolbarPart::CircleWheel,
-        ToolbarPart::TNTBarrel,
-        ToolbarPart::Fan,
-        ToolbarPart::WindSail
+    const Rectangle largeSideButton{
+        static_cast<float>(screenWidth - 150),
+        static_cast<float>(screenHeight / 2 - 45),
+        130.0f,
+        90.0f
     };
-    constexpr std::string_view labels[] = {
-        "Square",
-        "Wheel",
-        "TNT",
-        "Fan",
-        "Sail"
-    };
-    constexpr Color colors[] = {
-        BLUE,
-        GREEN,
-        MAROON,
-        ORANGE,
-        YELLOW
-    };
-
-    controls.reserve(5);
-    for (int index = 0; index < 5; ++index) {
-        controls.push_back(MakeToolbarControl(
-            index,
-            parts[index],
-            labels[index],
-            colors[index]
+    if (state == AppState::Build || state == AppState::Play) {
+        controls.push_back(MakeEditorControl(
+            static_cast<int>(controls.size()),
+            state == AppState::Build
+                ? EditorAction::StartPlay
+                : EditorAction::ReturnToBuild,
+            state == AppState::Build ? "PLAY" : "EDIT",
+            DARKGREEN,
+            true,
+            largeSideButton,
+            24,
+            32,
+            32
+        ));
+    }
+    if (state == AppState::View) {
+        controls.push_back(MakeEditorControl(
+            0,
+            EditorAction::ReturnToBuild,
+            "EDIT",
+            DARKGREEN,
+            true,
+            Rectangle{
+                static_cast<float>(screenWidth - 140),
+                static_cast<float>(screenHeight / 2 + 155),
+                110.0f,
+                40.0f
+            },
+            14,
+            17,
+            13
+        ));
+        return controls;
+    }
+    if (state == AppState::Build) {
+        controls.push_back(MakeEditorControl(
+            6,
+            EditorAction::ClearSelection,
+            "DROP",
+            DARKGRAY,
+            true,
+            Rectangle{
+                static_cast<float>(screenWidth - 140),
+                static_cast<float>(screenHeight / 2 + 55),
+                110.0f,
+                40.0f
+            },
+            14,
+            12,
+            13
+        ));
+        controls.push_back(MakeEditorControl(
+            7,
+            EditorAction::ClearBuild,
+            "BASURA",
+            MAROON,
+            true,
+            Rectangle{
+                20.0f,
+                static_cast<float>(screenHeight / 2 - 20),
+                110.0f,
+                40.0f
+            },
+            14,
+            17,
+            13
+        ));
+        controls.push_back(MakeEditorControl(
+            8,
+            EditorAction::EnterView,
+            "VIEW",
+            DARKBLUE,
+            true,
+            Rectangle{
+                static_cast<float>(screenWidth - 140),
+                static_cast<float>(screenHeight / 2 + 155),
+                110.0f,
+                40.0f
+            }
         ));
     }
     return controls;

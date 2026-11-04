@@ -310,7 +310,10 @@ std::shared_ptr<I_Joint> Box2D_PhysicsWorld::CreateWeldJoint(
     return std::make_shared<Box2D_Joint>(jointId);
 }
 
-std::vector<Math::Vector2D> Box2D_PhysicsWorld::CreateTerrainChain(const std::vector<Math::Vector2D>& catmullRomPoints) {
+std::vector<Math::Vector2D> Box2D_PhysicsWorld::CreateTerrainChain(
+    const std::vector<Math::Vector2D>& catmullRomPoints,
+    bool isLoop
+) {
     // 1. Get pure Math::Vector2D sampled points from decoupled math module
     if (catmullRomPoints.size() < 2) return {};
 
@@ -331,16 +334,26 @@ std::vector<Math::Vector2D> Box2D_PhysicsWorld::CreateTerrainChain(const std::ve
     b2ChainDef chainDef = b2DefaultChainDef();
     chainDef.points = b2Vertices.data();
     chainDef.pointCount = static_cast<int>(b2Vertices.size());
-    chainDef.isLoop = false;
+    chainDef.isLoop = isLoop;
 
-    // Ghost points for smooth sliding
-    b2Vec2 p0 = b2Vertices[0];
-    b2Vec2 p1 = b2Vertices[1];
-    chainDef.ghost1 = {p0.x - (p1.x - p0.x), p0.y - (p1.y - p0.y)};
+    if (isLoop && b2Vertices.size() < 3) return {};
 
-    b2Vec2 pn_1 = b2Vertices[b2Vertices.size() - 2];
-    b2Vec2 pn = b2Vertices.back();
-    chainDef.ghost2 = {pn.x + (pn.x - pn_1.x), pn.y + (pn.y - pn_1.y)};
+    if (!isLoop) {
+        // Ghost points for smooth sliding.
+        b2Vec2 p0 = b2Vertices[0];
+        b2Vec2 p1 = b2Vertices[1];
+        chainDef.ghost1 = {
+            p0.x - (p1.x - p0.x),
+            p0.y - (p1.y - p0.y)
+        };
+
+        b2Vec2 pn_1 = b2Vertices[b2Vertices.size() - 2];
+        b2Vec2 pn = b2Vertices.back();
+        chainDef.ghost2 = {
+            pn.x + (pn.x - pn_1.x),
+            pn.y + (pn.y - pn_1.y)
+        };
+    }
 
     b2SurfaceMaterial material = b2DefaultSurfaceMaterial();
     material.friction = 0.6f;

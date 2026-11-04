@@ -1,4 +1,5 @@
 #include "game/EditorGrid.hpp"
+#include "game/PartDefinition.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include "raylib.h"
@@ -6,11 +7,31 @@
 
 using namespace Math;
 
+namespace {
+
+std::size_t CountPartTree(const Part& part) {
+    return 1 + (
+        part.HasContainedPart()
+            ? CountPartTree(*part.GetContainedPart())
+            : 0
+    );
+}
+
+}
+
 EditorGrid::EditorGrid(GridCoord gridDims, Vector2D initialPos, float cellSize):
     m_gridDims(gridDims), m_initialPos(initialPos), m_cellSize(cellSize)
 {
     const int mult = gridDims.x * gridDims.y;
-    m_cells.resize(mult, std::nullopt);
+    m_cells.resize(mult);
+}
+
+std::size_t EditorGrid::GetPartCount() const {
+    std::size_t count = 0;
+    for (const Part* part : m_activeParts) {
+        count += CountPartTree(*part);
+    }
+    return count;
 }
 
 size_t EditorGrid::GetIndex(GridCoord coord) const {
@@ -22,6 +43,10 @@ bool EditorGrid::IsGridCoordWithinSelfBounds(Math::GridCoord coord) const {
         coord.x >= 0 && coord.x < m_gridDims.x &&
         coord.y >= 0 && coord.y < m_gridDims.y
     );
+}
+
+bool EditorGrid::IsWithinBounds(Math::GridCoord coord) const {
+    return IsGridCoordWithinSelfBounds(coord);
 }
 
 bool EditorGrid::IsWorldPosWithinSelfBounds(Math::Vector2D pos) const {
@@ -39,6 +64,10 @@ bool EditorGrid::IsWorldPosWithinSelfBounds(Math::Vector2D pos) const {
     );
 }
 
+std::optional<Part>& EditorGrid::GetPart(GridCoord coord) {
+    return m_cells[GetIndex(coord)];
+}
+
 const std::optional<Part>& EditorGrid::GetPart(GridCoord coord) const {
     size_t idx = GetIndex(coord);
     return m_cells[idx];
@@ -53,9 +82,47 @@ bool EditorGrid::PlacePart(
     if (!IsGridCoordWithinSelfBounds(coord)) return false;
     size_t idx = GetIndex(coord);
 
-    if (m_cells[idx].has_value()) {
-        RemovePart(coord);
+    if (!m_cells[idx].has_value()) {
+        m_cells[idx] = Part(coord, type, orientation, id);
+        m_activeParts.push_back(&m_cells[idx].value());
+        m_cells[idx].value().m_activeCacheIndex = m_activeParts.size() - 1;
+        return true;
     }
+
+    if (GetPartDefinition(type).role == PartRole::Containable) {
+        Part candidate(coord, type, orientation, id);
+        if (m_cells[idx]->CanContain(candidate)) {
+            return m_cells[idx]->ContainPart(
+                std::make_unique<Part>(std::move(candidate))
+            );
+        }
+        if (GetPartDefinition(m_cells[idx]->m_type).role ==
+                PartRole::Container) {
+            m_cells[idx]->RemoveContainedPart();
+            return m_cells[idx]->ContainPart(
+                std::make_unique<Part>(std::move(candidate))
+            );
+        }
+    } else if (GetPartDefinition(type).role == PartRole::Container) {
+        Part candidate(coord, type, orientation, id);
+        Part& existingPart = m_cells[idx].value();
+        if (GetPartDefinition(existingPart.m_type).role == PartRole::Containable) {
+            candidate.ContainPart(
+                std::make_unique<Part>(std::move(existingPart))
+            );
+            m_cells[idx] = std::move(candidate);
+            return true;
+        }
+        if (GetPartDefinition(existingPart.m_type).role == PartRole::Container) {
+            candidate.ContainPart(
+                std::make_unique<Part>(std::move(existingPart))
+            );
+            m_cells[idx] = std::move(candidate);
+            return true;
+        }
+    }
+
+    RemovePart(coord);
 
     m_cells[idx] = Part(coord, type, orientation, id);
     m_activeParts.push_back(&m_cells[idx].value());
@@ -80,10 +147,58 @@ void EditorGrid::RemovePart(GridCoord coord) {
     m_cells[idx].reset();
 }
 
+void EditorGrid::RotatePart(GridCoord coord) {
+    if (!IsGridCoordWithinSelfBounds(coord)) return;
+    std::optional<Part>& part = m_cells[GetIndex(coord)];
+    if (part.has_value()) {
+        part->m_orientation = RotatePartOrientation(part->m_orientation);
+    }
+}
+
 void EditorGrid::Clear() {
-    const int mult = m_gridDims.x * m_gridDims.y;
-    m_cells.assign(mult, std::nullopt);
+    for (std::optional<Part>& cell : m_cells) {
+        cell.reset();
+    }
     m_activeParts.clear();
+}
+
+bool EditorGrid::CanShiftContents(Math::GridCoord delta) const {
+    for (const Part* part : m_activeParts) {
+        const GridCoord shifted{
+            part->GetGridCoord().x + delta.x,
+            part->GetGridCoord().y + delta.y
+        };
+        if (!IsGridCoordWithinSelfBounds(shifted)) return false;
+    }
+    return true;
+}
+
+bool EditorGrid::ShiftContents(Math::GridCoord delta) {
+    if (!CanShiftContents(delta)) return false;
+    if (delta.x == 0 && delta.y == 0) return true;
+
+    std::vector<std::optional<Part>> shiftedCells;
+    shiftedCells.resize(m_cells.size());
+    for (std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        const GridCoord oldCoord = cell->GetGridCoord();
+        const GridCoord newCoord{
+            oldCoord.x + delta.x,
+            oldCoord.y + delta.y
+        };
+        const size_t newIndex = GetIndex(newCoord);
+        shiftedCells[newIndex] = std::move(cell);
+        shiftedCells[newIndex]->m_gridCoord = newCoord;
+    }
+
+    m_cells = std::move(shiftedCells);
+    m_activeParts.clear();
+    for (std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        cell->m_activeCacheIndex = m_activeParts.size();
+        m_activeParts.push_back(&cell.value());
+    }
+    return true;
 }
 
 void EditorGrid::DrawSelf() const {

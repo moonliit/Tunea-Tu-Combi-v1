@@ -4,22 +4,19 @@
 #include "game/AppState.hpp"
 #include "game/BuildSession.hpp"
 #include "game/Level.hpp"
-#include "game/Part.hpp"
 #include "game/PlaySession.hpp"
 #include "input/GameInput.hpp"
 #include "rendering/GameUiRenderer.hpp"
 #include "rendering/WorldRenderer.hpp"
-
 #include <raylib.h>
-#include <optional>
-#include <memory>
-#include <vector>
 
 class Game {
 private:
     int m_screenWidth;
     int m_screenHeight;
     Camera2D m_camera;
+    Vector2 m_editorCameraTarget;
+    float m_editorCameraZoom = 1.0f;
 
     float m_gravity;
     AppStateMachine m_stateMachine;
@@ -34,6 +31,7 @@ private:
     void Update(float dt);
     void Render();
     void ResetToBuildMode();
+    void ResetEditorCamera();
     void TransitionToPlayMode();
 
 public:

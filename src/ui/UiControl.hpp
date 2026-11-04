@@ -10,7 +10,20 @@
 
 enum class UiControlType {
     ToolbarPart,
-    Activation
+    Activation,
+    Editor
+};
+
+enum class EditorAction {
+    MoveUp,
+    MoveRight,
+    MoveDown,
+    MoveLeft,
+    ClearBuild,
+    StartPlay,
+    ClearSelection,
+    EnterView,
+    ReturnToBuild
 };
 
 enum class ToolbarPart {
@@ -28,7 +41,12 @@ struct UiControl {
     Color color;
     std::optional<ToolbarPart> toolbarPart;
     std::optional<ActivationAction> activationAction;
+    std::optional<EditorAction> editorAction;
+    bool enabled = true;
     bool active = false;
+    int labelFontSize = 12;
+    int labelOffsetX = 8;
+    int labelOffsetY = 15;
 };
 
 #endif

@@ -16,7 +16,13 @@ void GameUiRenderer::Render(
     DrawRectangle(0, 520, screenWidth, 80, LIGHTGRAY);
     DrawRectangleLines(0, 520, screenWidth, 80, GRAY);
 
-    const auto controls = UiLayout::BuildControls(state, activationRegistry);
+    const auto controls = UiLayout::BuildControls(
+        state,
+        activationRegistry,
+        grid,
+        screenWidth,
+        screenHeight
+    );
     const auto& selectedPartType = buildSession.GetSelectedPartType();
     for (const UiControl& control : controls) {
         Color color = control.color;
@@ -33,6 +39,8 @@ void GameUiRenderer::Render(
             color = IsFanAction(control.activationAction.value())
                 ? DARKGREEN
                 : RED;
+        } else if (control.type == UiControlType::Editor) {
+            color = control.color;
         }
         DrawRectangle(
             static_cast<int>(control.bounds.x),
@@ -43,15 +51,19 @@ void GameUiRenderer::Render(
         );
         DrawText(
             control.label.data(),
-            static_cast<int>(control.bounds.x) + 8,
-            static_cast<int>(control.bounds.y) + 15,
-            control.type == UiControlType::ToolbarPart ? 14 : 12,
+            static_cast<int>(control.bounds.x) + control.labelOffsetX,
+            static_cast<int>(control.bounds.y) + control.labelOffsetY,
+            control.type == UiControlType::ToolbarPart
+                ? 14
+                : control.labelFontSize,
             WHITE
         );
     }
 
     const std::string modeText = state == AppState::Build
         ? "MODE: EDIT (Left Click: Place, Right Click: Delete, ENTER: Play)"
+        : state == AppState::View
+        ? "MODE: VIEW (Drag to move camera, ESC: Edit)"
         : "MODE: PLAY (Press ENTER to Edit)";
     DrawText(
         modeText.c_str(),
@@ -82,7 +94,7 @@ void GameUiRenderer::Render(
             mouseWorld.y,
             coordText,
             worldText,
-            grid.GetActiveParts().size()
+            grid.GetPartCount()
         ).c_str(),
         20,
         45,

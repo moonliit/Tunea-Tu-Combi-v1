@@ -40,6 +40,8 @@ public:
     );
     void RemovePart(Math::GridCoord coord);
     void Clear();
+    bool CanShiftContents(Math::GridCoord delta) const;
+    bool ShiftContents(Math::GridCoord delta);
     std::vector<PartPlacement> GetPlacements() const;
     std::vector<PartConnection> GetConnections() const;
 

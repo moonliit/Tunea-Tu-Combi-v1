@@ -1,6 +1,22 @@
 #include "game/PlaySession.hpp"
 #include "physics/Box2D_Physics.hpp"
 
+#include <algorithm>
+#include <cmath>
+
+namespace {
+
+bool AreSamePoint(
+    const Math::Vector2D& first,
+    const Math::Vector2D& second
+) {
+    constexpr float epsilon = 0.0001f;
+    return std::fabs(static_cast<float>(first.x - second.x)) <= epsilon &&
+        std::fabs(static_cast<float>(first.y - second.y)) <= epsilon;
+}
+
+}
+
 PlaySession::PlaySession(
     BuildModel& model,
     const std::vector<Math::Vector2D>& terrainPoints,
@@ -9,14 +25,99 @@ PlaySession::PlaySession(
     m_model(model),
     m_gravity(gravity)
 {
-    CreatePhysicsWorld(terrainPoints);
+    CreatePhysicsWorld(
+        std::vector<std::vector<Math::Vector2D>>{terrainPoints},
+        false
+    );
+}
+
+PlaySession::PlaySession(
+    BuildModel& model,
+    const std::vector<std::vector<Math::Vector2D>>& terrainSections,
+    Math::Vector2D gravity
+):
+    m_model(model),
+    m_gravity(gravity)
+{
+    TerrainDefinition definition;
+    for (const auto& section : terrainSections) {
+        definition.polygons.push_back(TerrainPolygon{
+            .segments = {
+                TerrainSegment{
+                    .type = TerrainSegmentType::Line,
+                    .points = section
+                }
+            }
+        });
+    }
+    m_terrainDefinition = definition;
+    CreatePhysicsWorld(terrainSections, false);
+}
+
+PlaySession::PlaySession(
+    BuildModel& model,
+    const TerrainDefinition& terrain,
+    Math::Vector2D gravity
+):
+    m_model(model),
+    m_terrainDefinition(terrain),
+    m_gravity(gravity)
+{
+    CreatePhysicsWorld(SampleTerrain(terrain), true);
 }
 
 void PlaySession::CreatePhysicsWorld(
     const std::vector<Math::Vector2D>& terrainPoints
 ) {
+    CreatePhysicsWorld(
+        std::vector<std::vector<Math::Vector2D>>{terrainPoints},
+        false
+    );
+}
+
+void PlaySession::CreatePhysicsWorld(
+    const std::vector<std::vector<Math::Vector2D>>& terrainSections,
+    bool closed
+) {
     m_physics = std::make_unique<Box2D_PhysicsWorld>(m_gravity);
-    m_terrainVertices = m_physics->CreateTerrainChain(terrainPoints);
+    m_terrainMeshes.clear();
+    for (const auto& section : terrainSections) {
+        std::vector<Math::Vector2D> physicsPoints = section;
+        physicsPoints.erase(
+            std::unique(
+                physicsPoints.begin(),
+                physicsPoints.end(),
+                [](const Math::Vector2D& first, const Math::Vector2D& second) {
+                    return AreSamePoint(first, second);
+                }
+            ),
+            physicsPoints.end()
+        );
+        if (physicsPoints.size() >= 3 &&
+            AreSamePoint(physicsPoints.front(), physicsPoints.back())) {
+            physicsPoints.pop_back();
+        }
+        const bool sectionIsClosed =
+            closed &&
+            physicsPoints.size() >= 3 &&
+            AreSamePoint(section.front(), section.back());
+        const std::vector<Math::Vector2D> vertices =
+            m_physics->CreateTerrainChain(physicsPoints, sectionIsClosed);
+        if (vertices.size() >= 2) {
+            TerrainMesh mesh = BuildTerrainPolygonMesh(section);
+            if (mesh.top.empty() && !closed) {
+                mesh.top = section;
+            }
+            if (!mesh.indices.empty()) {
+                m_terrainMeshes.push_back(std::move(mesh));
+            } else if (!mesh.top.empty()) {
+                m_terrainMeshes.push_back(std::move(mesh));
+            }
+        }
+    }
+    m_terrainVertices = terrainSections.empty()
+        ? std::vector<Math::Vector2D>{}
+        : terrainSections.front();
 }
 
 void PlaySession::Start() {
@@ -25,12 +126,32 @@ void PlaySession::Start() {
 }
 
 void PlaySession::Reset(const std::vector<Math::Vector2D>& terrainPoints) {
+    Reset(std::vector<std::vector<Math::Vector2D>>{terrainPoints});
+}
+
+void PlaySession::Reset(
+    const std::vector<std::vector<Math::Vector2D>>& terrainSections
+) {
+    m_terrainDefinition.polygons.clear();
+    for (const auto& section : terrainSections) {
+        m_terrainDefinition.polygons.push_back(TerrainPolygon{
+            .segments = {TerrainSegment{
+                .type = TerrainSegmentType::Line,
+                .points = section
+            }}
+        });
+    }
+    Reset(m_terrainDefinition);
+}
+
+void PlaySession::Reset(const TerrainDefinition& terrain) {
+    m_terrainDefinition = terrain;
     m_assembler.Clear();
     for (Part* part : m_model.GetGrid().GetActiveParts()) {
         part->ResetPhysicsBody();
     }
 
-    CreatePhysicsWorld(terrainPoints);
+    CreatePhysicsWorld(SampleTerrain(terrain), true);
     m_activationRegistry.Clear();
 }
 
@@ -41,29 +162,35 @@ void PlaySession::Update(float deltaTime) {
 
 void PlaySession::BuildActivationSubscriptions() {
     m_activationRegistry.Clear();
-    for (Part* part : m_model.GetGrid().GetActiveParts()) {
-        switch (part->GetType()) {
+    const auto subscribePart = [this](Part& part, const auto& self) -> void {
+        switch (part.GetType()) {
             case PartType::Fan:
                 m_activationRegistry.Subscribe(
-                    GetFanAction(part->GetOrientation()),
-                    *part
+                    GetFanAction(part.GetOrientation()),
+                    part
                 );
                 break;
             case PartType::WindSail:
                 m_activationRegistry.Subscribe(
-                    GetWindSailAction(part->GetOrientation()),
-                    *part
+                    GetWindSailAction(part.GetOrientation()),
+                    part
                 );
                 break;
             case PartType::TNTBarrel:
                 m_activationRegistry.Subscribe(
                     ActivationAction::TNT,
-                    *part
+                    part
                 );
                 break;
             default:
                 break;
         }
+        if (part.HasContainedPart()) {
+            self(*part.GetContainedPart(), self);
+        }
+    };
+    for (Part* part : m_model.GetGrid().GetActiveParts()) {
+        subscribePart(*part, subscribePart);
     }
 }
 

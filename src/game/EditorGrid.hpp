@@ -23,6 +23,7 @@ private:
 public:
     EditorGrid(Math::GridCoord gridDims, Math::Vector2D initialPos, float cellSize);
 
+    std::optional<Part>& GetPart(Math::GridCoord coord);
     const std::optional<Part>& GetPart(Math::GridCoord coord) const;
     bool PlacePart(
         Math::GridCoord coord,
@@ -31,15 +32,20 @@ public:
         PartId id = 0
     );
     void RemovePart(Math::GridCoord coord);
+    void RotatePart(Math::GridCoord coord);
     void Clear();
+    bool CanShiftContents(Math::GridCoord delta) const;
+    bool ShiftContents(Math::GridCoord delta);
 
     std::vector<Part*>& GetActiveParts() { return m_activeParts; }
     const std::vector<Part*>& GetActiveParts() const { return m_activeParts; }
+    std::size_t GetPartCount() const;
     float GetCellSize() const { return m_cellSize; }
 
     void DrawSelf() const;
     std::optional<Math::GridCoord> WorldToCoord(Math::Vector2D v) const;
     Math::Vector2D CoordToWorld(Math::GridCoord coord) const;
+    bool IsWithinBounds(Math::GridCoord coord) const;
 };
 
 #endif

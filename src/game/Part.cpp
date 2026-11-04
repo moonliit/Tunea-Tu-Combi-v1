@@ -1,13 +1,7 @@
 #include "game/Part.hpp"
-
 #include "game/EditorGrid.hpp"
 #include "game/PartDefinition.hpp"
-
 #include <algorithm>
-#include <cmath>
-#include "raylib.h"
-#include "raymath.h"
-
 using namespace Math;
 
 namespace {
@@ -51,6 +45,7 @@ void Part::Activate() {
                     direction.y * WindSailImpulse
                 });
             }
+
             m_activationActive = true;
             m_propulsionActive = true;
             m_activationCooldown = WindSailDelay;
@@ -60,6 +55,34 @@ void Part::Activate() {
         case PartType::CircleWheel:
             break;
     }
+}
+
+void Part::SetAttachmentBody(std::shared_ptr<I_RigidBody> body) {
+    if (!body || m_attachmentBody) return;
+    m_attachmentRotationOffset =
+        PartOrientationRadians(m_orientation) - body->GetRotation();
+    m_attachmentBody = std::move(body);
+}
+
+void Part::SetContainedBody(std::shared_ptr<I_RigidBody> body) {
+    if (!body || m_physicsBody) return;
+    m_attachmentRotationOffset = 0.0f;
+    m_attachmentBody = std::move(body);
+}
+
+bool Part::CanContain(const Part& part) const {
+    return GetPartDefinition(m_type).role == PartRole::Container &&
+        GetPartDefinition(part.m_type).role == PartRole::Containable;
+}
+
+bool Part::ContainPart(std::unique_ptr<Part> part) {
+    if (!part || !CanContain(*part)) return false;
+    m_containedPart = std::move(part);
+    return true;
+}
+
+std::unique_ptr<Part> Part::RemoveContainedPart() {
+    return std::move(m_containedPart);
 }
 
 void Part::UpdateActivation(float deltaTime) {
@@ -173,8 +196,10 @@ PartRenderState Part::GetRenderState(const EditorGrid& grid) const {
     const float cellSize = grid.GetCellSize();
     Vector2D position = m_physicsBody
         ? m_physicsBody->GetPosition()
+        : m_attachmentBody
+        ? m_attachmentBody->GetPosition()
         : grid.CoordToWorld(m_gridCoord);
-    if (!m_physicsBody) {
+    if (!m_physicsBody && !m_attachmentBody) {
         const PartDefinition& definition = GetPartDefinition(m_type);
         const Vector2D offset = RotateLocalOffset(
             Vector2D{0.0f, grid.GetCellSize() * definition.attachmentOffsetScale},
@@ -185,6 +210,8 @@ PartRenderState Part::GetRenderState(const EditorGrid& grid) const {
     }
     RealNum rotation = m_physicsBody
         ? m_physicsBody->GetRotation()
+        : m_attachmentBody
+        ? m_attachmentBody->GetRotation() + m_attachmentRotationOffset
         : RealNum{PartOrientationRadians(m_orientation)};
     if (m_type == PartType::CircleWheel && m_physicsBody) {
         rotation += PartOrientationRadians(m_orientation);

@@ -24,6 +24,12 @@ enum class PartShape {
     Triangle
 };
 
+enum class PartRole {
+    Normal,
+    Container,
+    Containable
+};
+
 enum class PartOrientation : std::uint8_t {
     Up,
     Right,
@@ -79,13 +85,8 @@ public:
     std::shared_ptr<I_RigidBody> GetPhysicsBody() const {
         return m_physicsBody;
     }
-    void SetAttachmentBody(std::shared_ptr<I_RigidBody> body) {
-        if (!m_attachmentBody) {
-            m_attachmentRotationOffset =
-                PartOrientationRadians(m_orientation) - body->GetRotation();
-            m_attachmentBody = std::move(body);
-        }
-    }
+    void SetAttachmentBody(std::shared_ptr<I_RigidBody> body);
+    void SetContainedBody(std::shared_ptr<I_RigidBody> body);
     void SetPropulsionActive(bool active) { m_propulsionActive = active; }
     void Activate();
     void UpdateActivation(float deltaTime);
@@ -99,6 +100,9 @@ public:
         m_propulsionActive = false;
         m_activationActive = false;
         m_activationCooldown = 0.0f;
+        if (m_containedPart) {
+            m_containedPart->ResetPhysicsBody();
+        }
     };
 
     PartType GetType() const { return m_type; }
@@ -106,6 +110,12 @@ public:
     PartId GetId() const { return m_id; }
     Math::GridCoord GetGridCoord() const { return m_gridCoord; }
     PartRenderState GetRenderState(const EditorGrid& grid) const;
+    bool HasContainedPart() const { return m_containedPart != nullptr; }
+    Part* GetContainedPart() { return m_containedPart.get(); }
+    const Part* GetContainedPart() const { return m_containedPart.get(); }
+    bool CanContain(const Part& part) const;
+    bool ContainPart(std::unique_ptr<Part> part);
+    std::unique_ptr<Part> RemoveContainedPart();
 
 private:
     Math::GridCoord m_gridCoord;
@@ -120,6 +130,7 @@ private:
     bool m_propulsionActive = false;
     bool m_activationActive = false;
     float m_activationCooldown = 0.0f;
+    std::unique_ptr<Part> m_containedPart;
 
     friend class EditorGrid;
 };

@@ -4,12 +4,13 @@
 
 namespace {
 
-const PartDefinition SQUARE_BLOCK{
+const PartDefinition SQUARE_BOX{
     PartType::SquareBlock,
-    "Square block",
+    "Square box",
     1.0f,
     PartShape::Box,
     PartBehavior::Passive,
+    PartRole::Container,
     0.5f,
     0.0f,
     ConnectorBit(ConnectorDirection::Up) |
@@ -23,6 +24,7 @@ const PartDefinition CIRCLE_WHEEL{
     1.0f,
     PartShape::Circle,
     PartBehavior::Passive,
+    PartRole::Normal,
     0.32f,
     0.18f,
     ConnectorBit(ConnectorDirection::Up)
@@ -33,12 +35,10 @@ const PartDefinition TNT_BARREL{
     1.0f,
     PartShape::Box,
     PartBehavior::Explosive,
+    PartRole::Containable,
     0.5f,
     0.0f,
-    ConnectorBit(ConnectorDirection::Up) |
-        ConnectorBit(ConnectorDirection::Right) |
-        ConnectorBit(ConnectorDirection::Down) |
-        ConnectorBit(ConnectorDirection::Left)
+    0
 };
 const PartDefinition FAN{
     PartType::Fan,
@@ -46,6 +46,7 @@ const PartDefinition FAN{
     1.0f,
     PartShape::Capsule,
     PartBehavior::Passive,
+    PartRole::Normal,
     0.5f,
     0.0f,
     ConnectorBit(ConnectorDirection::Right)
@@ -56,6 +57,7 @@ const PartDefinition WIND_SAIL{
     1.0f,
     PartShape::Triangle,
     PartBehavior::Passive,
+    PartRole::Normal,
     0.5f,
     0.0f,
     ConnectorBit(ConnectorDirection::Right)
@@ -65,7 +67,7 @@ const PartDefinition WIND_SAIL{
 
 const PartDefinition& GetPartDefinition(PartType type) {
     switch (type) {
-        case PartType::SquareBlock: return SQUARE_BLOCK;
+        case PartType::SquareBlock: return SQUARE_BOX;
         case PartType::CircleWheel: return CIRCLE_WHEEL;
         case PartType::TNTBarrel: return TNT_BARREL;
         case PartType::Fan: return FAN;

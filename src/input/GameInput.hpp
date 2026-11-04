@@ -4,19 +4,29 @@
 #include "math/Vector2D.hpp"
 #include "game/ActivationRegistry.hpp"
 #include "game/AppState.hpp"
+#include "math/GridCoord.hpp"
 #include "ui/UiControl.hpp"
 
 #include <optional>
+
+struct Camera2D;
 
 struct GameInputFrame {
     bool toggleMode = false;
     bool placePart = false;
     bool removePart = false;
     bool rotatePart = false;
+    bool rotatePlacedPart = false;
+    bool pickupPart = false;
+    bool clearSelection = false;
+    bool discardRepositionedPart = false;
     Math::Vector2D cameraMovement = Math::Vector2D::Zero();
     Math::Vector2D mouseScreenPosition = Math::Vector2D::Zero();
+    std::optional<Math::GridCoord> interactionCoord;
     std::optional<ToolbarPart> toolbarPart;
     std::optional<ActivationAction> activationAction;
+    std::optional<EditorAction> editorAction;
+    bool cameraDragging = false;
 };
 
 class GameInput {
@@ -24,8 +34,22 @@ public:
     GameInputFrame Capture(
         float deltaTime,
         AppState state,
-        const ActivationRegistry& activationRegistry
+        const ActivationRegistry& activationRegistry,
+        const EditorGrid& grid,
+        const Camera2D& camera,
+        const std::optional<PartType>& selectedPartType,
+        bool hasRepositionedPart,
+        int screenWidth,
+        int screenHeight
     ) const;
+
+private:
+    mutable bool m_dragging = false;
+    mutable bool m_pendingWorldClick = false;
+    mutable bool m_canDrag = false;
+    mutable Math::Vector2D m_pressScreenPosition = Math::Vector2D::Zero();
+    mutable std::optional<Math::GridCoord> m_pressGridCoord;
+    mutable bool m_repositioningPart = false;
 };
 
 #endif

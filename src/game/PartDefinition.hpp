@@ -48,6 +48,7 @@ struct PartDefinition {
     float mass;
     PartShape shape;
     PartBehavior behavior = PartBehavior::Passive;
+    PartRole role = PartRole::Normal;
     float radiusScale = 0.5f;
     float attachmentOffsetScale = 0.0f;
     ConnectorMask connectors = 0;
