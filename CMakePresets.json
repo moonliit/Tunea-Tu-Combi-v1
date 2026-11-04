@@ -1,0 +1,70 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "native-debug",
+      "displayName": "Native Debug",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/native",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_COLOR_DIAGNOSTICS": "ON"
+      }
+    },
+    {
+      "name": "native-release",
+      "displayName": "Native Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/native-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_COLOR_DIAGNOSTICS": "ON"
+      }
+    },
+    {
+      "name": "web-debug",
+      "displayName": "WebAssembly Debug",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/web",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_COLOR_DIAGNOSTICS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "native-debug",
+      "configurePreset": "native-debug",
+      "jobs": 0
+    },
+    {
+      "name": "native-release",
+      "configurePreset": "native-release",
+      "jobs": 0
+    },
+    {
+      "name": "web-debug",
+      "configurePreset": "web-debug",
+      "jobs": 0
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "native-debug",
+      "configurePreset": "native-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

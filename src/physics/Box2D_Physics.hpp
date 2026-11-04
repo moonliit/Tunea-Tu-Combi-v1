@@ -12,6 +12,8 @@ public:
 
     Math::Vector2D GetPosition() const override;
     Math::RealNum GetRotation() const override;
+    void ApplyForce(Math::Vector2D force) override;
+    void ApplyLinearImpulse(Math::Vector2D impulse) override;
 };
 
 class Box2D_BoxRigidBody : public Box2D_IRigidBody {
@@ -122,6 +124,12 @@ public:
     ) override;
 
     std::shared_ptr<I_Joint> CreateRevoluteJoint(
+        std::shared_ptr<I_RigidBody> bodyA,
+        std::shared_ptr<I_RigidBody> bodyB,
+        Math::Vector2D anchor
+    ) override;
+
+    std::shared_ptr<I_Joint> CreateWeldJoint(
         std::shared_ptr<I_RigidBody> bodyA,
         std::shared_ptr<I_RigidBody> bodyB,
         Math::Vector2D anchor

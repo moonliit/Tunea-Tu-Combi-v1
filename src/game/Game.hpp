@@ -1,19 +1,19 @@
 #ifndef GAME_HPP
 #define GAME_HPP
 
-#include "physics/I_Physics.hpp"
+#include "game/AppState.hpp"
+#include "game/BuildSession.hpp"
 #include "game/Level.hpp"
 #include "game/Part.hpp"
+#include "game/PlaySession.hpp"
+#include "input/GameInput.hpp"
+#include "rendering/GameUiRenderer.hpp"
+#include "rendering/WorldRenderer.hpp"
 
 #include <raylib.h>
 #include <optional>
 #include <memory>
 #include <vector>
-
-enum class GameState {
-    Edit,
-    Play
-};
 
 class Game {
 private:
@@ -22,20 +22,18 @@ private:
     Camera2D m_camera;
 
     float m_gravity;
-    GameState m_currentState;
-    std::vector<Part> m_activeParts;
-    std::unique_ptr<I_PhysicsWorld> m_physics;
-    std::optional<PartType> m_currentPartType;
-    std::vector<Math::Vector2D> m_terrainVertices;
-
+    AppStateMachine m_stateMachine;
     Level m_level;
-
-    void SetPartType(PartType type);
+    BuildSession m_buildSession;
+    PlaySession m_playSession;
+    GameInput m_input;
+    WorldRenderer m_worldRenderer;
+    GameUiRenderer m_uiRenderer;
 
     void ProcessInput(float dt);
     void Update(float dt);
     void Render();
-    void ResetToEditMode();
+    void ResetToBuildMode();
     void TransitionToPlayMode();
 
 public:

@@ -20,6 +20,28 @@ RealNum Box2D_IRigidBody::GetRotation() const {
     return Math::RealNum {b2Rot_GetAngle(rot)};
 }
 
+void Box2D_IRigidBody::ApplyForce(Math::Vector2D force) {
+    b2Body_ApplyForceToCenter(
+        GetInternalId(),
+        b2Vec2{
+            static_cast<float>(force.x),
+            static_cast<float>(force.y)
+        },
+        true
+    );
+}
+
+void Box2D_IRigidBody::ApplyLinearImpulse(Math::Vector2D impulse) {
+    b2Body_ApplyLinearImpulseToCenter(
+        GetInternalId(),
+        b2Vec2{
+            static_cast<float>(impulse.x),
+            static_cast<float>(impulse.y)
+        },
+        true
+    );
+}
+
 // --- Box RigidBody Implementation ---
 Box2D_BoxRigidBody::Box2D_BoxRigidBody(b2BodyId bodyId, Math::Vector2D size)
     : m_bodyId(bodyId), m_size(size) {}
@@ -197,9 +219,9 @@ std::shared_ptr<I_RigidBody> Box2D_PhysicsWorld::CreateTriangle(
 
     // Define vertices in counter-clockwise order
     b2Vec2 points[3] = {
-        { 0.0f, -size.y * 0.5f },             // Top tip
-        { -size.x * 0.5f,  size.y * 0.5f },    // Bottom-left
-        {  size.x * 0.5f,  size.y * 0.5f }     // Bottom-right
+        { -size.x * 0.5f, 0.0f },             // Left tip
+        {  size.x * 0.5f, -size.y * 0.5f },   // Right top
+        {  size.x * 0.5f,  size.y * 0.5f }    // Right bottom
     };
 
     // Use Box2D's official hull computation helper to ensure valid geometry and winding order
@@ -249,6 +271,42 @@ std::shared_ptr<I_Joint> Box2D_PhysicsWorld::CreateRevoluteJoint(
     jointDef.base.collideConnected = false;
 
     b2JointId jointId = b2CreateRevoluteJoint(m_worldId, &jointDef);
+    return std::make_shared<Box2D_Joint>(jointId);
+}
+
+std::shared_ptr<I_Joint> Box2D_PhysicsWorld::CreateWeldJoint(
+    std::shared_ptr<I_RigidBody> bodyA,
+    std::shared_ptr<I_RigidBody> bodyB,
+    Math::Vector2D anchor
+) {
+    auto bA = std::dynamic_pointer_cast<Box2D_IRigidBody>(bodyA);
+    auto bB = std::dynamic_pointer_cast<Box2D_IRigidBody>(bodyB);
+
+    if (!bA || !bB) return nullptr;
+
+    b2WeldJointDef jointDef = b2DefaultWeldJointDef();
+    jointDef.base.bodyIdA = bA->GetInternalId();
+    jointDef.base.bodyIdB = bB->GetInternalId();
+
+    const b2Vec2 worldAnchor{
+        static_cast<float>(anchor.x),
+        static_cast<float>(anchor.y)
+    };
+    jointDef.base.localFrameA.p =
+        b2Body_GetLocalPoint(jointDef.base.bodyIdA, worldAnchor);
+    jointDef.base.localFrameB.p =
+        b2Body_GetLocalPoint(jointDef.base.bodyIdB, worldAnchor);
+    const float rotationA = b2Rot_GetAngle(b2Body_GetRotation(
+        jointDef.base.bodyIdA
+    ));
+    const float rotationB = b2Rot_GetAngle(b2Body_GetRotation(
+        jointDef.base.bodyIdB
+    ));
+    jointDef.base.localFrameA.q = b2MakeRot(0.0f);
+    jointDef.base.localFrameB.q = b2MakeRot(rotationA - rotationB);
+    jointDef.base.collideConnected = false;
+
+    const b2JointId jointId = b2CreateWeldJoint(m_worldId, &jointDef);
     return std::make_shared<Box2D_Joint>(jointId);
 }
 

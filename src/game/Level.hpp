@@ -2,7 +2,7 @@
 #define LEVEL_HPP
 
 #include "math/Vector2D.hpp"
-#include "game/EditorGrid.hpp"
+#include "game/BuildModel.hpp"
 #include <vector>
 
 struct LevelSpecs {
@@ -17,13 +17,16 @@ struct LevelSpecs {
 class Level {
 private:
     std::vector<Math::Vector2D> m_catmullRomPoints;
-    EditorGrid m_editorGrid;
+    BuildModel m_buildModel;
 
 public:
     Level(LevelSpecs specs);
 
     const std::vector<Math::Vector2D>& GetCatmullromPoints() const { return m_catmullRomPoints; }
-    EditorGrid& GetGrid() { return m_editorGrid; }
+    BuildModel& GetBuildModel() { return m_buildModel; }
+    const BuildModel& GetBuildModel() const { return m_buildModel; }
+    EditorGrid& GetGrid() { return m_buildModel.GetGrid(); }
+    const EditorGrid& GetGrid() const { return m_buildModel.GetGrid(); }
 };
 
 #endif

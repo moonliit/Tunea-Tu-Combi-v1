@@ -36,20 +36,20 @@ source ./emsdk_env.sh
 
 ---
 
-## Uso del Proyecto (`Justfile`)
+## Uso del Proyecto (`Justfile` y CMake Presets)
 
-El proyecto utiliza `just` para gestionar los comandos de compilación.
+El proyecto utiliza `just` como wrapper de CMake. Los presets usan explícitamente
+`Unix Makefiles`, habilitan diagnósticos coloreados y conservan compilación
+incremental. CMake genera `compile_commands.json` dentro del build nativo y
+`just build` crea un symlink en la raíz para herramientas LSP.
 
-| Comando       | Descripción                                                                    |
-| ------------- | ------------------------------------------------------------------------------ |
-| `just build`  | Compila el ejecutable nativo en `build/native/`                                |
-| `just run`    | Compila y ejecuta la versión nativa                                            |
-| `just web`    | Compila la versión WebAssembly en `build/web/`                                 |
-| `just serve`  | Compila para WebAssembly y levanta un servidor local (`http://localhost:6931`) |
-| `just compdb` | Genera `compile_commands.json` usando `bear` _(Opcional)_                      |
-| `just clean`  | Elimina los artefactos de compilación (`build/`, `obj/`, `dep/`)               |
-
----
+| Comando      | Descripción                                                                    |
+| ------------ | ------------------------------------------------------------------------------ |
+| `just build` | Compila el ejecutable nativo en `build/native/`                                |
+| `just run`   | Compila y ejecuta la versión nativa                                            |
+| `just web`   | Compila la versión WebAssembly en `build/web/`                                 |
+| `just serve` | Compila para WebAssembly y levanta un servidor local (`http://localhost:6931`) |
+| `just clean` | Elimina los artefactos compilados y el symlink de `compile_commands.json`      |
 
 ## Estructura del Proyecto
 
@@ -61,7 +61,8 @@ El proyecto utiliza `just` para gestionar los comandos de compilación.
 │   ├── raylib/
 │   └── raylib-cpp/
 ├── lib/
-│   └── web/         # Raylib compilado estáticamente para WASM (libraylib.web.a)
+│   ├── native/      # Box2D compilado estáticamente para Linux
+│   └── web/         # Raylib y Box2D compilados estáticamente para WASM
 ├── src/             # Código fuente C++ (.cpp)
 ├── Justfile         # Recetas de compilación
 └── README.md

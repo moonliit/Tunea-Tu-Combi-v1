@@ -16,6 +16,8 @@ public:
     virtual ~I_RigidBody() = default;
     virtual Math::Vector2D GetPosition() const = 0;
     virtual Math::RealNum GetRotation() const = 0;
+    virtual void ApplyForce(Math::Vector2D force) = 0;
+    virtual void ApplyLinearImpulse(Math::Vector2D impulse) = 0;
 };
 
 // abstract representation of a joint
@@ -70,6 +72,12 @@ public:
 
     // joints creation (to connect chasis and wheels)
     virtual std::shared_ptr<I_Joint> CreateRevoluteJoint(
+        std::shared_ptr<I_RigidBody> bodyA,
+        std::shared_ptr<I_RigidBody> bodyB,
+        Math::Vector2D anchor
+    ) = 0;
+
+    virtual std::shared_ptr<I_Joint> CreateWeldJoint(
         std::shared_ptr<I_RigidBody> bodyA,
         std::shared_ptr<I_RigidBody> bodyB,
         Math::Vector2D anchor

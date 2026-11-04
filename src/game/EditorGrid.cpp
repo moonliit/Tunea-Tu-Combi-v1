@@ -44,7 +44,12 @@ const std::optional<Part>& EditorGrid::GetPart(GridCoord coord) const {
     return m_cells[idx];
 }
 
-bool EditorGrid::PlacePart(GridCoord coord, PartType type) {
+bool EditorGrid::PlacePart(
+    GridCoord coord,
+    PartType type,
+    PartOrientation orientation,
+    PartId id
+) {
     if (!IsGridCoordWithinSelfBounds(coord)) return false;
     size_t idx = GetIndex(coord);
 
@@ -52,7 +57,7 @@ bool EditorGrid::PlacePart(GridCoord coord, PartType type) {
         RemovePart(coord);
     }
 
-    m_cells[idx] = Part(coord, type);
+    m_cells[idx] = Part(coord, type, orientation, id);
     m_activeParts.push_back(&m_cells[idx].value());
     m_cells[idx].value().m_activeCacheIndex = m_activeParts.size() - 1;
     return true;
@@ -81,7 +86,7 @@ void EditorGrid::Clear() {
     m_activeParts.clear();
 }
 
-void EditorGrid::DrawSelf() {
+void EditorGrid::DrawSelf() const {
     const float sizeMultiplier = 0.9f;
     const float drawnSize = m_cellSize * sizeMultiplier;
     const float offsetPos = drawnSize / 2.0f;

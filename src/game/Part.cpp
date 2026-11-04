@@ -1,187 +1,207 @@
 #include "game/Part.hpp"
+
 #include "game/EditorGrid.hpp"
-#include "math/GridCoord.hpp"
-#include "math/Vector2D.hpp"
-#include "physics/I_Physics.hpp"
+#include "game/PartDefinition.hpp"
+
+#include <algorithm>
+#include <cmath>
 #include "raylib.h"
-#include "rlgl.h"
+#include "raymath.h"
 
 using namespace Math;
 
-Part::Part(GridCoord gridCoord, PartType type):
-    m_gridCoord(gridCoord), m_type(type), m_activeCacheIndex(0) {}
+namespace {
 
-void Part::SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics) {
-    Vector2D worldPos = grid.CoordToWorld(m_gridCoord);
+constexpr float FanForce = 750.0f;
+constexpr float WindSailImpulse = 1500.0f;
+constexpr float WindSailDelay = 0.75f;
+
+Vector2D RotateLocalOffset(Vector2D offset, PartOrientation orientation) {
+    switch (orientation) {
+        case PartOrientation::Up:
+            return offset;
+        case PartOrientation::Right:
+            return Vector2D{-offset.y, offset.x};
+        case PartOrientation::Down:
+            return Vector2D{-offset.x, -offset.y};
+        case PartOrientation::Left:
+            return Vector2D{offset.y, -offset.x};
+    }
+    return offset;
+}
+
+}
+
+void Part::Activate() {
+    if (!m_physicsBody) return;
+
+    switch (m_type) {
+        case PartType::Fan:
+            m_activationActive = !m_activationActive;
+            m_propulsionActive = m_activationActive;
+            break;
+        case PartType::WindSail:
+            if (m_activationCooldown > 0.0f) return;
+            {
+                const Vector2D direction = Vector2D::FromAngle(
+                    m_physicsBody->GetRotation()
+                );
+                m_physicsBody->ApplyLinearImpulse({
+                    direction.x * WindSailImpulse,
+                    direction.y * WindSailImpulse
+                });
+            }
+            m_activationActive = true;
+            m_propulsionActive = true;
+            m_activationCooldown = WindSailDelay;
+            break;
+        case PartType::TNTBarrel:
+        case PartType::SquareBlock:
+        case PartType::CircleWheel:
+            break;
+    }
+}
+
+void Part::UpdateActivation(float deltaTime) {
+    if (!m_physicsBody) return;
+
+    if (m_activationCooldown > 0.0f) {
+        m_activationCooldown = std::max(
+            0.0f,
+            m_activationCooldown - deltaTime
+        );
+        if (m_activationCooldown <= 0.0f &&
+            m_type == PartType::WindSail) {
+            m_activationActive = false;
+        }
+    }
+
+    m_propulsionActive = m_activationActive;
+    if (m_type != PartType::Fan || !m_activationActive) return;
+
+    const Vector2D direction = Vector2D::FromAngle(
+        m_physicsBody->GetRotation()
+    );
+    m_physicsBody->ApplyForce({
+        direction.x * FanForce,
+        direction.y * FanForce
+    });
+}
+
+Part::Part(
+    GridCoord gridCoord,
+    PartType type,
+    PartOrientation orientation,
+    PartId id
+):
+    m_gridCoord(gridCoord),
+    m_type(type),
+    m_orientation(orientation),
+    m_id(id),
+    m_activeCacheIndex(0) {}
+
+void Part::SetPhysicsBody(
+    const EditorGrid& grid,
+    std::unique_ptr<I_PhysicsWorld>& physics
+) {
+    const Vector2D worldPos = grid.CoordToWorld(m_gridCoord);
     const float cellSize = grid.GetCellSize();
-
-    std::shared_ptr<I_RigidBody> rb = nullptr;
+    const PartDefinition& definition = GetPartDefinition(m_type);
+    Vector2D physicsPosition = worldPos;
+    if (m_type == PartType::CircleWheel) {
+        const Vector2D offset = RotateLocalOffset(
+            Vector2D{0.0f, cellSize * definition.attachmentOffsetScale},
+            m_orientation
+        );
+        physicsPosition.x += offset.x;
+        physicsPosition.y += offset.y;
+    }
+    std::shared_ptr<I_RigidBody> body;
 
     switch (m_type) {
         case PartType::SquareBlock:
-            rb = physics->CreateBox(
-                worldPos, 0.0f,
-                Vector2D{cellSize, cellSize}, 1.0f, BodyType::Dynamic
+            body = physics->CreateBox(
+                physicsPosition,
+                PartOrientationRadians(m_orientation),
+                Vector2D{cellSize, cellSize},
+                definition.mass,
+                BodyType::Dynamic
             );
             break;
         case PartType::CircleWheel:
-            rb = physics->CreateCircle(
-                worldPos,
-                cellSize / 2.0f, 1.0f, BodyType::Dynamic
+            body = physics->CreateCircle(
+                physicsPosition,
+                cellSize * definition.radiusScale,
+                definition.mass,
+                BodyType::Dynamic
             );
             break;
-        case PartType::TNTBarrel:
-            break;
         case PartType::Fan:
-            rb = physics->CreateCapsule(
-                worldPos, 0.f,
-                cellSize, cellSize / 4.f,
-                1.f, BodyType::Dynamic
+            body = physics->CreateCapsule(
+                physicsPosition,
+                PartOrientationRadians(m_orientation),
+                cellSize,
+                cellSize / 4.0f,
+                definition.mass,
+                BodyType::Dynamic
             );
             break;
         case PartType::WindSail:
-            rb = physics->CreateTriangle(
-                worldPos, 0.f,
-                Vector2D{cellSize, cellSize}, 1.f, BodyType::Dynamic
+            body = physics->CreateTriangle(
+                physicsPosition,
+                PartOrientationRadians(m_orientation),
+                Vector2D{cellSize, cellSize},
+                definition.mass,
+                BodyType::Dynamic
             );
             break;
-        default:
+        case PartType::TNTBarrel:
+            body = physics->CreateBox(
+                physicsPosition,
+                PartOrientationRadians(m_orientation),
+                Vector2D{cellSize, cellSize},
+                definition.mass,
+                BodyType::Dynamic
+            );
             break;
     }
 
-    m_physicsBody = rb;
+    m_physicsBody = body;
 }
 
-#include "physics/Box2D_Physics.hpp"
-
-void Part::DrawSelf(const EditorGrid& grid) const {
+PartRenderState Part::GetRenderState(const EditorGrid& grid) const {
     const float cellSize = grid.GetCellSize();
-    Vector2D pos = m_physicsBody ? m_physicsBody->GetPosition() : grid.CoordToWorld(m_gridCoord);
-    RealNum rot = m_physicsBody ? m_physicsBody->GetRotation() * RAD2DEG : RealNum {0.f};
-
-    switch (m_type) {
-        case PartType::SquareBlock:
-            DrawRectanglePro(
-                Rectangle{static_cast<float>(pos.x), static_cast<float>(pos.y), cellSize, cellSize},
-                Vector2{cellSize / 2.0f, cellSize / 2.0f},
-                rot, BLUE
-            );
-            break;
-
-        case PartType::CircleWheel:
-            // Even if it has a circular collision shape, we draw it as a wheel with spokes or a distinct color
-            DrawCircleLines(pos.x, pos.y, cellSize / 2.0f, BLACK);
-            DrawCircle(pos.x, pos.y, cellSize / 2.0f - 2, GREEN);
-            // Draw a little rotation indicator line so you can see the wheel spinning
-            break;
-
-        case PartType::TNTBarrel:
-            // Custom rendering for TNT: Red box with a warning symbol or fuse
-            DrawRectanglePro(
-                Rectangle{static_cast<float>(pos.x), static_cast<float>(pos.y), cellSize, cellSize},
-                Vector2{cellSize / 2.0f, cellSize / 2.0f},
-                rot, MAROON
-            );
-            // DrawText("TNT", pos.x - 15, pos.y - 10, 10, YELLOW);
-            break;
-
-        case PartType::Fan: {
-            float capsuleHeight = cellSize;
-            float capsuleRadius = cellSize * 0.25f;
-            if (auto capsuleBody = std::dynamic_pointer_cast<Box2D_CapsuleRigidBody>(m_physicsBody)) {
-                capsuleHeight = capsuleBody->GetHeight();
-                capsuleRadius = capsuleBody->GetRadius();
-            }
-
-            float width = capsuleRadius * 2.0f;
-            float halfHeight = capsuleHeight / 2.0f;
-            float halfSegment = std::max(0.0f, halfHeight - capsuleRadius);
-
-            // Use Raylib's matrix stack to handle rotation and translation as a single unit
-            rlPushMatrix();
-            rlTranslatef(static_cast<float>(pos.x), static_cast<float>(pos.y), 0.0f);
-            rlRotatef(rot, 0.0f, 0.0f, 1.0f); // rot is already in degrees
-
-            // 1. Draw the central connecting rectangle (between the two semi-circle caps)
-            DrawRectangleRec(
-                Rectangle{ -width / 2.0f, -halfSegment, width, halfSegment * 2.0f },
-                ORANGE
-            );
-
-            // 2. Draw the top and bottom circular caps
-            DrawCircle(0.0f, -halfSegment, capsuleRadius, ORANGE);
-            DrawCircle(0.0f,  halfSegment, capsuleRadius, ORANGE);
-
-            rlPopMatrix();
-            break;
-        }
-
-        case PartType::WindSail: {
-            float halfSize = cellSize / 2.0f;
-
-            // Define local vertices relative to the center (0,0)
-            // Matching the physics body: top tip pointing up (-Y), base at the bottom (+Y)
-            Vector2 localV1 = { 0.0f, -halfSize };          // Top tip
-            Vector2 localV2 = { -halfSize, halfSize };      // Bottom-left
-            Vector2 localV3 = {  halfSize, halfSize };      // Bottom-right
-
-            rlPushMatrix();
-            rlTranslatef(static_cast<float>(pos.x), static_cast<float>(pos.y), 0.0f);
-            rlRotatef(rot, 0.0f, 0.0f, 1.0f); // rot is in degrees
-
-            // Draw using local coordinates; rotation is handled by the matrix stack
-            DrawTriangle(localV1, localV2, localV3, YELLOW);
-            DrawTriangleLines(localV1, localV2, localV3, BLACK);
-
-            rlPopMatrix();
-            break;
-        }
-
-        default:
-            break;
+    Vector2D position = m_physicsBody
+        ? m_physicsBody->GetPosition()
+        : grid.CoordToWorld(m_gridCoord);
+    if (!m_physicsBody) {
+        const PartDefinition& definition = GetPartDefinition(m_type);
+        const Vector2D offset = RotateLocalOffset(
+            Vector2D{0.0f, grid.GetCellSize() * definition.attachmentOffsetScale},
+            m_orientation
+        );
+        position.x += offset.x;
+        position.y += offset.y;
     }
-}
-
-void Part::DrawGhost(PartType type, GridCoord coord, const EditorGrid& grid) {
-    Vector2D pos = grid.CoordToWorld(coord);
-    const float cellSize = grid.GetCellSize();
-    const float halfCell = cellSize / 2.f;
-
-    switch (type) {
-
-                // if (m_currentPartType == PartType::SquareBlock) {
-                //     DrawRectangle(previewX, previewY, cellSize, cellSize, Fade(BLUE, 0.2f));
-                //     DrawRectangleLines(previewX, previewY, cellSize, cellSize, BLUE);
-                // } else {
-                //     DrawCircle(previewX + cellSize / 2, previewY + cellSize / 2, cellSize / 2, Fade(GREEN, 0.2f));
-                //     DrawCircleLines(previewX + cellSize / 2, previewY + cellSize / 2, cellSize / 2, GREEN);
-                // }
-
-        case PartType::SquareBlock:
-            DrawRectangleRec(
-                Rectangle{pos.x - halfCell, pos.y - halfCell, cellSize, cellSize},
-                Fade(BLUE, 0.2f)
-            );
-            break;
-
-        case PartType::CircleWheel:
-            // Even if it has a circular collision shape, we draw it as a wheel with spokes or a distinct color
-            DrawCircleLines(pos.x, pos.y, cellSize / 2.0f, Fade(BLACK, 0.2f));
-            DrawCircle(pos.x, pos.y, cellSize / 2.0f - 2, Fade(GREEN, 0.2f));
-            // Draw a little rotation indicator line so you can see the wheel spinning
-            break;
-
-        case PartType::TNTBarrel:
-            // Custom rendering for TNT: Red box with a warning symbol or fuse
-            DrawRectanglePro(
-                Rectangle{static_cast<float>(pos.x), static_cast<float>(pos.y), cellSize, cellSize},
-                Vector2{cellSize / 2.0f, cellSize / 2.0f},
-                0, MAROON
-            );
-            // DrawText("TNT", pos.x - 15, pos.y - 10, 10, YELLOW);
-            break;
-
-        default:
-            break;
+    RealNum rotation = m_physicsBody
+        ? m_physicsBody->GetRotation()
+        : RealNum{PartOrientationRadians(m_orientation)};
+    if (m_type == PartType::CircleWheel && m_physicsBody) {
+        rotation += PartOrientationRadians(m_orientation);
     }
+    const RealNum attachmentRotation = m_attachmentBody
+        ? m_attachmentBody->GetRotation() + m_attachmentRotationOffset
+        : RealNum{PartOrientationRadians(m_orientation)};
+
+    return PartRenderState{
+        .type = m_type,
+        .position = position,
+        .rotation = rotation,
+        .attachmentRotation = attachmentRotation,
+        .propulsionActive = m_propulsionActive,
+        .orientation = m_orientation,
+        .cellSize = cellSize,
+        .capsuleHeight = cellSize,
+        .capsuleRadius = cellSize * 0.25f
+    };
 }
