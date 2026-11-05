@@ -1,4 +1,4 @@
-#include "game/BuildModel.hpp"
+#include "app/game/BuildModel.hpp"
 
 #include <utility>
 

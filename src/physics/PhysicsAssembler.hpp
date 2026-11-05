@@ -1,7 +1,7 @@
 #ifndef PHYSICS_ASSEMBLER_HPP
 #define PHYSICS_ASSEMBLER_HPP
 
-#include "game/BuildModel.hpp"
+#include "app/game/BuildModel.hpp"
 #include "physics/I_Physics.hpp"
 
 #include <memory>

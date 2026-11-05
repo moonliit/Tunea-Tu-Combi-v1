@@ -1,7 +1,7 @@
 #ifndef RENDERING_PART_RENDERER_HPP
 #define RENDERING_PART_RENDERER_HPP
 
-#include "game/Part.hpp"
+#include "app/game/Part.hpp"
 
 class PartRenderer {
 public:

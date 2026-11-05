@@ -1,4 +1,4 @@
-#include "game/BuildSession.hpp"
+#include "app/game/BuildSession.hpp"
 
 void BuildSession::SelectPartType(PartType type) {
     if (m_selectedPartType.has_value() && m_selectedPartType.value() == type) {

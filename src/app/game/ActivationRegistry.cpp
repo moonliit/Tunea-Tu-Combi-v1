@@ -1,4 +1,4 @@
-#include "game/ActivationRegistry.hpp"
+#include "app/game/ActivationRegistry.hpp"
 
 #include <algorithm>
 

@@ -1,10 +1,11 @@
-#ifndef GAME_TERRAIN_HPP
-#define GAME_TERRAIN_HPP
+#ifndef MATH_TERRAIN_HPP
+#define MATH_TERRAIN_HPP
 
 #include "math/Vector2D.hpp"
-
 #include <vector>
 #include <cstdint>
+
+namespace Math {
 
 enum class TerrainSegmentType {
     Line,
@@ -69,5 +70,7 @@ TerrainMesh BuildTerrainMesh(
 TerrainMesh BuildTerrainPolygonMesh(
     const std::vector<Math::Vector2D>& polygon
 );
+
+};
 
 #endif

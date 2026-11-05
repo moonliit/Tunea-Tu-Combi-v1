@@ -1,4 +1,4 @@
-#include "game/Game.hpp"
+#include "app/game/MainGameScene.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include "ui/UiControl.hpp"
@@ -42,7 +42,7 @@ Vector2 CalculateGridTarget(const LevelSpecs& specs) {
 
 }
 
-Game::Game(int width, int height, const std::string& title, LevelSpecs specs):
+MainGameScene::MainGameScene(int width, int height, LevelSpecs specs):
     m_screenWidth(width),
     m_screenHeight(height),
     m_gravity(9.8f * 40.0f),
@@ -54,10 +54,6 @@ Game::Game(int width, int height, const std::string& title, LevelSpecs specs):
         Vector2D{0.0f, m_gravity}
     )
 {
-    InitWindow(width, height, title.c_str());
-    SetExitKey(KEY_NULL);
-    SetTargetFPS(60);
-
     // Initialize Camera2D
     m_camera = Camera2D(Vector2{0});
     const Vector2 automaticTarget = CalculateGridTarget(specs);
@@ -86,17 +82,7 @@ Game::Game(int width, int height, const std::string& title, LevelSpecs specs):
 
 }
 
-void Game::Run() {
-    while (!WindowShouldClose()) {
-        float dt = GetFrameTime();
-        if (dt > 0.033f) dt = 0.033f;
-
-        ProcessInput(dt);
-        Update(dt);
-        Render();
-    }
-}
-void Game::ProcessInput(float dt) {
+void MainGameScene::ProcessInput(float dt) {
     const GameInputFrame input = m_input.Capture(
         dt,
         m_stateMachine.GetState(),
@@ -220,18 +206,18 @@ void Game::ProcessInput(float dt) {
     }
 }
 
-void Game::Update(float dt) {
+void MainGameScene::Update(float dt) {
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
     }
 }
 
-void Game::TransitionToPlayMode() {
+void MainGameScene::TransitionToPlayMode() {
     m_stateMachine.EnterPlay();
     m_playSession.Start();
 }
 
-void Game::ResetToBuildMode() {
+void MainGameScene::ResetToBuildMode() {
     if (!m_stateMachine.IsBuildMode()) {
         m_stateMachine.EnterBuild();
     }
@@ -240,12 +226,12 @@ void Game::ResetToBuildMode() {
     m_playSession.Reset(m_level.GetTerrain());
 }
 
-void Game::ResetEditorCamera() {
+void MainGameScene::ResetEditorCamera() {
     m_camera.target = m_editorCameraTarget;
     m_camera.zoom = m_editorCameraZoom;
 }
 
-void Game::Render() {
+void MainGameScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
 

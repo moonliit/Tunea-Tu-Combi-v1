@@ -2,8 +2,8 @@
 #define INPUT_GAME_INPUT_HPP
 
 #include "math/Vector2D.hpp"
-#include "game/ActivationRegistry.hpp"
-#include "game/AppState.hpp"
+#include "app/game/ActivationRegistry.hpp"
+#include "app/game/GameState.hpp"
 #include "math/GridCoord.hpp"
 #include "ui/UiControl.hpp"
 
@@ -33,7 +33,7 @@ class GameInput {
 public:
     GameInputFrame Capture(
         float deltaTime,
-        AppState state,
+        GameState state,
         const ActivationRegistry& activationRegistry,
         const EditorGrid& grid,
         const Camera2D& camera,

@@ -1,6 +1,6 @@
-#include "game/Part.hpp"
-#include "game/EditorGrid.hpp"
-#include "game/PartDefinition.hpp"
+#include "app/game/Part.hpp"
+#include "app/game/EditorGrid.hpp"
+#include "app/game/PartDefinition.hpp"
 #include <algorithm>
 using namespace Math;
 

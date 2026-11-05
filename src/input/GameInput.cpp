@@ -1,5 +1,5 @@
 #include "input/GameInput.hpp"
-#include "game/EditorGrid.hpp"
+#include "app/game/EditorGrid.hpp"
 #include "ui/UiLayout.hpp"
 #include <raylib.h>
 
@@ -10,7 +10,7 @@ namespace {
 
 GameInputFrame GameInput::Capture(
     float deltaTime,
-    AppState state,
+    GameState state,
     const ActivationRegistry& activationRegistry,
     const EditorGrid& grid,
     const Camera2D& camera,
@@ -28,7 +28,7 @@ GameInputFrame GameInput::Capture(
         GetMousePosition().y
     };
 
-    const bool cameraMode = state == AppState::View || state == AppState::Play;
+    const bool cameraMode = state == GameState::View || state == GameState::Play;
     if (cameraMode) {
         const float cameraSpeed = 300.0f * deltaTime;
         if (IsKeyDown(KEY_W)) frame.cameraMovement.y -= cameraSpeed;
@@ -150,7 +150,7 @@ GameInputFrame GameInput::Capture(
     }
 
     m_pendingWorldClick = cameraMode ||
-        (state == AppState::Build && frame.mouseScreenPosition.y <= 520.0f);
+        (state == GameState::Build && frame.mouseScreenPosition.y <= 520.0f);
     m_pressScreenPosition = frame.mouseScreenPosition;
     m_canDrag = false;
     m_repositioningPart = false;

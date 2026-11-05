@@ -1,9 +1,9 @@
 #ifndef RENDERING_WORLD_RENDERER_HPP
 #define RENDERING_WORLD_RENDERER_HPP
 
-#include "game/AppState.hpp"
-#include "game/EditorGrid.hpp"
-#include "game/PlaySession.hpp"
+#include "app/game/GameState.hpp"
+#include "app/game/EditorGrid.hpp"
+#include "app/game/PlaySession.hpp"
 #include "rendering/PartRenderer.hpp"
 
 #include <raylib.h>
@@ -16,7 +16,7 @@ private:
 public:
     void Render(
         const Camera2D& camera,
-        AppState state,
+        GameState state,
         const EditorGrid& grid,
         const PlaySession& playSession,
         const std::optional<PartType>& selectedPartType,

@@ -1,4 +1,4 @@
-#include "game/PlaySession.hpp"
+#include "app/game/PlaySession.hpp"
 #include "physics/Box2D_Physics.hpp"
 
 #include <algorithm>
@@ -39,12 +39,12 @@ PlaySession::PlaySession(
     m_model(model),
     m_gravity(gravity)
 {
-    TerrainDefinition definition;
+    Math::TerrainDefinition definition;
     for (const auto& section : terrainSections) {
-        definition.polygons.push_back(TerrainPolygon{
+        definition.polygons.push_back(Math::TerrainPolygon{
             .segments = {
-                TerrainSegment{
-                    .type = TerrainSegmentType::Line,
+                Math::TerrainSegment{
+                    .type = Math::TerrainSegmentType::Line,
                     .points = section
                 }
             }
@@ -56,7 +56,7 @@ PlaySession::PlaySession(
 
 PlaySession::PlaySession(
     BuildModel& model,
-    const TerrainDefinition& terrain,
+    const Math::TerrainDefinition& terrain,
     Math::Vector2D gravity
 ):
     m_model(model),
@@ -104,7 +104,7 @@ void PlaySession::CreatePhysicsWorld(
         const std::vector<Math::Vector2D> vertices =
             m_physics->CreateTerrainChain(physicsPoints, sectionIsClosed);
         if (vertices.size() >= 2) {
-            TerrainMesh mesh = BuildTerrainPolygonMesh(section);
+            Math::TerrainMesh mesh = BuildTerrainPolygonMesh(section);
             if (mesh.top.empty() && !closed) {
                 mesh.top = section;
             }
@@ -134,9 +134,9 @@ void PlaySession::Reset(
 ) {
     m_terrainDefinition.polygons.clear();
     for (const auto& section : terrainSections) {
-        m_terrainDefinition.polygons.push_back(TerrainPolygon{
-            .segments = {TerrainSegment{
-                .type = TerrainSegmentType::Line,
+        m_terrainDefinition.polygons.push_back(Math::TerrainPolygon{
+            .segments = {Math::TerrainSegment{
+                .type = Math::TerrainSegmentType::Line,
                 .points = section
             }}
         });
@@ -144,7 +144,7 @@ void PlaySession::Reset(
     Reset(m_terrainDefinition);
 }
 
-void PlaySession::Reset(const TerrainDefinition& terrain) {
+void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_terrainDefinition = terrain;
     m_assembler.Clear();
     for (Part* part : m_model.GetGrid().GetActiveParts()) {

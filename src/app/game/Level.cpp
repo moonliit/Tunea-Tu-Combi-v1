@@ -1,4 +1,4 @@
-#include "game/Level.hpp"
+#include "app/game/Level.hpp"
 #include <utility>
 
 Level::Level(LevelSpecs specs):
@@ -11,17 +11,17 @@ Level::Level(LevelSpecs specs):
 {
     if (m_definition.terrain.polygons.empty() &&
         m_definition.terrainControlPoints.size() >= 2) {
-        m_definition.terrain.polygons.push_back(TerrainPolygon{
+        m_definition.terrain.polygons.push_back(Math::TerrainPolygon{
             .segments = {
-                TerrainSegment{
-                    .type = TerrainSegmentType::CatmullRom,
+            Math::TerrainSegment{
+                    .type = Math::TerrainSegmentType::CatmullRom,
                     .points = std::move(m_definition.terrainControlPoints),
                     .resolution = m_definition.catmullRomResolution
                 }
             }
         });
     }
-    const auto sections = SampleTerrain(m_definition.terrain);
+    const auto sections = Math::SampleTerrain(m_definition.terrain);
     if (!sections.empty()) {
         m_catmullRomPoints = sections.front();
     }

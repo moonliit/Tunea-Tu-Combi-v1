@@ -1,6 +1,6 @@
 #include "ui/UiLayout.hpp"
 
-#include "game/EditorGrid.hpp"
+#include "app/game/EditorGrid.hpp"
 
 namespace {
 
@@ -79,14 +79,14 @@ UiControl MakeEditorControl(
 }
 
 std::vector<UiControl> UiLayout::BuildControls(
-    AppState state,
+    GameState state,
     const ActivationRegistry& activationRegistry,
     const EditorGrid& grid,
     int screenWidth,
     int screenHeight
 ) {
     std::vector<UiControl> controls;
-    if (state == AppState::Play) {
+    if (state == GameState::Play) {
         const auto actions = activationRegistry.GetVisibleActions();
         for (std::size_t index = 0; index < actions.size(); ++index) {
             const ActivationAction action = actions[index];
@@ -109,7 +109,7 @@ std::vector<UiControl> UiLayout::BuildControls(
                 .active = activationRegistry.IsActive(action)
             });
         }
-    } else if (state == AppState::Build) {
+    } else if (state == GameState::Build) {
         constexpr ToolbarPart parts[] = {
             ToolbarPart::SquareBlock,
             ToolbarPart::CircleWheel,
@@ -165,13 +165,13 @@ std::vector<UiControl> UiLayout::BuildControls(
         130.0f,
         90.0f
     };
-    if (state == AppState::Build || state == AppState::Play) {
+    if (state == GameState::Build || state == GameState::Play) {
         controls.push_back(MakeEditorControl(
             static_cast<int>(controls.size()),
-            state == AppState::Build
+            state == GameState::Build
                 ? EditorAction::StartPlay
                 : EditorAction::ReturnToBuild,
-            state == AppState::Build ? "PLAY" : "EDIT",
+            state == GameState::Build ? "PLAY" : "EDIT",
             DARKGREEN,
             true,
             largeSideButton,
@@ -180,7 +180,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             32
         ));
     }
-    if (state == AppState::View) {
+    if (state == GameState::View) {
         controls.push_back(MakeEditorControl(
             0,
             EditorAction::ReturnToBuild,
@@ -199,7 +199,7 @@ std::vector<UiControl> UiLayout::BuildControls(
         ));
         return controls;
     }
-    if (state == AppState::Build) {
+    if (state == GameState::Build) {
         controls.push_back(MakeEditorControl(
             6,
             EditorAction::ClearSelection,

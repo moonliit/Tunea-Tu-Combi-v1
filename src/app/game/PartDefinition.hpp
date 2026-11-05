@@ -1,8 +1,7 @@
 #ifndef GAME_PART_DEFINITION_HPP
 #define GAME_PART_DEFINITION_HPP
 
-#include "game/Part.hpp"
-
+#include "app/game/Part.hpp"
 #include <string_view>
 #include <cstdint>
 

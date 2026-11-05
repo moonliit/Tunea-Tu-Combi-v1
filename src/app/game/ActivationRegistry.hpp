@@ -1,7 +1,7 @@
 #ifndef GAME_ACTIVATION_REGISTRY_HPP
 #define GAME_ACTIVATION_REGISTRY_HPP
 
-#include "game/Part.hpp"
+#include "app/game/Part.hpp"
 
 #include <array>
 #include <cstddef>

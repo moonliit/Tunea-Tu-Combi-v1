@@ -1,5 +1,5 @@
-#include "game/EditorGrid.hpp"
-#include "game/PartDefinition.hpp"
+#include "app/game/EditorGrid.hpp"
+#include "app/game/PartDefinition.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include "raylib.h"

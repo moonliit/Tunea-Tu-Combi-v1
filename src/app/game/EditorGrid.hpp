@@ -1,7 +1,7 @@
 #ifndef EDITOR_GRID_HPP
 #define EDITOR_GRID_HPP
 
-#include "game/Part.hpp"
+#include "app/game/Part.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include <optional>

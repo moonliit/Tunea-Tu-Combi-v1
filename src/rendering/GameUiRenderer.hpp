@@ -1,9 +1,9 @@
 #ifndef RENDERING_GAME_UI_RENDERER_HPP
 #define RENDERING_GAME_UI_RENDERER_HPP
 
-#include "game/AppState.hpp"
-#include "game/BuildSession.hpp"
-#include "game/ActivationRegistry.hpp"
+#include "app/game/GameState.hpp"
+#include "app/game/BuildSession.hpp"
+#include "app/game/ActivationRegistry.hpp"
 
 #include <raylib.h>
 
@@ -12,7 +12,7 @@ public:
     void Render(
         int screenWidth,
         int screenHeight,
-        AppState state,
+        GameState state,
         const BuildSession& buildSession,
         const EditorGrid& grid,
         const Camera2D& camera,

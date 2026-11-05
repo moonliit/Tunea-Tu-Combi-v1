@@ -1,10 +1,9 @@
 #include "rendering/PartRenderer.hpp"
 
-#include "game/EditorGrid.hpp"
-#include "game/PartDefinition.hpp"
+#include "app/game/EditorGrid.hpp"
+#include "app/game/PartDefinition.hpp"
 #include "raylib.h"
 #include "rlgl.h"
-#include <print>
 
 #include <algorithm>
 #include <cmath>

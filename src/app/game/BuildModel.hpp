@@ -1,8 +1,8 @@
 #ifndef GAME_BUILD_MODEL_HPP
 #define GAME_BUILD_MODEL_HPP
 
-#include "game/EditorGrid.hpp"
-#include "game/PartDefinition.hpp"
+#include "app/game/EditorGrid.hpp"
+#include "app/game/PartDefinition.hpp"
 
 #include <vector>
 

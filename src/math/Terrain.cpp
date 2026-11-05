@@ -1,31 +1,11 @@
-#include "game/Terrain.hpp"
-
+#include "math/Terrain.hpp"
 #include "math/Spline.hpp"
 
 #include <algorithm>
 #include <cmath>
+using namespace Math;
 
-namespace {
-
-bool AreSamePoint(
-    const Math::Vector2D& first,
-    const Math::Vector2D& second
-) {
-    constexpr float epsilon = 0.0001f;
-    return std::fabs(static_cast<float>(first.x - second.x)) <= epsilon &&
-        std::fabs(static_cast<float>(first.y - second.y)) <= epsilon;
-}
-
-float Cross(
-    const Math::Vector2D& a,
-    const Math::Vector2D& b,
-    const Math::Vector2D& c
-) {
-    return static_cast<float>(
-        (b.x - a.x) * (c.y - a.y) -
-        (b.y - a.y) * (c.x - a.x)
-    );
-}
+namespace Math {
 
 float SignedArea(const std::vector<Math::Vector2D>& polygon) {
     float area = 0.0f;
@@ -43,11 +23,14 @@ bool IsInsideTriangle(
     const Math::Vector2D& b,
     const Math::Vector2D& c
 ) {
-    constexpr float epsilon = 0.0001f;
-    const float first = Cross(a, b, point);
-    const float second = Cross(b, c, point);
-    const float third = Cross(c, a, point);
-    return first >= -epsilon && second >= -epsilon && third >= -epsilon;
+    const float first = Vector2D::TripleCross(a, b, point);
+    const float second = Vector2D::TripleCross(b, c, point);
+    const float third = Vector2D::TripleCross(c, a, point);
+    return (
+        first >= -RealNum::epsilon &&
+        second >= -RealNum::epsilon &&
+        third >= -RealNum::epsilon
+    );
 }
 
 std::vector<std::uint32_t> TriangulatePolygon(
@@ -76,7 +59,7 @@ std::vector<std::uint32_t> TriangulatePolygon(
             const std::uint32_t current = remaining[index];
             const std::uint32_t next =
                 remaining[(index + 1) % remaining.size()];
-            if (Cross(
+            if (Vector2D::TripleCross(
                     polygon[previous],
                     polygon[current],
                     polygon[next]
@@ -177,8 +160,6 @@ SampledTerrainSection EnrichSection(
     return section;
 }
 
-}
-
 std::vector<std::vector<Math::Vector2D>> SampleTerrain(
     const TerrainDefinition& definition
 ) {
@@ -190,7 +171,7 @@ std::vector<std::vector<Math::Vector2D>> SampleTerrain(
             std::vector<Math::Vector2D> sampled = SampleSegment(segment);
             if (sampled.empty()) continue;
             if (!boundary.empty() &&
-                AreSamePoint(boundary.back(), sampled.front())) {
+                boundary.back() == sampled.front()) {
                 sampled.erase(sampled.begin());
             }
             boundary.insert(
@@ -249,7 +230,7 @@ TerrainMesh BuildTerrainPolygonMesh(
     TerrainMesh mesh;
     if (polygon.size() < 3) return mesh;
 
-    if (!AreSamePoint(polygon.front(), polygon.back())) {
+    if (polygon.front() != polygon.back()) {
         return mesh;
     }
 
@@ -267,4 +248,6 @@ TerrainMesh BuildTerrainPolygonMesh(
     mesh.top = mesh.vertices;
     mesh.closed = true;
     return mesh;
+}
+
 }

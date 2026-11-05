@@ -1,4 +1,5 @@
-#include "game/Game.hpp"
+#include "app/App.hpp"
+using namespace Math;
 
 namespace {
 
@@ -112,19 +113,19 @@ int main() {
         .terrain = CreateTerrainDefinition(true),
         .grid = GridDefinition{
             .dims = {6, 4},
-            .worldPos = {300.0f, 395.0f},
+            .worldPos = {-50.0f, 480.0f},
             .cellSize = 40.0f
         },
-        .initialCamera = CameraDefinition{
-            .target = {300.0f, 360.0f},
-            .zoom = 0.72f
-        },
+        // .initialCamera = CameraDefinition{
+        //     .target = {300.0f, 360.0f},
+        //     .zoom = 0.72f
+        // },
         .goal = GoalDefinition{
             .position = {900.0f, 430.0f}
         }
     };
 
-    Game game(windowWidth, windowHeight, windowTitle, specs);
-    game.Run();
+    App app(windowWidth, windowHeight, windowTitle, specs);
+    app.Run();
     return 0;
 }

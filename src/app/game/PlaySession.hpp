@@ -1,13 +1,12 @@
 #ifndef GAME_PLAY_SESSION_HPP
 #define GAME_PLAY_SESSION_HPP
 
-#include "game/BuildModel.hpp"
-#include "game/Terrain.hpp"
-#include "game/ActivationRegistry.hpp"
+#include "app/game/BuildModel.hpp"
+#include "app/game/ActivationRegistry.hpp"
+#include "math/Terrain.hpp"
 #include "math/Vector2D.hpp"
 #include "physics/I_Physics.hpp"
 #include "physics/PhysicsAssembler.hpp"
-
 #include <memory>
 #include <vector>
 
@@ -15,9 +14,9 @@ class PlaySession {
 private:
     BuildModel& m_model;
     std::vector<Math::Vector2D> m_terrainVertices;
-    TerrainDefinition m_terrainDefinition;
-    std::vector<TerrainMesh> m_terrainMeshes;
-    TerrainVisualDefinition m_terrainVisual;
+    Math::TerrainDefinition m_terrainDefinition;
+    std::vector<Math::TerrainMesh> m_terrainMeshes;
+    Math::TerrainVisualDefinition m_terrainVisual;
     std::unique_ptr<I_PhysicsWorld> m_physics;
     PhysicsAssembler m_assembler;
     ActivationRegistry m_activationRegistry;
@@ -42,7 +41,7 @@ public:
     );
     PlaySession(
         BuildModel& model,
-        const TerrainDefinition& terrain,
+        const Math::TerrainDefinition& terrain,
         Math::Vector2D gravity
     );
 
@@ -50,10 +49,10 @@ public:
     const std::vector<Math::Vector2D>& GetTerrainVertices() const {
         return m_terrainVertices;
     }
-    const std::vector<TerrainMesh>& GetTerrainMeshes() const {
+    const std::vector<Math::TerrainMesh>& GetTerrainMeshes() const {
         return m_terrainMeshes;
     }
-    const TerrainVisualDefinition& GetTerrainVisual() const {
+    const Math::TerrainVisualDefinition& GetTerrainVisual() const {
         return m_terrainVisual;
     }
     std::size_t GetJointCount() const {
@@ -65,7 +64,7 @@ public:
     void Reset(
         const std::vector<std::vector<Math::Vector2D>>& terrainSections
     );
-    void Reset(const TerrainDefinition& terrain);
+    void Reset(const Math::TerrainDefinition& terrain);
     void Update(float deltaTime);
     void ActivateAction(ActivationAction action);
     const ActivationRegistry& GetActivationRegistry() const {

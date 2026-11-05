@@ -1,4 +1,4 @@
-#include "game/PartDefinition.hpp"
+#include "app/game/PartDefinition.hpp"
 
 #include <stdexcept>
 

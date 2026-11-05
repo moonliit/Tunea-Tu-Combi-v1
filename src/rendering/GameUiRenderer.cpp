@@ -1,5 +1,6 @@
 #include "rendering/GameUiRenderer.hpp"
 
+#include "math/Vector2D.hpp"
 #include "ui/UiLayout.hpp"
 
 #include <format>
@@ -7,7 +8,7 @@
 void GameUiRenderer::Render(
     int screenWidth,
     int screenHeight,
-    AppState state,
+    GameState state,
     const BuildSession& buildSession,
     const EditorGrid& grid,
     const Camera2D& camera,
@@ -49,6 +50,15 @@ void GameUiRenderer::Render(
             static_cast<int>(control.bounds.height),
             color
         );
+
+//         Vector2 p1 = {400 + 100, 550};
+// Vector2 p2 = {400 + 100, 450};
+// Vector2 p3 = {400 + 300, 450};
+// Color fill = RED;
+//
+// // Swap p2 and p3 to fix the winding order
+// DrawTriangle(p1, p3, p2, fill);
+
         DrawText(
             control.label.data(),
             static_cast<int>(control.bounds.x) + control.labelOffsetX,
@@ -60,9 +70,9 @@ void GameUiRenderer::Render(
         );
     }
 
-    const std::string modeText = state == AppState::Build
+    const std::string modeText = state == GameState::Build
         ? "MODE: EDIT (Left Click: Place, Right Click: Delete, ENTER: Play)"
-        : state == AppState::View
+        : state == GameState::View
         ? "MODE: VIEW (Drag to move camera, ESC: Edit)"
         : "MODE: PLAY (Press ENTER to Edit)";
     DrawText(
@@ -70,7 +80,7 @@ void GameUiRenderer::Render(
         20,
         20,
         18,
-        state == AppState::Build ? DARKGREEN : MAROON
+        state == GameState::Build ? DARKGREEN : MAROON
     );
 
     const Vector2 mouseScreen = GetMousePosition();

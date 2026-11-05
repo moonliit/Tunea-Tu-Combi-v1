@@ -1,4 +1,5 @@
 #include "rendering/WorldRenderer.hpp"
+#include <cassert>
 
 namespace {
 
@@ -12,8 +13,8 @@ Color ToRaylibColor(
 }
 
 void RenderTerrainMesh(
-    const TerrainMesh& mesh,
-    const TerrainVisualDefinition& visual
+    const Math::TerrainMesh& mesh,
+    const Math::TerrainVisualDefinition& visual
 ) {
     if (mesh.vertices.size() < 3 || mesh.indices.size() < 3) {
         return;
@@ -31,10 +32,11 @@ void RenderTerrainMesh(
         visual.outlineA
     );
     for (size_t index = 0; index + 2 < mesh.indices.size(); index += 3) {
+        // invert winding order
         DrawTriangle(
             mesh.vertices[mesh.indices[index]].ToRayVec(),
-            mesh.vertices[mesh.indices[index + 1]].ToRayVec(),
             mesh.vertices[mesh.indices[index + 2]].ToRayVec(),
+            mesh.vertices[mesh.indices[index + 1]].ToRayVec(),
             fill
         );
     }
@@ -58,7 +60,7 @@ void RenderTerrainMesh(
 
 void WorldRenderer::Render(
     const Camera2D& camera,
-    AppState state,
+    GameState state,
     const EditorGrid& grid,
     const PlaySession& playSession,
     const std::optional<PartType>& selectedPartType,
@@ -68,11 +70,11 @@ void WorldRenderer::Render(
 ) const {
     BeginMode2D(camera);
 
-    for (const TerrainMesh& mesh : playSession.GetTerrainMeshes()) {
+    for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {
         RenderTerrainMesh(mesh, playSession.GetTerrainVisual());
     }
 
-    if (state == AppState::Build || state == AppState::View) {
+    if (state == GameState::Build || state == GameState::View) {
         grid.DrawSelf();
 
         for (const Part* part : grid.GetActiveParts()) {
@@ -95,7 +97,7 @@ void WorldRenderer::Render(
         const PartOrientation ghostOrientation = repositionedPartType.has_value()
             ? repositionedOrientation
             : selectedOrientation;
-        if (state == AppState::Build && ghostPartType.has_value()) {
+        if (state == GameState::Build && ghostPartType.has_value()) {
             const Vector2 mouseScreen = GetMousePosition();
             if (mouseScreen.y <= 520.0f) {
                 const Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
@@ -128,7 +130,7 @@ void WorldRenderer::Render(
                 }
             }
         }
-    } else if (state == AppState::Play) {
+    } else if (state == GameState::Play) {
         for (const Part* part : grid.GetActiveParts()) {
             if (part->HasContainedPart()) {
                 m_partRenderer.RenderContained(

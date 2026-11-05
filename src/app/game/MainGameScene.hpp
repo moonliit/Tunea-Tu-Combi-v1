@@ -1,23 +1,24 @@
-#ifndef GAME_HPP
-#define GAME_HPP
+#ifndef GAME_MAIN_GAME_SCENE_HPP
+#define GAME_MAIN_GAME_SCENE_HPP
 
-#include "game/AppState.hpp"
-#include "game/BuildSession.hpp"
-#include "game/Level.hpp"
-#include "game/PlaySession.hpp"
+#include "app/game/GameState.hpp"
+#include "app/game/BuildSession.hpp"
+#include "app/game/Level.hpp"
+#include "app/game/PlaySession.hpp"
+#include "app/I_Scene.hpp"
 #include "input/GameInput.hpp"
 #include "rendering/GameUiRenderer.hpp"
 #include "rendering/WorldRenderer.hpp"
+
 #include <raylib.h>
 
-class Game {
+class MainGameScene final : public I_Scene {
 private:
     int m_screenWidth;
     int m_screenHeight;
     Camera2D m_camera;
     Vector2 m_editorCameraTarget;
     float m_editorCameraZoom = 1.0f;
-
     float m_gravity;
     AppStateMachine m_stateMachine;
     Level m_level;
@@ -27,18 +28,15 @@ private:
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
 
-    void ProcessInput(float dt);
-    void Update(float dt);
-    void Render();
     void ResetToBuildMode();
     void ResetEditorCamera();
     void TransitionToPlayMode();
 
 public:
-    Game(int width, int height, const std::string& title, LevelSpecs specs);
-    ~Game() = default;
-
-    void Run();
+    MainGameScene(int width, int height, LevelSpecs specs);
+    void ProcessInput(float deltaTime) override;
+    void Update(float deltaTime) override;
+    void Render() const override;
 };
 
 #endif

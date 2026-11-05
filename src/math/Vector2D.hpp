@@ -2,7 +2,6 @@
 #define MATH_VECTOR2D_HPP
 
 #include "math/SafeReal.hpp"
-#include <cmath>
 #include <raylib.h>
 
 class EditorGrid;
@@ -13,12 +12,26 @@ namespace Math {
         RealNum x;
         RealNum y;
 
-        inline Vector2 ToRayVec() const { return Vector2(static_cast<float>(x), static_cast<float>(y)); }
-        static inline Vector2D Zero() { return {0, 0}; }
-        static inline Vector2D FromAngle(RealNum angle) {
-            return {std::cos(angle), std::sin(angle)};
-        }
+        Vector2 ToRayVec() const;
+        static Vector2D Zero();
+        static Vector2D FromAngle(RealNum angle);
+
+        Vector2D operator+(const Vector2D& other) const;
+        Vector2D operator-(const Vector2D& other) const;
+        Vector2D operator*(const RealNum& value) const;
+        Vector2D operator/(const RealNum& value) const;
+
+        RealNum Cross(const Vector2D& other) const;
+        static RealNum TripleCross(
+            const Vector2D& a,
+            const Vector2D& b,
+            const Vector2D& c
+        );
+
+        bool operator==(const Vector2D& other) const;
+        bool operator!=(const Vector2D& other) const;
     };
+
 }
 
 #endif

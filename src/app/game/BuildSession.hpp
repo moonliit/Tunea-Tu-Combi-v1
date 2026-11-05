@@ -1,8 +1,7 @@
-#ifndef GAME_BUILD_SESSION_HPP
-#define GAME_BUILD_SESSION_HPP
+#ifndef BUILD_SESSION_HPP
+#define BUILD_SESSION_HPP
 
-#include "game/BuildModel.hpp"
-
+#include "app/game/BuildModel.hpp"
 #include <optional>
 
 class BuildSession {

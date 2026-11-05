@@ -1,10 +1,8 @@
 #ifndef UI_UI_CONTROL_HPP
 #define UI_UI_CONTROL_HPP
 
-#include "game/ActivationRegistry.hpp"
-
+#include "app/game/ActivationRegistry.hpp"
 #include <raylib.h>
-
 #include <optional>
 #include <string_view>
 

@@ -1,9 +1,9 @@
-#ifndef LEVEL_HPP
-#define LEVEL_HPP
+#ifndef GAME_LEVEL_HPP
+#define GAME_LEVEL_HPP
 
+#include "app/game/BuildModel.hpp"
 #include "math/Vector2D.hpp"
-#include "game/BuildModel.hpp"
-#include "game/Terrain.hpp"
+#include "math/Terrain.hpp"
 #include <optional>
 #include <vector>
 
@@ -25,7 +25,7 @@ struct GridDefinition {
 inline constexpr Math::Vector2D GoalSize{80.0f, 80.0f};
 
 struct LevelDefinition {
-    TerrainDefinition terrain;
+    Math::TerrainDefinition terrain;
     GridDefinition grid;
     std::optional<CameraDefinition> initialCamera;
     GoalDefinition goal;
@@ -46,7 +46,7 @@ public:
 
     const LevelDefinition& GetDefinition() const { return m_definition; }
     const std::vector<Math::Vector2D>& GetCatmullromPoints() const { return m_catmullRomPoints; }
-    const TerrainDefinition& GetTerrain() const {
+    const Math::TerrainDefinition& GetTerrain() const {
         return m_definition.terrain;
     }
     BuildModel& GetBuildModel() { return m_buildModel; }
