@@ -20,7 +20,7 @@ private:
     Vector2 m_editorCameraTarget;
     float m_editorCameraZoom = 1.0f;
     float m_gravity;
-    AppStateMachine m_stateMachine;
+    GameStateMachine m_stateMachine;
     Level m_level;
     BuildSession m_buildSession;
     PlaySession m_playSession;

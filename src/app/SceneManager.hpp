@@ -6,7 +6,8 @@
 #include <memory>
 
 enum class SceneId {
-    MainGame
+    MainGame,
+    Editor,
 };
 
 class SceneManager {

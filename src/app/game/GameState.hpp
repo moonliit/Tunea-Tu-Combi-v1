@@ -10,12 +10,12 @@ enum class GameState {
     Results
 };
 
-class AppStateMachine {
+class GameStateMachine {
 private:
     GameState m_currentState;
 
 public:
-    explicit AppStateMachine(GameState initialState = GameState::Build):
+    explicit GameStateMachine(GameState initialState = GameState::Build):
         m_currentState(initialState) {}
 
     GameState GetState() const { return m_currentState; }
@@ -54,8 +54,5 @@ public:
         m_currentState = GameState::Results;
     }
 };
-
-// Kept as a source-compatible name for clients of the first prototype.
-using AppState = GameState;
 
 #endif

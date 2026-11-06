@@ -20,6 +20,8 @@ include_directories(
     include
     include/raylib
     include/box2d
+    include/imgui
+    include/rl_imgui
     src
 )
 

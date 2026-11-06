@@ -1,5 +1,6 @@
 #include "app/App.hpp"
 #include "app/game/MainGameScene.hpp"
+#include "app/editor/EditorScene.hpp"
 
 #include <algorithm>
 #include <raylib.h>
@@ -13,6 +14,10 @@ App::App(int width, int height, const std::string& title, LevelSpecs specs) {
     m_sceneManager.Add(
         SceneId::MainGame,
         std::make_unique<MainGameScene>(width, height, std::move(specs))
+    );
+    m_sceneManager.Add(
+        SceneId::Editor,
+        std::make_unique<EditorScene>(width, height)
     );
     m_sceneManager.SetCurrent(SceneId::MainGame);
 }
