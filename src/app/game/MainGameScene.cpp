@@ -1,7 +1,9 @@
 #include "app/game/MainGameScene.hpp"
+#include "app/game/Level.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include "ui/UiControl.hpp"
+#include "app/AppContext.hpp"
 #include <optional>
 #include <raylib.h>
 #include <algorithm>
@@ -13,12 +15,12 @@ namespace {
 float CalculateGridFitZoom(
     int screenWidth,
     int screenHeight,
-    const LevelSpecs& specs
+    const LevelDefinition& levelDef
 ) {
     const float gridWidth =
-        static_cast<float>(specs.grid.dims.x) * specs.grid.cellSize;
+        static_cast<float>(levelDef.grid.dims.x) * levelDef.grid.cellSize;
     const float gridHeight =
-        static_cast<float>(specs.grid.dims.y) * specs.grid.cellSize;
+        static_cast<float>(levelDef.grid.dims.y) * levelDef.grid.cellSize;
     const float availableHeight = static_cast<float>(screenHeight - 100);
     return std::min(
         1.0f,
@@ -29,7 +31,7 @@ float CalculateGridFitZoom(
     );
 }
 
-Vector2 CalculateGridTarget(const LevelSpecs& specs) {
+Vector2 CalculateGridTarget(const LevelDefinition& specs) {
     const float gridHeight =
         static_cast<float>(specs.grid.dims.y) * specs.grid.cellSize;
     return {
@@ -42,9 +44,11 @@ Vector2 CalculateGridTarget(const LevelSpecs& specs) {
 
 }
 
-MainGameScene::MainGameScene(int width, int height, LevelSpecs specs):
-    m_screenWidth(width),
-    m_screenHeight(height),
+MainGameScene::MainGameScene(
+    AppContext* appContext,
+    const LevelDefinition& specs
+):
+    m_appContext(appContext),
     m_gravity(9.8f * 40.0f),
     m_level(specs),
     m_buildSession(m_level.GetBuildModel()),
@@ -58,8 +62,8 @@ MainGameScene::MainGameScene(int width, int height, LevelSpecs specs):
     m_camera = Camera2D(Vector2{0});
     const Vector2 automaticTarget = CalculateGridTarget(specs);
     const float minimumZoom = CalculateGridFitZoom(
-        m_screenWidth,
-        m_screenHeight,
+        m_appContext->windowWidth,
+        m_appContext->windowHeight,
         specs
     );
     const CameraDefinition cameraDefinition =
@@ -74,12 +78,11 @@ MainGameScene::MainGameScene(int width, int height, LevelSpecs specs):
         static_cast<float>(cameraDefinition.target.x),
         static_cast<float>(cameraDefinition.target.y)
     };
-    m_camera.offset = {m_screenWidth / 2.f, m_screenHeight / 2.f};
+    m_camera.offset = {m_appContext->windowWidth / 2.f, m_appContext->windowWidth / 2.f};
     m_camera.rotation = 0.0f;
     m_camera.zoom = std::max(minimumZoom, cameraDefinition.zoom);
     m_editorCameraTarget = m_camera.target;
     m_editorCameraZoom = m_camera.zoom;
-
 }
 
 void MainGameScene::ProcessInput(float dt) {
@@ -91,8 +94,8 @@ void MainGameScene::ProcessInput(float dt) {
         m_camera,
         m_buildSession.GetSelectedPartType(),
         m_buildSession.HasRepositionedPart(),
-        m_screenWidth,
-        m_screenHeight
+        m_appContext->windowWidth,
+        m_appContext->windowHeight
     );
 
     if (input.toggleMode) {
@@ -246,8 +249,8 @@ void MainGameScene::Render() const {
         m_buildSession.GetRepositionedOrientation()
     );
     m_uiRenderer.Render(
-        m_screenWidth,
-        m_screenHeight,
+        m_appContext->windowWidth,
+        m_appContext->windowHeight,
         m_stateMachine.GetState(),
         m_buildSession,
         m_level.GetGrid(),

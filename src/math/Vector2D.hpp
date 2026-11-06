@@ -2,6 +2,7 @@
 #define MATH_VECTOR2D_HPP
 
 #include "math/SafeReal.hpp"
+#include "json.hpp"
 #include <raylib.h>
 
 class EditorGrid;
@@ -13,8 +14,11 @@ namespace Math {
         RealNum y;
 
         Vector2 ToRayVec() const;
-        static Vector2D Zero();
+        nlohmann::json ToJson() const;
+
         static Vector2D FromAngle(RealNum angle);
+        static Vector2D FromJson(const nlohmann::json& j);
+        static Vector2D Zero();
 
         Vector2D operator+(const Vector2D& other) const;
         Vector2D operator-(const Vector2D& other) const;

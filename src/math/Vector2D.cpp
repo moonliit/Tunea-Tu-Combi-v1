@@ -11,14 +11,28 @@ Vector2 Vector2D::ToRayVec() const {
     };
 }
 
+nlohmann::json Vector2D::ToJson() const {
+    return nlohmann::json {
+        {"x", static_cast<float>(x)},
+        {"y", static_cast<float>(y)}
+    };
+}
+
 Vector2D Vector2D::Zero() {
     return Vector2D {0.f, 0.f};
 }
 
 Vector2D Vector2D::FromAngle(RealNum angle) {
-    return {
+    return Vector2D {
         cos(angle),
         sin(angle)
+    };
+}
+
+Vector2D Vector2D::FromJson(const nlohmann::json& j) {
+    return Vector2D {
+        j.at("x").get<float>(),
+        j.at("y").get<float>()
     };
 }
 

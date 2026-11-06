@@ -1,5 +1,6 @@
 #include "app/editor/EditorScene.hpp"
-#include "json.hpp"
+#include "app/game/Level.hpp"
+#include "app/AppContext.hpp"
 #include <fstream>
 #include "imgui.h"
 #include "raylib.h"
@@ -8,15 +9,18 @@
 #include <stdio.h>
 using namespace Math;
 
-EditorScene::EditorScene(int width, int height)
-    : m_screenWidth(width), m_screenHeight(height),
-      m_currentTool(EditorTool::PlacePoint),
-      m_activeSegmentType(TerrainSegmentType::Line)
+EditorScene::EditorScene(AppContext* appContext):
+    m_appContext(appContext),
+    m_currentTool(EditorTool::PlacePoint),
+    m_activeSegmentType(TerrainSegmentType::Line)
 {
     rlImGuiSetup(true);
     m_camera = { 0 };
     m_camera.zoom = 1.0f;
-    m_camera.offset = { (float)width / 2.0f, (float)height / 2.0f };
+    m_camera.offset = {
+        (float)m_appContext->windowWidth / 2.0f,
+        (float)m_appContext->windowHeight / 2.0f
+    };
     m_camera.target = { 0.0f, 0.0f };
 
     // init filename buffer with a default name
@@ -184,7 +188,7 @@ void EditorScene::Render() const {
     ImGui::SameLine();
     ImGui::Text(".json");
 
-    if (ImGui::Button("Export LevelSpecs to JSON")) {
+    if (ImGui::Button("Export LevelDefinition to JSON")) {
         // build path: assets/levels/<filename>.json
         std::string fileName = m_filenameBuffer;
         if (fileName.empty()) {
@@ -192,47 +196,31 @@ void EditorScene::Render() const {
         }
         std::string fullPath = "assets/levels/" + fileName + ".json";
 
-        nlohmann::json j;
-
-        // build terrain definition to JSON
-        nlohmann::json polygonsJson = nlohmann::json::array();
+        // build terrain definition polygons from completed editor data
+        Math::TerrainDefinition terrainDef;
         for (const auto& poly : m_completedPolygons) {
-            nlohmann::json segmentsJson = nlohmann::json::array();
-            for (const auto& seg : poly.segments) {
-                nlohmann::json pointsJson = nlohmann::json::array();
-                for (const auto& pt : seg.points) {
-                    pointsJson.push_back({
-                        {"x", static_cast<float>(pt.x)},
-                        {"y", static_cast<float>(pt.y)}
-                    });
-                }
-
-                segmentsJson.push_back({
-                    {"type", (seg.type == TerrainSegmentType::Line) ? "Line" : "CatmullRom"},
-                    {"points", pointsJson},
-                    {"resolution", seg.resolution}
-                });
-            }
-            polygonsJson.push_back({{"segments", segmentsJson}});
+            terrainDef.polygons.push_back(poly);
         }
 
-        j["terrain"]["polygons"] = polygonsJson;
-
-        // TODO: default level configuration fields (placeholder)
-        j["grid"] = {
-            {"dims", {6, 4}},
-            {"worldPos", {{"x", -50.0f}, {"y", 480.0f}}},
-            {"cellSize", 40.0f}
+        // populate the level definition object cleanly
+        LevelDefinition levelDef{
+            .terrain = terrainDef,
+            .grid = GridDefinition{
+                .dims = {6, 4},
+                .worldPos = {-50.0f, 480.0f},
+                .cellSize = 40.0f
+            },
+            .initialCamera = CameraDefinition{
+                .target = {300.0f, 360.0f},
+                .zoom = 0.72f
+            },
+            .goal = GoalDefinition{
+                .position = {900.0f, 430.0f}
+            }
         };
 
-        j["initialCamera"] = {
-            {"target", {{"x", 300.0f}, {"y", 360.0f}}},
-            {"zoom", 0.72f}
-        };
-
-        j["goal"] = {
-            {"position", {{"x", 900.0f}, {"y", 430.0f}}}
-        };
+        // convert level definition object to json
+        nlohmann::json j = levelDef.ToJson();
 
         // write to disk using the custom path
         std::ofstream file(fullPath);

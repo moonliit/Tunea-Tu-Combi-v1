@@ -12,10 +12,11 @@
 
 #include <raylib.h>
 
+struct AppContext;
+
 class MainGameScene final : public I_Scene {
 private:
-    int m_screenWidth;
-    int m_screenHeight;
+    AppContext* m_appContext;
     Camera2D m_camera;
     Vector2 m_editorCameraTarget;
     float m_editorCameraZoom = 1.0f;
@@ -33,7 +34,11 @@ private:
     void TransitionToPlayMode();
 
 public:
-    MainGameScene(int width, int height, LevelSpecs specs);
+    MainGameScene(
+        AppContext* appContext,
+        const LevelDefinition& levelDef
+    );
+
     void ProcessInput(float deltaTime) override;
     void Update(float deltaTime) override;
     void Render() const override;

@@ -1,17 +1,22 @@
 #ifndef APP_HPP
 #define APP_HPP
 
-#include "app/game/Level.hpp"
 #include "app/SceneManager.hpp"
+#include "app/AppContext.hpp"
 
 #include <string>
 
 class App {
 private:
     SceneManager m_sceneManager;
+    AppContext m_appContext;
 
 public:
-    App(int width, int height, const std::string& title, LevelSpecs specs);
+    App(
+        int width,
+        int height,
+        const std::string& title
+    );
     ~App() = default;
 
     void Run();

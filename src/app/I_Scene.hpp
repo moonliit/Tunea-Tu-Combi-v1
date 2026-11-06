@@ -1,6 +1,8 @@
 #ifndef GAME_SCENE_HPP
 #define GAME_SCENE_HPP
 
+class SceneRequester;
+
 class I_Scene {
 public:
     virtual ~I_Scene() = default;

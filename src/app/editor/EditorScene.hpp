@@ -7,6 +7,8 @@
 #include <raylib.h>
 #include <vector>
 
+struct AppContext;
+
 enum class EditorTool {
     PlacePoint,
     SelectSegmentType
@@ -19,9 +21,9 @@ struct WorkingSegmentPoint {
 
 class EditorScene final : public I_Scene {
 private:
-    int m_screenWidth;
-    int m_screenHeight;
+    AppContext* m_appContext;
     Camera2D m_camera;
+    SceneRequester* m_sceneRequester;
 
     EditorTool m_currentTool;
     mutable Math::TerrainSegmentType m_activeSegmentType;
@@ -36,7 +38,7 @@ private:
     void DrawUI();
 
 public:
-    EditorScene(int width, int height);
+    EditorScene(AppContext* appContext);
     ~EditorScene();
 
     void ProcessInput(float deltaTime) override;

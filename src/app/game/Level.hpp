@@ -4,6 +4,7 @@
 #include "app/game/BuildModel.hpp"
 #include "math/Vector2D.hpp"
 #include "math/Terrain.hpp"
+#include "json.hpp"
 #include <optional>
 #include <vector>
 
@@ -31,9 +32,12 @@ struct LevelDefinition {
     GoalDefinition goal;
     std::vector<Math::Vector2D> terrainControlPoints;
     int catmullRomResolution = 8;
-};
 
-using LevelSpecs = LevelDefinition;
+    static LevelDefinition Default();
+    static LevelDefinition FromJson(const nlohmann::json& j);
+    static LevelDefinition FromJsonPath(const std::string& path);
+    nlohmann::json ToJson() const;
+};
 
 class Level {
 private:
@@ -42,7 +46,7 @@ private:
     BuildModel m_buildModel;
 
 public:
-    Level(LevelSpecs specs);
+    Level(const LevelDefinition& specs);
 
     const LevelDefinition& GetDefinition() const { return m_definition; }
     const std::vector<Math::Vector2D>& GetCatmullromPoints() const { return m_catmullRomPoints; }
