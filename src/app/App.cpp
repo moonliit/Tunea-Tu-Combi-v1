@@ -19,7 +19,8 @@ App::App(int width, int height, const std::string& title, LevelSpecs specs) {
         SceneId::Editor,
         std::make_unique<EditorScene>(width, height)
     );
-    m_sceneManager.SetCurrent(SceneId::MainGame);
+    // m_sceneManager.SetCurrent(SceneId::MainGame);
+    m_sceneManager.SetCurrent(SceneId::Editor);
 }
 
 void App::Run() {

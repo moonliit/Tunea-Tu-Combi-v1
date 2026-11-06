@@ -50,15 +50,6 @@ void GameUiRenderer::Render(
             static_cast<int>(control.bounds.height),
             color
         );
-
-//         Vector2 p1 = {400 + 100, 550};
-// Vector2 p2 = {400 + 100, 450};
-// Vector2 p3 = {400 + 300, 450};
-// Color fill = RED;
-//
-// // Swap p2 and p3 to fix the winding order
-// DrawTriangle(p1, p3, p2, fill);
-
         DrawText(
             control.label.data(),
             static_cast<int>(control.bounds.x) + control.labelOffsetX,

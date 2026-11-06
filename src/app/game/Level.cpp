@@ -1,4 +1,5 @@
 #include "app/game/Level.hpp"
+#include "math/Vector2D.hpp"
 #include <utility>
 
 Level::Level(LevelSpecs specs):
@@ -21,7 +22,8 @@ Level::Level(LevelSpecs specs):
             }
         });
     }
-    const auto sections = Math::SampleTerrain(m_definition.terrain);
+    const std::vector<std::vector<Math::Vector2D>> sections =
+        Math::SampleTerrain(m_definition.terrain);
     if (!sections.empty()) {
         m_catmullRomPoints = sections.front();
     }

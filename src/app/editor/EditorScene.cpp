@@ -1,180 +1,249 @@
 #include "app/editor/EditorScene.hpp"
-#include "input/EditorInput.hpp"
-#include "math/GridCoord.hpp"
-#include "math/Vector2D.hpp"
-#include "ui/UiControl.hpp"
-#include <optional>
-#include <raylib.h>
+#include "json.hpp"
+#include <fstream>
+#include "imgui.h"
+#include "raylib.h"
+#include "rlImGui.h"
+#include <raymath.h>
+#include <stdio.h>
 using namespace Math;
 
-
-EditorScene::EditorScene(int width, int height):
-    m_screenWidth(width),
-    m_screenHeight(height)
+EditorScene::EditorScene(int width, int height)
+    : m_screenWidth(width), m_screenHeight(height),
+      m_currentTool(EditorTool::PlacePoint),
+      m_activeSegmentType(TerrainSegmentType::Line)
 {
-    // Initialize Camera2D
-    m_camera = Camera2D(Vector2{0});
-    m_camera.target = {
-        static_cast<float>(width), // placeholder
-        static_cast<float>(height)
-    };
-    m_camera.offset = {m_screenWidth / 2.f, m_screenHeight / 2.f};
-    m_camera.rotation = 0.0f;
+    rlImGuiSetup(true);
+    m_camera = { 0 };
+    m_camera.zoom = 1.0f;
+    m_camera.offset = { (float)width / 2.0f, (float)height / 2.0f };
+    m_camera.target = { 0.0f, 0.0f };
+
+    // init filename buffer with a default name
+    std::strcpy(m_filenameBuffer, "level_1");
 }
 
-void EditorScene::ProcessInput(float dt) {
-    // const EditorInputFrame input = m_input.Capture(
-    //     dt,
-    //     m_stateMachine.GetState(),
-    //     m_playSession.GetActivationRegistry(),
-    //     m_level.GetGrid(),
-    //     m_camera,
-    //     m_buildSession.GetSelectedPartType(),
-    //     m_buildSession.HasRepositionedPart(),
-    //     m_screenWidth,
-    //     m_screenHeight
-    // );
-    //
-    // if (input.toggleMode) {
-    //     if (m_stateMachine.IsBuildMode()) {
-    //         TransitionToPlayMode();
-    //     } else if (m_stateMachine.IsPlayMode() ||
-    //                m_stateMachine.IsViewMode()) {
-    //         ResetToBuildMode();
-    //     }
-    // }
-    // if (m_stateMachine.IsViewMode() && input.clearSelection) {
-    //     ResetToBuildMode();
-    // }
-    //
-    // if (m_stateMachine.IsPlayMode()) {
-    //     if (input.activationAction.has_value()) {
-    //         m_playSession.ActivateAction(input.activationAction.value());
-    //     }
-    // }
-    //
-    // if (input.editorAction.has_value() &&
-    //     (m_stateMachine.IsBuildMode() ||
-    //      m_stateMachine.IsViewMode() ||
-    //      (m_stateMachine.IsPlayMode() &&
-    //       input.editorAction == EditorAction::ReturnToBuild))) {
-    //     switch (input.editorAction.value()) {
-    //         case EditorAction::MoveUp:
-    //             m_level.GetBuildModel().ShiftContents({0, -1});
-    //             break;
-    //         case EditorAction::MoveRight:
-    //             m_level.GetBuildModel().ShiftContents({1, 0});
-    //             break;
-    //         case EditorAction::MoveDown:
-    //             m_level.GetBuildModel().ShiftContents({0, 1});
-    //             break;
-    //         case EditorAction::MoveLeft:
-    //             m_level.GetBuildModel().ShiftContents({-1, 0});
-    //             break;
-    //         case EditorAction::ClearBuild:
-    //             if (m_buildSession.HasHandItem()) {
-    //                 m_buildSession.ClearHand();
-    //             } else {
-    //                 m_level.GetBuildModel().Clear();
-    //             }
-    //             break;
-    //         case EditorAction::StartPlay:
-    //             TransitionToPlayMode();
-    //             break;
-    //         case EditorAction::ClearSelection:
-    //             m_buildSession.ClearHand();
-    //             break;
-    //         case EditorAction::EnterView:
-    //             m_stateMachine.EnterView();
-    //             break;
-    //         case EditorAction::ReturnToBuild:
-    //             ResetToBuildMode();
-    //             break;
-    //     }
-    // }
-    //
-    // m_camera.target.x += static_cast<float>(input.cameraMovement.x);
-    // m_camera.target.y += static_cast<float>(input.cameraMovement.y);
-    //
-    // if (m_stateMachine.IsBuildMode()) {
-    //     if (input.clearSelection) {
-    //         m_buildSession.ClearHand();
-    //     }
-    //     if (input.discardRepositionedPart) {
-    //         m_buildSession.DiscardRepositionedPart();
-    //     }
-    //     if (input.pickupPart && input.interactionCoord.has_value()) {
-    //         m_buildSession.PickUpPart(input.interactionCoord.value());
-    //     }
-    //     if (input.rotatePlacedPart && input.interactionCoord.has_value()) {
-    //         m_buildSession.RotatePart(input.interactionCoord.value());
-    //     }
-    //     if (input.rotatePart) {
-    //         m_buildSession.RotateSelectedPart();
-    //     }
-    //     if (input.toolbarPart.has_value()) {
-    //         const PartType partType = static_cast<PartType>(
-    //             input.toolbarPart.value()
-    //         );
-    //         m_buildSession.SelectPartType(partType);
-    //     } else if ((m_buildSession.GetSelectedPartType().has_value() ||
-    //                 m_buildSession.HasRepositionedPart()) &&
-    //                input.mouseScreenPosition.y <= 520.0f &&
-    //                (input.placePart || input.removePart)) {
-    //         const Vector2 mouseWorld = GetScreenToWorld2D(
-    //             input.mouseScreenPosition.ToRayVec(),
-    //             m_camera
-    //         );
-    //         auto gridCoordOpt = m_level.GetGrid().WorldToCoord(Math::Vector2D{mouseWorld.x, mouseWorld.y});
-    //
-    //         if (gridCoordOpt.has_value()) {
-    //             GridCoord coord = gridCoordOpt.value();
-    //
-    //             if (input.placePart) {
-    //                 if (m_buildSession.HasRepositionedPart()) {
-    //                     m_buildSession.PlaceRepositionedPart(coord);
-    //                 } else {
-    //                     m_buildSession.PlaceSelectedPart(coord);
-    //                 }
-    //             }
-    //             if (input.removePart) {
-    //                 m_buildSession.RemovePart(coord);
-    //             }
-    //         }
-    //
-    //     }
-    // }
+EditorScene::~EditorScene() {
+    rlImGuiShutdown();
 }
 
-void EditorScene::Update(float dt) {
-    // if (m_stateMachine.IsPlayMode()) {
-    //     m_playSession.Update(dt);
-    // }
+void EditorScene::ProcessInput(float deltaTime) {
+    HandleCameraInput(deltaTime);
+    HandleMouseInput();
+}
+
+void EditorScene::HandleCameraInput(float deltaTime) {
+    // WASD camera panning
+    float panSpeed = 400.0f / m_camera.zoom;
+    if (IsKeyDown(KEY_W)) m_camera.target.y -= panSpeed * deltaTime;
+    if (IsKeyDown(KEY_S)) m_camera.target.y += panSpeed * deltaTime;
+    if (IsKeyDown(KEY_A)) m_camera.target.x -= panSpeed * deltaTime;
+    if (IsKeyDown(KEY_D)) m_camera.target.x += panSpeed * deltaTime;
+
+    // zooming with mouse wheel
+    float wheel = GetMouseWheelMove();
+    if (wheel != 0) {
+        // zoom relative to mouse position
+        Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), m_camera);
+        m_camera.offset = GetMousePosition();
+        m_camera.target = mouseWorldPos;
+
+        m_camera.zoom += wheel * 0.1f;
+        if (m_camera.zoom < 0.1f) m_camera.zoom = 0.1f;
+    }
+}
+
+void EditorScene::HandleMouseInput() {
+    if (ImGui::GetIO().WantCaptureMouse) return;
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), m_camera);
+        m_currentPolygonWorkPoints.push_back(WorkingSegmentPoint{
+            .point = {mousePos.x, mousePos.y},
+            .type = m_activeSegmentType
+        });
+    }
+
+    // right click to finish the polygon loop
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && m_currentPolygonWorkPoints.size() >= 3) {
+        Math::TerrainPolygon poly;
+        size_t n = m_currentPolygonWorkPoints.size();
+        size_t i = 0;
+
+        while (i < n) {
+            TerrainSegmentType segType = m_currentPolygonWorkPoints[i].type;
+            std::vector<Math::Vector2D> segPoints;
+
+            segPoints.push_back(m_currentPolygonWorkPoints[i].point);
+
+            size_t j = i + 1;
+            // consume subsequent points as long as they share the same segment type
+            while (j < n && m_currentPolygonWorkPoints[j].type == segType) {
+                segPoints.push_back(m_currentPolygonWorkPoints[j].point);
+                j++;
+            }
+
+            if (j < n) {
+                // we hit a type change at index j
+                // include this junction point to cleanly end the current segment,
+                // and let the next segment start at this exact same point (sharing c1 == p1).
+                segPoints.push_back(m_currentPolygonWorkPoints[j].point);
+                poly.segments.push_back(Math::TerrainSegment{
+                    .type = segType,
+                    .points = segPoints,
+                    .resolution = (segType == TerrainSegmentType::CatmullRom) ? 12 : 1
+                });
+                i = j; // next segment picks up right at index j
+            } else {
+                segPoints.push_back(m_currentPolygonWorkPoints[0].point);
+                poly.segments.push_back(Math::TerrainSegment{
+                    .type = segType,
+                    .points = segPoints,
+                    .resolution = (segType == TerrainSegmentType::CatmullRom) ? 12 : 1
+                });
+                break;
+            }
+        }
+
+        m_completedPolygons.push_back(poly);
+        m_currentPolygonWorkPoints.clear();
+    }
+}
+
+void EditorScene::Update(float deltaTime) {
+    // Any per-frame updates
 }
 
 void EditorScene::Render() const {
-    // BeginDrawing();
-    // ClearBackground(RAYWHITE);
-    //
-    // m_worldRenderer.Render(
-    //     m_camera,
-    //     m_stateMachine.GetState(),
-    //     m_level.GetGrid(),
-    //     m_playSession,
-    //     m_buildSession.GetSelectedPartType(),
-    //     m_buildSession.GetSelectedOrientation(),
-    //     m_buildSession.GetRepositionedPartType(),
-    //     m_buildSession.GetRepositionedOrientation()
-    // );
-    // m_uiRenderer.Render(
-    //     m_screenWidth,
-    //     m_screenHeight,
-    //     m_stateMachine.GetState(),
-    //     m_buildSession,
-    //     m_level.GetGrid(),
-    //     m_camera,
-    //     m_playSession.GetActivationRegistry()
-    // );
-    //
-    // EndDrawing();
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+
+    BeginMode2D(m_camera);
+    DrawGrid(40, 50.0f);
+
+    // draw completed polygons
+    for (const auto& poly : m_completedPolygons) {
+        Math::TerrainDefinition def{ .polygons = { poly } };
+        auto sampledSections = Math::SampleTerrain(def);
+
+        // draw the smoothly evaluated terrain sections
+        for (const auto& section : sampledSections) {
+            for (size_t i = 0; i < section.size(); ++i) {
+                Vector2 p0 = section[i].ToRayVec();
+                Vector2 p1 = section[(i + 1) % section.size()].ToRayVec();
+
+                DrawLineV(p0, p1, BLUE);
+                DrawCircleV(p0, 3.0f, DARKBLUE);
+            }
+        }
+    }
+
+    // draw active polygon being built
+    for (size_t i = 0; i < m_currentPolygonWorkPoints.size(); ++i) {
+        auto curr = m_currentPolygonWorkPoints[i];
+        Vector2 p0 = curr.point.ToRayVec();
+        Color currentColor = (curr.type == TerrainSegmentType::Line) ? RED : BLUE;
+        DrawCircleV(p0, 5.0f, currentColor);
+        if (i > 0) {
+            auto prev = m_currentPolygonWorkPoints[i - 1];
+            Vector2 p1 = prev.point.ToRayVec();
+            DrawLineV(p1, p0, currentColor);
+        }
+    }
+
+    EndMode2D();
+
+    // imgui for the debug drawing of controls
+    rlImGuiBegin();
+
+    ImGui::Begin("Terrain Editor Controls");
+    ImGui::Text("WASD to Pan | Mouse Wheel to Zoom");
+    ImGui::Text("Left Click: Add Point | Right Click: Close Polygon");
+    ImGui::Separator();
+
+    ImGui::Text("Points in current polygon: %zu", m_currentPolygonWorkPoints.size());
+
+    if (ImGui::Button("Clear Current Points")) {
+        m_currentPolygonWorkPoints.clear();
+    }
+
+    // segment type selector (Line vs CatmullRom)
+    const char* segmentItems[] = { "Line", "CatmullRom" };
+    int currentItem = (m_activeSegmentType == TerrainSegmentType::Line) ? 0 : 1;
+    if (ImGui::Combo("Next Segment Type", &currentItem, segmentItems, 2)) {
+        m_activeSegmentType = (currentItem == 0) ?
+            TerrainSegmentType::Line :
+            TerrainSegmentType::CatmullRom;
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Completed Polygons: %zu", m_completedPolygons.size());
+
+    // text input for file naming
+    ImGui::InputText("Filename", m_filenameBuffer, sizeof(m_filenameBuffer));
+    ImGui::SameLine();
+    ImGui::Text(".json");
+
+    if (ImGui::Button("Export LevelSpecs to JSON")) {
+        // build path: assets/levels/<filename>.json
+        std::string fileName = m_filenameBuffer;
+        if (fileName.empty()) {
+            fileName = "unnamed_level";
+        }
+        std::string fullPath = "assets/levels/" + fileName + ".json";
+
+        nlohmann::json j;
+
+        // build terrain definition to JSON
+        nlohmann::json polygonsJson = nlohmann::json::array();
+        for (const auto& poly : m_completedPolygons) {
+            nlohmann::json segmentsJson = nlohmann::json::array();
+            for (const auto& seg : poly.segments) {
+                nlohmann::json pointsJson = nlohmann::json::array();
+                for (const auto& pt : seg.points) {
+                    pointsJson.push_back({
+                        {"x", static_cast<float>(pt.x)},
+                        {"y", static_cast<float>(pt.y)}
+                    });
+                }
+
+                segmentsJson.push_back({
+                    {"type", (seg.type == TerrainSegmentType::Line) ? "Line" : "CatmullRom"},
+                    {"points", pointsJson},
+                    {"resolution", seg.resolution}
+                });
+            }
+            polygonsJson.push_back({{"segments", segmentsJson}});
+        }
+
+        j["terrain"]["polygons"] = polygonsJson;
+
+        // TODO: default level configuration fields (placeholder)
+        j["grid"] = {
+            {"dims", {6, 4}},
+            {"worldPos", {{"x", -50.0f}, {"y", 480.0f}}},
+            {"cellSize", 40.0f}
+        };
+
+        j["initialCamera"] = {
+            {"target", {{"x", 300.0f}, {"y", 360.0f}}},
+            {"zoom", 0.72f}
+        };
+
+        j["goal"] = {
+            {"position", {{"x", 900.0f}, {"y", 430.0f}}}
+        };
+
+        // write to disk using the custom path
+        std::ofstream file(fullPath);
+        if (file.is_open()) {
+            file << j.dump(4);
+            file.close();
+        }
+    }
+
+    ImGui::End();
+
+    rlImGuiEnd();
+    EndDrawing();
 }

@@ -160,6 +160,7 @@ SampledTerrainSection EnrichSection(
     return section;
 }
 
+
 std::vector<std::vector<Math::Vector2D>> SampleTerrain(
     const TerrainDefinition& definition
 ) {

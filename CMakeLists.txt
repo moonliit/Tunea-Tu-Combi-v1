@@ -22,6 +22,7 @@ include_directories(
     include/box2d
     include/imgui
     include/rl_imgui
+    include/json
     src
 )
 
