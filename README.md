@@ -16,8 +16,6 @@ En Arch Linux por ejemplo puedes instalar los paquetes base con:
 sudo pacman -S gcc just raylib
 ```
 
-> **Nota para LSP (Neovim/VSCode/clangd):** Opcionalmente puedes instalar `bear` si deseas generar `compile_commands.json`.
-
 ---
 
 ### 2. Desarrollo Web (WebAssembly)
@@ -49,7 +47,7 @@ incremental. CMake genera `compile_commands.json` dentro del build nativo y
 | `just run`   | Compila y ejecuta la versión nativa                                            |
 | `just web`   | Compila la versión WebAssembly en `build/web/`                                 |
 | `just serve` | Compila para WebAssembly y levanta un servidor local (`http://localhost:6931`) |
-| `just clean` | Elimina los artefactos compilados y el symlink de `compile_commands.json`      |
+| `just clean` | Elimina los artefactos compilados                                              |
 
 ## Estructura del Proyecto
 
