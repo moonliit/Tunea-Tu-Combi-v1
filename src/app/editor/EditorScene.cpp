@@ -18,8 +18,8 @@ EditorScene::EditorScene(AppContext* appContext):
     m_camera = { 0 };
     m_camera.zoom = 1.0f;
     m_camera.offset = {
-        (float)m_appContext->windowWidth / 2.0f,
-        (float)m_appContext->windowHeight / 2.0f
+        static_cast<float>(m_appContext->windowWidth) / 2.0f,
+        static_cast<float>(m_appContext->windowHeight) / 2.0f
     };
     m_camera.target = { 0.0f, 0.0f };
 
@@ -115,7 +115,6 @@ void EditorScene::HandleMouseInput() {
 }
 
 void EditorScene::Update(float deltaTime) {
-    // Any per-frame updates
 }
 
 void EditorScene::Render() const {

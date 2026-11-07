@@ -22,7 +22,6 @@ private:
     ActivationRegistry m_activationRegistry;
     Math::Vector2D m_gravity;
 
-    void CreatePhysicsWorld(const std::vector<Math::Vector2D>& terrainPoints);
     void CreatePhysicsWorld(
         const std::vector<std::vector<Math::Vector2D>>& terrainSections,
         bool closed
@@ -60,10 +59,6 @@ public:
     }
 
     void Start();
-    void Reset(const std::vector<Math::Vector2D>& terrainPoints);
-    void Reset(
-        const std::vector<std::vector<Math::Vector2D>>& terrainSections
-    );
     void Reset(const Math::TerrainDefinition& terrain);
     void Update(float deltaTime);
     void ActivateAction(ActivationAction action);

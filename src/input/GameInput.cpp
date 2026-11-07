@@ -5,20 +5,7 @@
 
 #include <algorithm>
 
-namespace {
-}
-
-GameInputFrame GameInput::Capture(
-    float deltaTime,
-    GameState state,
-    const ActivationRegistry& activationRegistry,
-    const EditorGrid& grid,
-    const Camera2D& camera,
-    const std::optional<PartType>& selectedPartType,
-    bool hasRepositionedPart,
-    int screenWidth,
-    int screenHeight
-) const {
+GameInputFrame GameInput::Capture(const GameInputContext& context) const {
     GameInputFrame frame;
     frame.toggleMode = IsKeyPressed(KEY_ENTER);
     frame.clearSelection = IsKeyPressed(KEY_ESCAPE);
@@ -28,9 +15,10 @@ GameInputFrame GameInput::Capture(
         GetMousePosition().y
     };
 
-    const bool cameraMode = state == GameState::View || state == GameState::Play;
+    const bool cameraMode = context.state == GameState::View ||
+        context.state == GameState::Play;
     if (cameraMode) {
-        const float cameraSpeed = 300.0f * deltaTime;
+        const float cameraSpeed = 300.0f * context.deltaTime;
         if (IsKeyDown(KEY_W)) frame.cameraMovement.y -= cameraSpeed;
         if (IsKeyDown(KEY_S)) frame.cameraMovement.y += cameraSpeed;
         if (IsKeyDown(KEY_A)) frame.cameraMovement.x -= cameraSpeed;
@@ -79,11 +67,11 @@ GameInputFrame GameInput::Capture(
                 const Vector2 mousePosition =
                     frame.mouseScreenPosition.ToRayVec();
                 const auto controls = UiLayout::BuildControls(
-                    state,
-                    activationRegistry,
-                    grid,
-                    screenWidth,
-                    screenHeight
+                    context.state,
+                    context.activationRegistry,
+                    context.grid,
+                    context.screenWidth,
+                    context.screenHeight
                 );
                 const bool releasedOnTrash = std::any_of(
                     controls.begin(),
@@ -99,9 +87,9 @@ GameInputFrame GameInput::Capture(
                 );
                 const Vector2 mouseWorld = GetScreenToWorld2D(
                     mousePosition,
-                    camera
+                    context.camera
                 );
-                const bool releasedInsideGrid = grid.WorldToCoord({
+                const bool releasedInsideGrid = context.grid.WorldToCoord({
                     mouseWorld.x,
                     mouseWorld.y
                 }).has_value();
@@ -120,11 +108,11 @@ GameInputFrame GameInput::Capture(
     }
 
     const auto controls = UiLayout::BuildControls(
-        state,
-        activationRegistry,
-        grid,
-        screenWidth,
-        screenHeight
+        context.state,
+        context.activationRegistry,
+        context.grid,
+        context.screenWidth,
+        context.screenHeight
     );
     for (const UiControl& control : controls) {
         if (!control.enabled ||
@@ -150,7 +138,8 @@ GameInputFrame GameInput::Capture(
     }
 
     m_pendingWorldClick = cameraMode ||
-        (state == GameState::Build && frame.mouseScreenPosition.y <= 520.0f);
+        (context.state == GameState::Build &&
+         frame.mouseScreenPosition.y <= 520.0f);
     m_pressScreenPosition = frame.mouseScreenPosition;
     m_canDrag = false;
     m_repositioningPart = false;
@@ -159,19 +148,20 @@ GameInputFrame GameInput::Capture(
     } else if (m_pendingWorldClick) {
         const Vector2 mouseWorld = GetScreenToWorld2D(
             frame.mouseScreenPosition.ToRayVec(),
-            camera
+            context.camera
         );
-        const auto gridCoord = grid.WorldToCoord({
+        const auto gridCoord = context.grid.WorldToCoord({
             mouseWorld.x,
             mouseWorld.y
         });
         if (gridCoord.has_value()) {
             m_pressGridCoord = gridCoord;
-            const bool occupied = grid.GetPart(gridCoord.value()).has_value();
+            const bool occupied =
+                context.grid.GetPart(gridCoord.value()).has_value();
             m_repositioningPart =
                 occupied &&
-                !selectedPartType.has_value() &&
-                !hasRepositionedPart;
+                !context.selectedPartType.has_value() &&
+                !context.hasRepositionedPart;
             m_canDrag = cameraMode || m_repositioningPart;
         } else {
             m_pressGridCoord.reset();

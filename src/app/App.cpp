@@ -7,22 +7,28 @@
 #include <raylib.h>
 #include <utility>
 
-App::App(int width, int height, const std::string& title) {
+namespace {
+
+constexpr const char* StartupLevelPath = "assets/levels/default.json";
+constexpr SceneId StartupScene = SceneId::Game;
+
+}
+
+App::App(int width, int height, const std::string& title):
+    m_sceneRequester(&m_sceneManager)
+{
     InitWindow(width, height, title.c_str());
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
 
-    SceneRequester requester(&m_sceneManager);
     m_appContext = {
         .windowWidth = width,
         .windowHeight = height,
         .windowTitle = title,
-        .sceneRequester = &requester
+        .sceneRequester = &m_sceneRequester
     };
     m_sceneManager.SetAppContext(&m_appContext);
-    // LevelDefinition emptyDef = LevelDefinition::Default();
-    LevelDefinition emptyDef = LevelDefinition::FromJsonPath("assets/levels/default.json");
-    // LevelDefinition emptyDef = LevelDefinition::FromJsonPath("assets/levels/level_1.json");
+    LevelDefinition emptyDef = LevelDefinition::FromJsonPath(StartupLevelPath);
 
     m_sceneManager.AddScene(
         SceneId::Game,
@@ -32,9 +38,7 @@ App::App(int width, int height, const std::string& title) {
         SceneId::Editor,
         std::make_unique<EditorScene>(&m_appContext)
     );
-    m_sceneManager.SetCurrentScene({SceneId::Game});
-    // m_sceneManager.SetCurrentScene({SceneId::Editor});
-    // m_sceneManager.SetCurrentScene({SceneId::MainMenu});
+    m_sceneManager.SetCurrentScene({StartupScene});
 }
 
 void App::Run() {

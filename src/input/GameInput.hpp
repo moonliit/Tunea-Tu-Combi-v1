@@ -29,19 +29,21 @@ struct GameInputFrame {
     bool cameraDragging = false;
 };
 
+struct GameInputContext {
+    float deltaTime;
+    GameState state;
+    const ActivationRegistry& activationRegistry;
+    const EditorGrid& grid;
+    const Camera2D& camera;
+    const std::optional<PartType>& selectedPartType;
+    bool hasRepositionedPart;
+    int screenWidth;
+    int screenHeight;
+};
+
 class GameInput {
 public:
-    GameInputFrame Capture(
-        float deltaTime,
-        GameState state,
-        const ActivationRegistry& activationRegistry,
-        const EditorGrid& grid,
-        const Camera2D& camera,
-        const std::optional<PartType>& selectedPartType,
-        bool hasRepositionedPart,
-        int screenWidth,
-        int screenHeight
-    ) const;
+    GameInputFrame Capture(const GameInputContext& context) const;
 
 private:
     mutable bool m_dragging = false;

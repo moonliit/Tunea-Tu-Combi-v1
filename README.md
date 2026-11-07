@@ -4,7 +4,7 @@ Proyecto multiplataforma en C++23 configurado para compilar tanto nativamente en
 
 ## Requisitos Previos
 
-### 1. Desarrollo Nativo (Linux)
+### 1. Desarrollo Nativo (Linux y macOS)
 
 - **Compilador C++23**: `g++` (o `clang++`)
 - **Librerías del sistema**: `raylib`
@@ -14,6 +14,12 @@ En Arch Linux por ejemplo puedes instalar los paquetes base con:
 
 ```bash
 sudo pacman -S gcc just raylib
+```
+
+En macOS con Homebrew:
+
+```bash
+brew install just cmake raylib box2d
 ```
 
 ---

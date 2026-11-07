@@ -110,62 +110,62 @@ std::vector<PartPlacement> BuildModel::GetPlacements() const {
     return placements;
 }
 
-    std::vector<PartConnection> BuildModel::GetConnections() const {
-        std::vector<PartConnection> connections;
-        const float halfCell = m_grid.GetCellSize() / 2.0f;
+std::vector<PartConnection> BuildModel::GetConnections() const {
+    std::vector<PartConnection> connections;
+    const float halfCell = m_grid.GetCellSize() / 2.0f;
 
-        for (const Part* first : m_grid.GetActiveParts()) {
-            const ConnectorMask firstMask = RotateConnectorMask(
-                GetPartDefinition(first->GetType()).connectors,
-                first->GetOrientation()
-            );
+    for (const Part* first : m_grid.GetActiveParts()) {
+        const ConnectorMask firstMask = RotateConnectorMask(
+            GetPartDefinition(first->GetType()).connectors,
+            first->GetOrientation()
+        );
 
-            for (const auto [direction, offset] : {
-                     std::pair{
-                         ConnectorDirection::Right,
-                         Math::GridCoord{1, 0}
-                     },
-                     std::pair{
-                         ConnectorDirection::Down,
-                         Math::GridCoord{0, 1}
-                     }
-                 }) {
-                if ((firstMask & ConnectorBit(direction)) == 0) continue;
+        for (const auto [direction, offset] : {
+                 std::pair{
+                     ConnectorDirection::Right,
+                     Math::GridCoord{1, 0}
+                 },
+                 std::pair{
+                     ConnectorDirection::Down,
+                     Math::GridCoord{0, 1}
+                 }
+             }) {
+            if ((firstMask & ConnectorBit(direction)) == 0) continue;
 
-                const Math::GridCoord secondCoord{
-                    first->GetGridCoord().x + offset.x,
-                    first->GetGridCoord().y + offset.y
-                };
-                const Part* second = FindPartAt(m_grid, secondCoord);
-                if (second == nullptr) continue;
-                if (!ArePartsCompatible(first->GetType(), second->GetType())) {
-                    continue;
-                }
-
-                const ConnectorDirection secondDirection =
-                    OppositeDirection(direction);
-                const ConnectorMask secondMask = RotateConnectorMask(
-                    GetPartDefinition(second->GetType()).connectors,
-                    second->GetOrientation()
-                );
-                if ((secondMask & ConnectorBit(secondDirection)) == 0) continue;
-
-                Math::Vector2D anchor = m_grid.CoordToWorld(first->GetGridCoord());
-                if (direction == ConnectorDirection::Right) {
-                    anchor.x += halfCell;
-                } else {
-                    anchor.y += halfCell;
-                }
-
-                connections.push_back(PartConnection{
-                    .first = first->GetId(),
-                    .second = second->GetId(),
-                    .firstDirection = direction,
-                    .secondDirection = secondDirection,
-                    .anchor = anchor
-                });
+            const Math::GridCoord secondCoord{
+                first->GetGridCoord().x + offset.x,
+                first->GetGridCoord().y + offset.y
+            };
+            const Part* second = FindPartAt(m_grid, secondCoord);
+            if (second == nullptr) continue;
+            if (!ArePartsCompatible(first->GetType(), second->GetType())) {
+                continue;
             }
-        }
 
-        return connections;
+            const ConnectorDirection secondDirection =
+                OppositeDirection(direction);
+            const ConnectorMask secondMask = RotateConnectorMask(
+                GetPartDefinition(second->GetType()).connectors,
+                second->GetOrientation()
+            );
+            if ((secondMask & ConnectorBit(secondDirection)) == 0) continue;
+
+            Math::Vector2D anchor = m_grid.CoordToWorld(first->GetGridCoord());
+            if (direction == ConnectorDirection::Right) {
+                anchor.x += halfCell;
+            } else {
+                anchor.y += halfCell;
+            }
+
+            connections.push_back(PartConnection{
+                .first = first->GetId(),
+                .second = second->GetId(),
+                .firstDirection = direction,
+                .secondDirection = secondDirection,
+                .anchor = anchor
+            });
+        }
     }
+
+    return connections;
+}

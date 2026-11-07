@@ -15,16 +15,25 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-fdiagnostics-color=always)
 endif()
 
+if(APPLE)
+    # Raylib y Box2D vienen de Homebrew: lib/native/libbox2d.a es un binario de
+    # Linux y las cabeceras de raylib deben coincidir con la librería.
+    find_package(raylib REQUIRED)
+    find_package(box2d CONFIG REQUIRED)
+endif()
+
 # Include directories
 include_directories(
     include
-    include/raylib
     include/box2d
     include/imgui
     include/rl_imgui
     include/json
     src
 )
+if(NOT APPLE)
+    include_directories(include/raylib)
+endif()
 
 # Collect all source files recursively from src/
 file(GLOB_RECURSE SOURCES src/*.cpp)
@@ -52,6 +61,9 @@ if(EMSCRIPTEN)
     if(ASSET_FILES)
         target_link_options(ray PRIVATE "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/assets@/assets")
     endif()
+
+elseif(APPLE)
+    target_link_libraries(ray PRIVATE raylib box2d::box2d)
 
 else()
     # --- Native Linux Configuration ---

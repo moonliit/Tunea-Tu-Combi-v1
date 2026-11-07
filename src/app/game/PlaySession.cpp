@@ -67,15 +67,6 @@ PlaySession::PlaySession(
 }
 
 void PlaySession::CreatePhysicsWorld(
-    const std::vector<Math::Vector2D>& terrainPoints
-) {
-    CreatePhysicsWorld(
-        std::vector<std::vector<Math::Vector2D>>{terrainPoints},
-        false
-    );
-}
-
-void PlaySession::CreatePhysicsWorld(
     const std::vector<std::vector<Math::Vector2D>>& terrainSections,
     bool closed
 ) {
@@ -123,25 +114,6 @@ void PlaySession::CreatePhysicsWorld(
 void PlaySession::Start() {
     m_assembler.Assemble(m_model, m_physics);
     BuildActivationSubscriptions();
-}
-
-void PlaySession::Reset(const std::vector<Math::Vector2D>& terrainPoints) {
-    Reset(std::vector<std::vector<Math::Vector2D>>{terrainPoints});
-}
-
-void PlaySession::Reset(
-    const std::vector<std::vector<Math::Vector2D>>& terrainSections
-) {
-    m_terrainDefinition.polygons.clear();
-    for (const auto& section : terrainSections) {
-        m_terrainDefinition.polygons.push_back(Math::TerrainPolygon{
-            .segments = {Math::TerrainSegment{
-                .type = Math::TerrainSegmentType::Line,
-                .points = section
-            }}
-        });
-    }
-    Reset(m_terrainDefinition);
 }
 
 void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
