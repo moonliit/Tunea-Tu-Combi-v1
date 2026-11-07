@@ -9,6 +9,8 @@ struct AppContext {
     int windowHeight;
     std::string windowTitle;
     SceneRequester* sceneRequester;
+    int unlockedLevel = 1;
+    int completedLevel = 0;
 };
 
 #endif

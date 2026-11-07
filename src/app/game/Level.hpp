@@ -26,6 +26,7 @@ struct GridDefinition {
 inline constexpr Math::Vector2D GoalSize{80.0f, 80.0f};
 
 struct LevelDefinition {
+    int levelNumber = 1;
     Math::TerrainDefinition terrain;
     GridDefinition grid;
     std::optional<CameraDefinition> initialCamera;

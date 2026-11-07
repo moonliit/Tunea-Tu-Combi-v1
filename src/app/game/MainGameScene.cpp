@@ -85,6 +85,18 @@ MainGameScene::MainGameScene(
 }
 
 void MainGameScene::ProcessInput(float dt) {
+    Rectangle menuButton{
+        static_cast<float>(m_appContext->windowWidth - 90),
+        20.0f,
+        78.0f,
+        32.0f
+    };
+    if (CheckCollisionPointRec(GetMousePosition(), menuButton) &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+        return;
+    }
+
     const GameInputFrame input = m_input.Capture(GameInputContext{
         .deltaTime = dt,
         .state = m_stateMachine.GetState(),
@@ -214,15 +226,23 @@ void MainGameScene::Update(float dt) {
         const auto& parts = m_level.GetGrid().GetActiveParts();
         if (!parts.empty()) {
             Vector2 center{0.0f, 0.0f};
+            bool entireCarPassedFinish = true;
             for (const Part* part : parts) {
                 const auto position = part->GetRenderState(m_level.GetGrid()).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
+                entireCarPassedFinish = entireCarPassedFinish &&
+                    position.x > m_level.GetDefinition().goal.position.x;
             }
             m_camera.target = {
                 center.x / parts.size(),
                 center.y / parts.size()
             };
+            if (entireCarPassedFinish && !m_levelCompleted) {
+                m_levelCompleted = true;
+                m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
+                m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+            }
         }
     }
 }
@@ -273,6 +293,23 @@ void MainGameScene::Render() const {
         m_buildSession.GetRepositionedPartType(),
         m_buildSession.GetRepositionedOrientation()
     );
+    BeginMode2D(m_camera);
+    const auto& finish = m_level.GetDefinition().goal.position;
+    const Vector2 pole{static_cast<float>(finish.x), static_cast<float>(finish.y)};
+    DrawLineEx({pole.x, pole.y - 100.0f}, pole, 5.0f, DARKGRAY);
+    DrawTriangle(
+        {pole.x, pole.y - 100.0f},
+        {pole.x, pole.y - 64.0f},
+        {pole.x + 65.0f, pole.y - 82.0f},
+        RED
+    );
+    DrawTriangleLines(
+        {pole.x, pole.y - 100.0f},
+        {pole.x, pole.y - 64.0f},
+        {pole.x + 65.0f, pole.y - 82.0f},
+        MAROON
+    );
+    EndMode2D();
     m_uiRenderer.Render(
         m_appContext->windowWidth,
         m_appContext->windowHeight,
@@ -282,6 +319,8 @@ void MainGameScene::Render() const {
         m_camera,
         m_playSession.GetActivationRegistry()
     );
+    DrawRectangle(m_appContext->windowWidth - 90, 20, 78, 32, DARKGRAY);
+    DrawText("Menú", m_appContext->windowWidth - 79, 28, 16, WHITE);
 
     EndDrawing();
 }

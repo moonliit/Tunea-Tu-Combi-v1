@@ -9,6 +9,7 @@ enum class SceneId;
 class MainMenuScene : public I_Scene {
     AppContext* m_context;
     bool m_selectingLevel = false;
+    int m_selectedLevel = 0;
 public:
     explicit MainMenuScene(AppContext* context): m_context(context) {}
     void ProcessInput(float) override;

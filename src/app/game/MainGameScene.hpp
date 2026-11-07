@@ -28,6 +28,7 @@ private:
     GameInput m_input;
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
+    bool m_levelCompleted = false;
 
     void ResetToBuildMode();
     void ResetEditorCamera();
