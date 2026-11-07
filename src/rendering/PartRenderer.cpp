@@ -62,14 +62,14 @@ const Part* FindPartAt(
 void PartRenderer::Render(const PartRenderState& state) const {
     const float cellSize = state.cellSize;
     const Vector2 position = state.position.ToRayVec();
-    const float rotation_rad = static_cast<float>(state.rotation);
-    const float rotation_deg = rotation_rad * RAD2DEG;
+    const float rotationRad = static_cast<float>(state.rotation);
+    const float rotationDeg = rotationRad * RAD2DEG;
 
     switch (state.type) {
         case PartType::SquareBlock:
             rlPushMatrix();
             rlTranslatef(position.x, position.y, 0.0f);
-            rlRotatef(rotation_deg, 0.0f, 0.0f, 1.0f);
+            rlRotatef(rotationDeg, 0.0f, 0.0f, 1.0f);
             DrawLineEx(
                 {-cellSize / 2.0f, -cellSize / 2.0f},
                 {cellSize / 2.0f, -cellSize / 2.0f},
@@ -119,9 +119,9 @@ void PartRenderer::Render(const PartRenderState& state) const {
             DrawCircle(position.x, position.y, radius - 2, GREEN);
 
             const float spokeX =
-                position.x + std::cos(rotation_rad) * (radius - 2);
+                position.x + std::cos(rotationRad) * (radius - 2);
             const float spokeY =
-                position.y + std::sin(rotation_rad) * (radius - 2);
+                position.y + std::sin(rotationRad) * (radius - 2);
             DrawLineV(position, Vector2{spokeX, spokeY}, BLACK);
 
             const float halfSize = cellSize / 2.0f;
@@ -146,10 +146,10 @@ void PartRenderer::Render(const PartRenderState& state) const {
             DrawRectanglePro(
                 Rectangle{position.x, position.y, cellSize, cellSize},
                 Vector2{cellSize / 2.0f, cellSize / 2.0f},
-                rotation_deg,
+                rotationDeg,
                 MAROON
             );
-            RenderOrientationMarker(position, cellSize, rotation_rad);
+            RenderOrientationMarker(position, cellSize, rotationRad);
             break;
         case PartType::Fan: {
             const float width = state.capsuleRadius * 2.0f;
@@ -159,7 +159,7 @@ void PartRenderer::Render(const PartRenderState& state) const {
 
             rlPushMatrix();
             rlTranslatef(position.x, position.y, 0.0f);
-            rlRotatef(rotation_deg, 0.0f, 0.0f, 1.0f);
+            rlRotatef(rotationDeg, 0.0f, 0.0f, 1.0f);
             const Color fanColor = state.propulsionActive ? RED : ORANGE;
             DrawRectangleRec(
                 Rectangle{-width / 2.0f, -halfSegment, width, halfSegment * 2.0f},
@@ -168,7 +168,7 @@ void PartRenderer::Render(const PartRenderState& state) const {
             DrawCircle(0.0f, -halfSegment, state.capsuleRadius, fanColor);
             DrawCircle(0.0f, halfSegment, state.capsuleRadius, fanColor);
             rlPopMatrix();
-            RenderOrientationMarker(position, cellSize, rotation_rad);
+            RenderOrientationMarker(position, cellSize, rotationRad);
             break;
         }
         case PartType::WindSail: {
@@ -185,7 +185,7 @@ void PartRenderer::Render(const PartRenderState& state) const {
 
             rlPushMatrix();
             rlTranslatef(position.x, position.y, 0.0f);
-            rlRotatef(rotation_deg, 0.0f, 0.0f, 1.0f);
+            rlRotatef(rotationDeg, 0.0f, 0.0f, 1.0f);
             DrawTriangle(
                 tip,
                 baseBottom,
@@ -194,7 +194,7 @@ void PartRenderer::Render(const PartRenderState& state) const {
             );
             DrawTriangleLines(tip, baseBottom, baseTop, sailOutline);
             rlPopMatrix();
-            RenderOrientationMarker(position, cellSize, rotation_rad);
+            RenderOrientationMarker(position, cellSize, rotationRad);
             break;
         }
     }

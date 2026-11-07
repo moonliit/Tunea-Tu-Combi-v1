@@ -58,7 +58,6 @@ MainGameScene::MainGameScene(
         Vector2D{0.0f, m_gravity}
     )
 {
-    // Initialize Camera2D
     m_camera = Camera2D(Vector2{0});
     const Vector2 automaticTarget = CalculateGridTarget(specs);
     const float minimumZoom = CalculateGridFitZoom(
@@ -86,17 +85,17 @@ MainGameScene::MainGameScene(
 }
 
 void MainGameScene::ProcessInput(float dt) {
-    const GameInputFrame input = m_input.Capture(
-        dt,
-        m_stateMachine.GetState(),
-        m_playSession.GetActivationRegistry(),
-        m_level.GetGrid(),
-        m_camera,
-        m_buildSession.GetSelectedPartType(),
-        m_buildSession.HasRepositionedPart(),
-        m_appContext->windowWidth,
-        m_appContext->windowHeight
-    );
+    const GameInputFrame input = m_input.Capture(GameInputContext{
+        .deltaTime = dt,
+        .state = m_stateMachine.GetState(),
+        .activationRegistry = m_playSession.GetActivationRegistry(),
+        .grid = m_level.GetGrid(),
+        .camera = m_camera,
+        .selectedPartType = m_buildSession.GetSelectedPartType(),
+        .hasRepositionedPart = m_buildSession.HasRepositionedPart(),
+        .screenWidth = m_appContext->windowWidth,
+        .screenHeight = m_appContext->windowHeight
+    });
 
     if (input.toggleMode) {
         if (m_stateMachine.IsBuildMode()) {

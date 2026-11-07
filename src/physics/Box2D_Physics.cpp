@@ -120,7 +120,6 @@ std::shared_ptr<I_RigidBody> Box2D_PhysicsWorld::CreateBox(
 
     b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
 
-    // Box2D 3.x shape definitions
     b2Polygon boxPolygon = b2MakeBox(size.x / 2.0f, size.y / 2.0f);
 
     b2ShapeDef shapeDef = b2DefaultShapeDef();
@@ -148,8 +147,8 @@ std::shared_ptr<I_RigidBody> Box2D_PhysicsWorld::CreateCircle(
 
     // Add damping to simulate air resistance and rolling energy loss
     if (type != BodyType::Static) {
-        bodyDef.angularDamping = 0.5f; // Adjust this value (e.g., 0.1 to 2.0) to control how fast it stops rolling
-        bodyDef.linearDamping = 0.1f;   // Optional: adds slight air drag
+        bodyDef.angularDamping = 0.5f;
+        bodyDef.linearDamping = 0.1f;
     }
 
     b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
@@ -205,8 +204,6 @@ std::shared_ptr<I_RigidBody> Box2D_PhysicsWorld::CreateCapsule(
     return std::make_shared<Box2D_CapsuleRigidBody>(bodyId, height, radius);
 }
 
-#include <print>
-
 std::shared_ptr<I_RigidBody> Box2D_PhysicsWorld::CreateTriangle(
     Math::Vector2D position, float rotation, Math::Vector2D size, float mass, BodyType type
 ) {
@@ -226,7 +223,7 @@ std::shared_ptr<I_RigidBody> Box2D_PhysicsWorld::CreateTriangle(
 
     // Use Box2D's official hull computation helper to ensure valid geometry and winding order
     b2Hull hull = b2ComputeHull(points, 3);
-    b2Polygon triangle = b2MakePolygon(&hull, 0.0f); // 0.0f radius
+    b2Polygon triangle = b2MakePolygon(&hull, 0.0f);
 
     b2ShapeDef shapeDef = b2DefaultShapeDef();
     if (type == BodyType::Static) {

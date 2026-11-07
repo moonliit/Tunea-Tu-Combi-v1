@@ -9,6 +9,7 @@
 class App {
 private:
     SceneManager m_sceneManager;
+    SceneRequester m_sceneRequester;
     AppContext m_appContext;
 
 public:
