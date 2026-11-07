@@ -77,7 +77,7 @@ MainGameScene::MainGameScene(
         static_cast<float>(cameraDefinition.target.x),
         static_cast<float>(cameraDefinition.target.y)
     };
-    m_camera.offset = {m_appContext->windowWidth / 2.f, m_appContext->windowWidth / 2.f};
+    m_camera.offset = {m_appContext->windowWidth / 2.f, m_appContext->windowHeight / 2.f};
     m_camera.rotation = 0.0f;
     m_camera.zoom = std::max(minimumZoom, cameraDefinition.zoom);
     m_editorCameraTarget = m_camera.target;
@@ -211,10 +211,36 @@ void MainGameScene::ProcessInput(float dt) {
 void MainGameScene::Update(float dt) {
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
+        const auto& parts = m_level.GetGrid().GetActiveParts();
+        if (!parts.empty()) {
+            Vector2 center{0.0f, 0.0f};
+            for (const Part* part : parts) {
+                const auto position = part->GetRenderState(m_level.GetGrid()).position;
+                center.x += static_cast<float>(position.x);
+                center.y += static_cast<float>(position.y);
+            }
+            m_camera.target = {
+                center.x / parts.size(),
+                center.y / parts.size()
+            };
+        }
     }
 }
 
 void MainGameScene::TransitionToPlayMode() {
+    const auto placements = m_level.GetBuildModel().GetPlacements();
+    if (!placements.empty()) {
+        Vector2 center{0.0f, 0.0f};
+        for (const auto& placement : placements) {
+            const auto position = m_level.GetGrid().CoordToWorld(placement.coord);
+            center.x += static_cast<float>(position.x);
+            center.y += static_cast<float>(position.y);
+        }
+        m_camera.target = {
+            center.x / placements.size(),
+            center.y / placements.size()
+        };
+    }
     m_stateMachine.EnterPlay();
     m_playSession.Start();
 }

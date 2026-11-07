@@ -31,7 +31,8 @@ void SceneManager::SetCurrentScene(const SceneRequest& req) {
 
     if (
         m_currentScene == SceneId::MainMenu &&
-        req.id == SceneId::Game
+        req.id == SceneId::Game &&
+        req.data != nullptr
     ) {
         LevelDefinition& levelDef = *(LevelDefinition*)req.data;
         // evict previous game scene and replace it with another one with a new level

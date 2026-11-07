@@ -2,6 +2,7 @@
 #include "app/game/Level.hpp"
 #include "app/game/MainGameScene.hpp"
 #include "app/editor/EditorScene.hpp"
+#include "app/MainMenuScene.hpp"
 
 #include <algorithm>
 #include <raylib.h>
@@ -10,7 +11,7 @@
 namespace {
 
 constexpr const char* StartupLevelPath = "assets/levels/default.json";
-constexpr SceneId StartupScene = SceneId::Game;
+constexpr SceneId StartupScene = SceneId::MainMenu;
 
 }
 
@@ -37,6 +38,10 @@ App::App(int width, int height, const std::string& title):
     m_sceneManager.AddScene(
         SceneId::Editor,
         std::make_unique<EditorScene>(&m_appContext)
+    );
+    m_sceneManager.AddScene(
+        SceneId::MainMenu,
+        std::make_unique<MainMenuScene>(&m_appContext)
     );
     m_sceneManager.SetCurrentScene({StartupScene});
 }
