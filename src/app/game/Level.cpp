@@ -1,7 +1,6 @@
 #include "app/game/Level.hpp"
 #include "math/Vector2D.hpp"
 #include <fstream>
-#include <iostream>
 
 Level::Level(const LevelDefinition& specs):
     m_definition(std::move(specs)),
@@ -121,8 +120,6 @@ LevelDefinition LevelDefinition::FromJson(const nlohmann::json& j) {
         level.grid.worldPos = Math::Vector2D::FromJson(j["grid"].at("worldPos"));
         level.grid.cellSize = j["grid"].at("cellSize");
     }
-    std:: cout << "after reading grid\n";
-
 
     if (j.contains("initialCamera")) {
         CameraDefinition cam;

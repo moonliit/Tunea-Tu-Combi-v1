@@ -50,7 +50,7 @@ if(EMSCRIPTEN)
     # Automatically preload assets folder if it contains files
     file(GLOB ASSET_FILES "assets/*")
     if(ASSET_FILES)
-        target_link_options(ray PRIVATE "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+        target_link_options(ray PRIVATE "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/assets@/assets")
     endif()
 
 else()

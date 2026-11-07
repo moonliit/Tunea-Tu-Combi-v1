@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <raylib.h>
 #include <utility>
-#include <print>
 
 App::App(int width, int height, const std::string& title) {
     InitWindow(width, height, title.c_str());
@@ -24,8 +23,6 @@ App::App(int width, int height, const std::string& title) {
     // LevelDefinition emptyDef = LevelDefinition::Default();
     LevelDefinition emptyDef = LevelDefinition::FromJsonPath("assets/levels/default.json");
     // LevelDefinition emptyDef = LevelDefinition::FromJsonPath("assets/levels/level_1.json");
-
-    std::println("grid dims: {}x{}", emptyDef.grid.dims.x, emptyDef.grid.dims.y);
 
     m_sceneManager.AddScene(
         SceneId::Game,
