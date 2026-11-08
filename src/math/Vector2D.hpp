@@ -16,7 +16,7 @@ namespace Math {
         Vector2 ToRayVec() const;
         nlohmann::json ToJson() const;
 
-        static Vector2D FromAngle(RealNum angle);
+        static Vector2D FromAngle(const RealNum& angle);
         static Vector2D FromJson(const nlohmann::json& j);
         static Vector2D Zero();
 
@@ -25,12 +25,19 @@ namespace Math {
         Vector2D operator*(const RealNum& value) const;
         Vector2D operator/(const RealNum& value) const;
 
+        RealNum Dot(const Vector2D& other) const;
         RealNum Cross(const Vector2D& other) const;
         static RealNum TripleCross(
             const Vector2D& a,
             const Vector2D& b,
             const Vector2D& c
         );
+
+        Vector2D& operator=(const Vector2D& other);
+        Vector2D& operator+=(const Vector2D& other);
+        Vector2D& operator-=(const Vector2D& other);
+        Vector2D& operator*=(const RealNum& value);
+        Vector2D& operator/=(const RealNum& value);
 
         bool operator==(const Vector2D& other) const;
         bool operator!=(const Vector2D& other) const;
