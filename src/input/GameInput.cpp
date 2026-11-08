@@ -4,6 +4,7 @@
 #include <raylib.h>
 
 #include <algorithm>
+#include <iterator>
 
 GameInputFrame GameInput::Capture(const GameInputContext& context) const {
     GameInputFrame frame;
@@ -23,6 +24,21 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
         if (IsKeyDown(KEY_S)) frame.cameraMovement.y += cameraSpeed;
         if (IsKeyDown(KEY_A)) frame.cameraMovement.x -= cameraSpeed;
         if (IsKeyDown(KEY_D)) frame.cameraMovement.x += cameraSpeed;
+    }
+    if (context.state == GameState::Play) {
+        constexpr int activationKeys[] = {
+            KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE,
+            KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE
+        };
+        const auto actions = context.activationRegistry.GetVisibleActions();
+        for (std::size_t index = 0;
+             index < actions.size() && index < std::size(activationKeys);
+             ++index) {
+            if (IsKeyPressed(activationKeys[index])) {
+                frame.activationAction = actions[index];
+                return frame;
+            }
+        }
     }
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         frame.removePart = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);

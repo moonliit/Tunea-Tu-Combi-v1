@@ -1,4 +1,5 @@
 #include "app/game/ActivationRegistry.hpp"
+#include "app/game/EditorGrid.hpp"
 
 #include <algorithm>
 
@@ -63,6 +64,27 @@ std::vector<ActivationAction> ActivationRegistry::GetVisibleActions() const {
     return visible;
 }
 
+std::vector<ActivationAction> ActivationRegistry::GetActionsForGrid(
+    const EditorGrid& grid
+) {
+    std::array<bool, static_cast<std::size_t>(ActivationAction::Count)> present{};
+    for (const Part* part : grid.GetActiveParts()) {
+        if (part->GetType() == PartType::Fan) {
+            present[static_cast<std::size_t>(GetFanAction(part->GetOrientation()))] = true;
+        } else if (part->GetType() == PartType::WindSail) {
+            present[static_cast<std::size_t>(GetWindSailAction(part->GetOrientation()))] = true;
+        } else if (part->GetType() == PartType::TNTBarrel) {
+            present[static_cast<std::size_t>(ActivationAction::TNT)] = true;
+        }
+    }
+
+    std::vector<ActivationAction> actions;
+    for (const ActivationAction action : GetAllActions()) {
+        if (present[ActionIndex(action)]) actions.push_back(action);
+    }
+    return actions;
+}
+
 const ActivationRegistry::ActionList& ActivationRegistry::GetAllActions() {
     static constexpr ActionList actions = {
         ActivationAction::FanUp,
@@ -117,14 +139,14 @@ PartOrientation GetPropulsionFacingOrientation(PartOrientation orientation) {
 
 const char* GetActivationLabel(ActivationAction action) {
     switch (action) {
-        case ActivationAction::FanUp: return "Fan Up";
-        case ActivationAction::FanRight: return "Fan Right";
-        case ActivationAction::FanDown: return "Fan Down";
-        case ActivationAction::FanLeft: return "Fan Left";
-        case ActivationAction::WindSailUp: return "Sail Up";
-        case ActivationAction::WindSailRight: return "Sail Right";
-        case ActivationAction::WindSailDown: return "Sail Down";
-        case ActivationAction::WindSailLeft: return "Sail Left";
+        case ActivationAction::FanUp: return "Fan ^";
+        case ActivationAction::FanRight: return "Fan >";
+        case ActivationAction::FanDown: return "Fan v";
+        case ActivationAction::FanLeft: return "Fan <";
+        case ActivationAction::WindSailUp: return "Sail ^";
+        case ActivationAction::WindSailRight: return "Sail >";
+        case ActivationAction::WindSailDown: return "Sail v";
+        case ActivationAction::WindSailLeft: return "Sail <";
         case ActivationAction::TNT: return "TNT";
         case ActivationAction::Count: break;
     }

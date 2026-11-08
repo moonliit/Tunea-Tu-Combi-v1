@@ -25,6 +25,7 @@ void GameUiRenderer::Render(
         screenHeight
     );
     const auto& selectedPartType = buildSession.GetSelectedPartType();
+    int activationIndex = 0;
     for (const UiControl& control : controls) {
         Color color = control.color;
         if (control.type == UiControlType::ToolbarPart &&
@@ -59,6 +60,48 @@ void GameUiRenderer::Render(
                 : control.labelFontSize,
             WHITE
         );
+        if (control.type == UiControlType::Activation) {
+            DrawRectangle(
+                static_cast<int>(control.bounds.x + control.bounds.width) - 23,
+                static_cast<int>(control.bounds.y) + 5,
+                18,
+                18,
+                BLACK
+            );
+            DrawText(
+                TextFormat("%d", ++activationIndex),
+                static_cast<int>(control.bounds.x + control.bounds.width) - 18,
+                static_cast<int>(control.bounds.y) + 7,
+                12,
+                WHITE
+            );
+        }
+    }
+
+    if (state == GameState::Build) {
+        const auto actions = ActivationRegistry::GetActionsForGrid(grid);
+        if (!actions.empty()) {
+            const int columns = 3;
+            const int rows = (static_cast<int>(actions.size()) + columns - 1) / columns;
+            const int panelX = screenWidth - 196;
+            const int panelY = 60;
+            const int panelHeight = 24 + rows * 22;
+            DrawRectangle(panelX, panelY, 184, panelHeight, Fade(DARKGRAY, 0.82f));
+            DrawText("EN PLAY (teclas 1-9)", panelX + 8, panelY + 5, 12, WHITE);
+            for (std::size_t index = 0; index < actions.size(); ++index) {
+                const int column = static_cast<int>(index) % columns;
+                const int row = static_cast<int>(index) / columns;
+                const int x = panelX + 8 + column * 58;
+                const int y = panelY + 25 + row * 22;
+                DrawText(
+                    TextFormat("%d %s", static_cast<int>(index) + 1, GetActivationLabel(actions[index])),
+                    x,
+                    y,
+                    12,
+                    IsFanAction(actions[index]) ? ORANGE : GOLD
+                );
+            }
+        }
     }
 
     const std::string modeText = state == GameState::Build
@@ -66,9 +109,12 @@ void GameUiRenderer::Render(
         : state == GameState::View
         ? "MODE: VIEW (Drag to move camera, ESC: Edit)"
         : "MODE: PLAY (Press ENTER to Edit)";
+    const int modeTextX = state == GameState::Play
+        ? screenWidth - MeasureText(modeText.c_str(), 18) - 102
+        : 20;
     DrawText(
         modeText.c_str(),
-        20,
+        modeTextX,
         20,
         18,
         state == GameState::Build ? DARKGREEN : MAROON

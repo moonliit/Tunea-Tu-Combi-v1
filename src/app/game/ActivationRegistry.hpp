@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <vector>
 
+class EditorGrid;
+
 enum class ActivationAction : std::size_t {
     FanUp,
     FanRight,
@@ -32,6 +34,7 @@ public:
     bool HasSubscribers(ActivationAction action) const;
     const std::vector<Part*>& GetSubscribers(ActivationAction action) const;
     std::vector<ActivationAction> GetVisibleActions() const;
+    static std::vector<ActivationAction> GetActionsForGrid(const EditorGrid& grid);
 
     void Publish(ActivationAction action);
     void Update(float deltaTime);

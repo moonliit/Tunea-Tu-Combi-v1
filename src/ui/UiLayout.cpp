@@ -106,7 +106,10 @@ std::vector<UiControl> UiLayout::BuildControls(
                 .activationAction = action,
                 .editorAction = std::nullopt,
                 .enabled = true,
-                .active = activationRegistry.IsActive(action)
+                .active = activationRegistry.IsActive(action),
+                .labelFontSize = 13,
+                .labelOffsetX = 28,
+                .labelOffsetY = 20
             });
         }
     } else if (state == GameState::Build) {
