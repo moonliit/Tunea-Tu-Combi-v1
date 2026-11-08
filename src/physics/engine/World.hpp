@@ -7,12 +7,13 @@ namespace Physics {
 
 class World : public I_PhysicsWorld {
 private:
+    std::vector<std::shared_ptr<I_RigidBody>> m_bodies;
     Math::Vector2D m_gravity;
     int m_subStepCount;
 
 public:
     explicit World(Math::Vector2D gravity, int subStepCount = 4);
-    ~World() override;
+    ~World() override = default;
     void Step(float deltaTime) override;
 
     std::shared_ptr<I_RigidBody> CreateBox(

@@ -5,11 +5,17 @@
 #include <vector>
 #include "physics/I_Physics.hpp"
 #include "math/Vector2D.hpp"
+#include "math/Matrix2x2.hpp"
 
 namespace Physics {
     struct Transform {
         Math::Vector2D position;
         Math::RealNum rotation;
+
+        inline Math::Vector2D ToWorldPoint(const Math::Vector2D& localPoint) const;
+        inline Math::Vector2D ToLocalPoint(const Math::Vector2D& worldPoint) const;
+        inline Math::Vector2D ToWorldVector(const Math::Vector2D& localVector) const;
+        inline Math::Vector2D ToLocalVector(const Math::Vector2D& worldVector) const;
     };
 
     struct Shape {
@@ -49,6 +55,26 @@ namespace Physics {
         Math::Vector2D anchorB;
         bool collideConnected = false;
     };
+}
+
+inline Math::Vector2D Physics::Transform::ToWorldPoint(const Math::Vector2D& localPoint) const {
+    Math::Matrix2x2 rot = Math::Matrix2x2::Rotation(rotation);
+    return (rot * localPoint) + position;
+}
+
+inline Math::Vector2D Physics::Transform::ToLocalPoint(const Math::Vector2D& worldPoint) const {
+    Math::Matrix2x2 invRot = Math::Matrix2x2::Rotation(-rotation);
+    return invRot * (worldPoint - position);
+}
+
+inline Math::Vector2D Physics::Transform::ToWorldVector(const Math::Vector2D& localVector) const {
+    Math::Matrix2x2 rot = Math::Matrix2x2::Rotation(rotation);
+    return rot * localVector;
+}
+
+inline Math::Vector2D Physics::Transform::ToLocalVector(const Math::Vector2D& worldVector) const {
+    Math::Matrix2x2 invRot = Math::Matrix2x2::Rotation(-rotation);
+    return invRot * worldVector;
 }
 
 #endif

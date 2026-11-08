@@ -10,7 +10,7 @@
 namespace Physics {
 
     class BaseRigidBody : public I_RigidBody {
-    private:
+    protected:
         Transform m_transform;
         MassData m_massData;
         Material m_material;
@@ -26,8 +26,6 @@ namespace Physics {
 
     public:
         BaseRigidBody() = default;
-        BaseRigidBody(BodyType type, Material material)
-            : m_bodyType(type), m_material(material) {}
         virtual ~BaseRigidBody() = default;
 
         Math::Vector2D GetPosition() const override { return m_transform.position; }
