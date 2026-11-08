@@ -34,6 +34,17 @@ std::size_t EditorGrid::GetPartCount() const {
     return count;
 }
 
+bool EditorGrid::ContainsPartType(PartType type) const {
+    for (const Part* part : m_activeParts) {
+        if (part->GetType() == type ||
+            (part->HasContainedPart() &&
+             part->GetContainedPart()->GetType() == type)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 size_t EditorGrid::GetIndex(GridCoord coord) const {
     return coord.y * m_gridDims.x + coord.x;
 }
@@ -151,7 +162,12 @@ void EditorGrid::RotatePart(GridCoord coord) {
     if (!IsGridCoordWithinSelfBounds(coord)) return;
     std::optional<Part>& part = m_cells[GetIndex(coord)];
     if (part.has_value()) {
-        part->m_orientation = RotatePartOrientation(part->m_orientation);
+        if (part->HasContainedPart()) {
+            Part* child = part->GetContainedPart();
+            child->m_orientation = RotatePartOrientation(child->m_orientation);
+        } else {
+            part->m_orientation = RotatePartOrientation(part->m_orientation);
+        }
     }
 }
 

@@ -40,6 +40,7 @@ public:
     std::vector<Part*>& GetActiveParts() { return m_activeParts; }
     const std::vector<Part*>& GetActiveParts() const { return m_activeParts; }
     std::size_t GetPartCount() const;
+    bool ContainsPartType(PartType type) const;
     float GetCellSize() const { return m_cellSize; }
 
     void DrawSelf() const;

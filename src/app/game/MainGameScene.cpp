@@ -130,6 +130,9 @@ void MainGameScene::ProcessInput(float dt) {
             if (IsWindSailAction(input.activationAction.value())) {
                 m_appContext->audioController->PlaySail();
             }
+            if (input.activationAction == ActivationAction::DriverHonk) {
+                m_appContext->audioController->PlayDriverHorn();
+            }
             m_playSession.ActivateAction(input.activationAction.value());
         }
     }
@@ -279,6 +282,7 @@ void MainGameScene::Update(float dt) {
 }
 
 void MainGameScene::TransitionToPlayMode() {
+    if (!m_level.GetGrid().ContainsPartType(PartType::Driver)) return;
     const auto& parts = m_level.GetGrid().GetActiveParts();
     const bool hasWheel = std::any_of(
         parts.begin(),

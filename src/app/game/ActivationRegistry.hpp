@@ -19,6 +19,7 @@ enum class ActivationAction : std::size_t {
     WindSailDown,
     WindSailLeft,
     TNT,
+    DriverHonk,
     Count
 };
 

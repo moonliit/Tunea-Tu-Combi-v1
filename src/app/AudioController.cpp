@@ -10,12 +10,18 @@ void AudioController::Initialize() {
         LoadMusicStream("assets/audio/level_2.wav"),
         LoadMusicStream("assets/audio/level_3.wav")
     };
+    SetMusicPitch(m_music[1], 1.08f);
     m_radioStatic = LoadSound("assets/audio/radio_static.wav");
     SetSoundVolume(m_radioStatic, 0.15f);
     m_uiClick = LoadSound("assets/audio/sfx/ui_click.wav");
     m_partSelect = LoadSound("assets/audio/sfx/part_select.wav");
     m_partPlace = LoadSound("assets/audio/sfx/part_place.wav");
     m_sailSound = LoadSound("assets/audio/sfx/sail.wav");
+    m_horns = {
+        LoadSound("assets/audio/sfx/combi_horn_1.wav"),
+        LoadSound("assets/audio/sfx/combi_horn_2.wav"),
+        LoadSound("assets/audio/sfx/combi_horn_3.wav")
+    };
     m_fanSound = LoadMusicStream("assets/audio/sfx/fan.wav");
     m_wheelSound = LoadMusicStream("assets/audio/sfx/wheel.wav");
     m_fanSound.looping = true;
@@ -26,6 +32,7 @@ void AudioController::Initialize() {
     SetSoundVolume(m_uiClick, 0.45f);
     SetSoundVolume(m_partSelect, 0.45f);
     SetSoundVolume(m_partPlace, 0.5f);
+    for (Sound horn : m_horns) SetSoundVolume(horn, 0.75f);
     m_current = 0;
     m_volume = 1.0f;
     SetMusicVolume(m_music[m_current], m_volume);
@@ -43,6 +50,7 @@ void AudioController::Shutdown() {
     UnloadSound(m_partSelect);
     UnloadSound(m_partPlace);
     UnloadSound(m_sailSound);
+    for (Sound horn : m_horns) UnloadSound(horn);
     CloseAudioDevice();
     m_initialized = false;
 }
@@ -72,6 +80,10 @@ void AudioController::PlayUiClick() { PlaySound(m_uiClick); }
 void AudioController::PlayPartSelect() { PlaySound(m_partSelect); }
 void AudioController::PlayPartPlace() { PlaySound(m_partPlace); }
 void AudioController::PlaySail() { PlaySound(m_sailSound); }
+void AudioController::PlayDriverHorn() {
+    PlaySound(m_horns[m_nextHorn]);
+    m_nextHorn = (m_nextHorn + 1) % static_cast<int>(m_horns.size());
+}
 
 void AudioController::SetFanActive(bool active) {
     if (active == m_fanActive) return;

@@ -28,7 +28,7 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
     if (context.state == GameState::Play) {
         constexpr int activationKeys[] = {
             KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE,
-            KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE
+            KEY_SIX, KEY_SEVEN, KEY_EIGHT, KEY_NINE, KEY_ZERO
         };
         const auto actions = context.activationRegistry.GetVisibleActions();
         for (std::size_t index = 0;

@@ -14,7 +14,8 @@ enum class PartType {
     CircleWheel,
     TNTBarrel,    // Future item with box collision but custom rendering/behavior
     Fan,          // Capsule shape
-    WindSail      // Triangle shape
+    WindSail,     // Triangle shape
+    Driver
 };
 
 enum class PartShape {

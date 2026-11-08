@@ -29,7 +29,8 @@ enum class ToolbarPart {
     CircleWheel,
     TNTBarrel,
     Fan,
-    WindSail
+    WindSail,
+    Driver
 };
 
 struct UiControl {

@@ -62,6 +62,17 @@ const PartDefinition WIND_SAIL{
     0.0f,
     ConnectorBit(ConnectorDirection::Right)
 };
+const PartDefinition DRIVER{
+    PartType::Driver,
+    "Driver",
+    1.0f,
+    PartShape::Box,
+    PartBehavior::Passive,
+    PartRole::Containable,
+    0.0f,
+    0.0f,
+    0
+};
 
 }
 
@@ -72,6 +83,7 @@ const PartDefinition& GetPartDefinition(PartType type) {
         case PartType::TNTBarrel: return TNT_BARREL;
         case PartType::Fan: return FAN;
         case PartType::WindSail: return WIND_SAIL;
+        case PartType::Driver: return DRIVER;
     }
 
     throw std::invalid_argument("Unknown part type");

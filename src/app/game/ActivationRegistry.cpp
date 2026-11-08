@@ -75,6 +75,12 @@ std::vector<ActivationAction> ActivationRegistry::GetActionsForGrid(
             present[static_cast<std::size_t>(GetWindSailAction(part->GetOrientation()))] = true;
         } else if (part->GetType() == PartType::TNTBarrel) {
             present[static_cast<std::size_t>(ActivationAction::TNT)] = true;
+        } else if (part->GetType() == PartType::Driver) {
+            present[static_cast<std::size_t>(ActivationAction::DriverHonk)] = true;
+        }
+        if (part->HasContainedPart() &&
+            part->GetContainedPart()->GetType() == PartType::Driver) {
+            present[static_cast<std::size_t>(ActivationAction::DriverHonk)] = true;
         }
     }
 
@@ -95,7 +101,8 @@ const ActivationRegistry::ActionList& ActivationRegistry::GetAllActions() {
         ActivationAction::WindSailRight,
         ActivationAction::WindSailDown,
         ActivationAction::WindSailLeft,
-        ActivationAction::TNT
+        ActivationAction::TNT,
+        ActivationAction::DriverHonk
     };
     return actions;
 }
@@ -148,6 +155,7 @@ const char* GetActivationLabel(ActivationAction action) {
         case ActivationAction::WindSailDown: return "Sail v";
         case ActivationAction::WindSailLeft: return "Sail <";
         case ActivationAction::TNT: return "TNT";
+        case ActivationAction::DriverHonk: return "Claxon";
         case ActivationAction::Count: break;
     }
     return "Action";

@@ -1,5 +1,6 @@
 #include "rendering/GameUiRenderer.hpp"
 
+#include "app/game/PartDefinition.hpp"
 #include "math/Vector2D.hpp"
 #include "ui/UiLayout.hpp"
 
@@ -27,6 +28,12 @@ void GameUiRenderer::Render(
     const auto& selectedPartType = buildSession.GetSelectedPartType();
     int activationIndex = 0;
     for (const UiControl& control : controls) {
+        const bool driverToolbar =
+            control.type == UiControlType::ToolbarPart &&
+            control.toolbarPart == ToolbarPart::Driver;
+        const bool containedPartToolbar = driverToolbar ||
+            (control.type == UiControlType::ToolbarPart &&
+             control.toolbarPart == ToolbarPart::TNTBarrel);
         Color color = control.color;
         if (control.type == UiControlType::ToolbarPart &&
             selectedPartType.has_value() &&
@@ -44,6 +51,12 @@ void GameUiRenderer::Render(
         } else if (control.type == UiControlType::Editor) {
             color = control.color;
         }
+        if (control.type == UiControlType::ToolbarPart &&
+            control.toolbarPart == ToolbarPart::Driver) {
+            color = grid.ContainsPartType(PartType::Driver)
+                ? DARKGRAY
+                : RED;
+        }
         DrawRectangle(
             static_cast<int>(control.bounds.x),
             static_cast<int>(control.bounds.y),
@@ -60,7 +73,40 @@ void GameUiRenderer::Render(
                 : control.labelFontSize,
             WHITE
         );
+        if (containedPartToolbar) {
+            const std::string containerHint = std::format(
+                "(inside {})",
+                GetPartDefinition(PartType::SquareBlock).name
+            );
+            int hintFontSize = 7;
+            const int maxHintWidth = static_cast<int>(control.bounds.width) - 8;
+            while (hintFontSize > 5 &&
+                   MeasureText(containerHint.c_str(), hintFontSize) > maxHintWidth) {
+                --hintFontSize;
+            }
+            DrawText(
+                containerHint.c_str(),
+                static_cast<int>(control.bounds.x +
+                    (control.bounds.width - MeasureText(containerHint.c_str(), hintFontSize)) / 2),
+                static_cast<int>(control.bounds.y) + 31,
+                hintFontSize,
+                WHITE
+            );
+        }
+        if (driverToolbar && !grid.ContainsPartType(PartType::Driver)) {
+            const char* required = "¡Obligatorio!";
+            DrawText(
+                required,
+                static_cast<int>(control.bounds.x +
+                    (control.bounds.width - MeasureText(required, 12)) / 2),
+                static_cast<int>(control.bounds.y) - 15,
+                12,
+                RED
+            );
+        }
         if (control.type == UiControlType::Activation) {
+            ++activationIndex;
+            const int hotkey = activationIndex == 10 ? 0 : activationIndex;
             DrawRectangle(
                 static_cast<int>(control.bounds.x + control.bounds.width) - 23,
                 static_cast<int>(control.bounds.y) + 5,
@@ -69,7 +115,7 @@ void GameUiRenderer::Render(
                 BLACK
             );
             DrawText(
-                TextFormat("%d", ++activationIndex),
+                TextFormat("%d", hotkey),
                 static_cast<int>(control.bounds.x + control.bounds.width) - 18,
                 static_cast<int>(control.bounds.y) + 7,
                 12,
@@ -87,14 +133,15 @@ void GameUiRenderer::Render(
             const int panelY = 60;
             const int panelHeight = 24 + rows * 22;
             DrawRectangle(panelX, panelY, 184, panelHeight, Fade(DARKGRAY, 0.82f));
-            DrawText("EN PLAY (teclas 1-9)", panelX + 8, panelY + 5, 12, WHITE);
+            DrawText("EN PLAY (teclas 1-0)", panelX + 8, panelY + 5, 12, WHITE);
             for (std::size_t index = 0; index < actions.size(); ++index) {
                 const int column = static_cast<int>(index) % columns;
                 const int row = static_cast<int>(index) / columns;
                 const int x = panelX + 8 + column * 58;
                 const int y = panelY + 25 + row * 22;
+                const int hotkey = index == 9 ? 0 : static_cast<int>(index) + 1;
                 DrawText(
-                    TextFormat("%d %s", static_cast<int>(index) + 1, GetActivationLabel(actions[index])),
+                    TextFormat("%d %s", hotkey, GetActivationLabel(actions[index])),
                     x,
                     y,
                     12,

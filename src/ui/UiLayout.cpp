@@ -2,6 +2,8 @@
 
 #include "app/game/EditorGrid.hpp"
 
+#include <algorithm>
+
 namespace {
 
 constexpr float ControlStartX = 20.0f;
@@ -88,6 +90,13 @@ std::vector<UiControl> UiLayout::BuildControls(
     std::vector<UiControl> controls;
     if (state == GameState::Play) {
         const auto actions = activationRegistry.GetVisibleActions();
+        const float actionGap = 6.0f;
+        const float actionWidth = std::min(
+            ControlWidth,
+            (static_cast<float>(screenWidth) - 40.0f -
+             actionGap * (static_cast<float>(actions.size()) - 1.0f)) /
+                static_cast<float>(std::max<std::size_t>(1, actions.size()))
+        );
         for (std::size_t index = 0; index < actions.size(); ++index) {
             const ActivationAction action = actions[index];
             const bool fan = IsFanAction(action);
@@ -95,9 +104,9 @@ std::vector<UiControl> UiLayout::BuildControls(
                 .type = UiControlType::Activation,
                 .bounds = {
                     ControlStartX + static_cast<float>(index) *
-                        (ControlWidth + ControlGap),
+                        (actionWidth + actionGap),
                     ControlStartY,
-                    ControlWidth,
+                    actionWidth,
                     ControlHeight
                 },
                 .label = GetActivationLabel(action),
@@ -107,13 +116,14 @@ std::vector<UiControl> UiLayout::BuildControls(
                 .editorAction = std::nullopt,
                 .enabled = true,
                 .active = activationRegistry.IsActive(action),
-                .labelFontSize = 13,
-                .labelOffsetX = 28,
-                .labelOffsetY = 20
+                .labelFontSize = 12,
+                .labelOffsetX = 8,
+                .labelOffsetY = 33
             });
         }
     } else if (state == GameState::Build) {
         constexpr ToolbarPart parts[] = {
+            ToolbarPart::Driver,
             ToolbarPart::SquareBlock,
             ToolbarPart::CircleWheel,
             ToolbarPart::TNTBarrel,
@@ -121,6 +131,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             ToolbarPart::WindSail
         };
         constexpr std::string_view labels[] = {
+            "Chofer",
             "Square Box",
             "Wheel",
             "TNT",
@@ -128,6 +139,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             "Sail"
         };
         constexpr Color colors[] = {
+            RED,
             BLUE,
             GREEN,
             MAROON,
@@ -135,7 +147,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             YELLOW
         };
 
-        for (int index = 0; index < 5; ++index) {
+        for (int index = 0; index < 6; ++index) {
             controls.push_back(MakeToolbarControl(
                 index,
                 parts[index],
@@ -176,7 +188,7 @@ std::vector<UiControl> UiLayout::BuildControls(
                 : EditorAction::ReturnToBuild,
             state == GameState::Build ? "PLAY" : "EDIT",
             DARKGREEN,
-            true,
+            state == GameState::Play || grid.ContainsPartType(PartType::Driver),
             largeSideButton,
             24,
             32,

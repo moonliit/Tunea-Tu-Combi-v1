@@ -154,6 +154,12 @@ void PlaySession::BuildActivationSubscriptions() {
                     part
                 );
                 break;
+            case PartType::Driver:
+                m_activationRegistry.Subscribe(
+                    ActivationAction::DriverHonk,
+                    part
+                );
+                break;
             default:
                 break;
         }

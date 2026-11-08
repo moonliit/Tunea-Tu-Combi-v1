@@ -62,6 +62,14 @@ bool BuildModel::PlacePart(
     PartType type,
     PartOrientation orientation
 ) {
+    if (type == PartType::Driver) {
+        if (!m_grid.IsWithinBounds(coord)) return false;
+        const auto& cell = m_grid.GetPart(coord);
+        if (!cell.has_value() ||
+            cell->GetType() != PartType::SquareBlock) {
+            return false;
+        }
+    }
     const PartOrientation placementOrientation = GetAttachmentOrientation(
         m_grid,
         coord,

@@ -11,6 +11,8 @@ class AudioController {
     Sound m_partSelect{};
     Sound m_partPlace{};
     Sound m_sailSound{};
+    std::array<Sound, 3> m_horns{};
+    int m_nextHorn = 0;
     Music m_fanSound{};
     Music m_wheelSound{};
     bool m_fanActive = false;
@@ -34,6 +36,7 @@ public:
     void PlayPartSelect();
     void PlayPartPlace();
     void PlaySail();
+    void PlayDriverHorn();
     void SetFanActive(bool active);
     void SetWheelActive(bool active);
     void Update(float deltaTime);

@@ -197,6 +197,21 @@ void PartRenderer::Render(const PartRenderState& state) const {
             RenderOrientationMarker(position, cellSize, rotationRad);
             break;
         }
+        case PartType::Driver: {
+            rlPushMatrix();
+            rlTranslatef(position.x, position.y, 0.0f);
+            rlRotatef(rotationDeg, 0.0f, 0.0f, 1.0f);
+            DrawCircleV({-4.0f, -9.0f}, 5.0f, GOLD);
+            DrawCircleLines(-4.0f, -9.0f, 5.0f, BLACK);
+            DrawLineEx({-4.0f, -4.0f}, {-4.0f, 7.0f}, 2.5f, DARKGRAY);
+            DrawLineEx({-4.0f, -1.0f}, {5.0f, -4.0f}, 2.0f, DARKGRAY);
+            DrawLineEx({5.0f, -4.0f}, {9.0f, 1.0f}, 2.0f, DARKGRAY);
+            DrawCircleLines(9.0f, 2.0f, 5.0f, MAROON);
+            DrawLineEx({-4.0f, 7.0f}, {-9.0f, 14.0f}, 2.5f, DARKGRAY);
+            DrawLineEx({-4.0f, 7.0f}, {1.0f, 14.0f}, 2.5f, DARKGRAY);
+            rlPopMatrix();
+            break;
+        }
     }
 }
 
@@ -432,6 +447,16 @@ void PartRenderer::RenderGhostAtPosition(
                 baseTop,
                 Fade(BLACK, 0.2f)
             );
+            rlPopMatrix();
+            break;
+        }
+        case PartType::Driver: {
+            rlPushMatrix();
+            rlTranslatef(static_cast<float>(anchor.x), static_cast<float>(anchor.y), 0.0f);
+            rlRotatef(rotation, 0.0f, 0.0f, 1.0f);
+            DrawCircleLines(-4.0f, -9.0f, 5.0f, Fade(BLACK, 0.35f));
+            DrawLineEx({-4.0f, -4.0f}, {-4.0f, 7.0f}, 2.0f, Fade(DARKGRAY, 0.35f));
+            DrawCircleLines(9.0f, 2.0f, 5.0f, Fade(MAROON, 0.35f));
             rlPopMatrix();
             break;
         }

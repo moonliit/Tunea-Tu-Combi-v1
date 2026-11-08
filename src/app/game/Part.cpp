@@ -53,6 +53,7 @@ void Part::Activate() {
         case PartType::TNTBarrel:
         case PartType::SquareBlock:
         case PartType::CircleWheel:
+        case PartType::Driver:
             break;
     }
 }
@@ -66,7 +67,8 @@ void Part::SetAttachmentBody(std::shared_ptr<I_RigidBody> body) {
 
 void Part::SetContainedBody(std::shared_ptr<I_RigidBody> body) {
     if (!body || m_physicsBody) return;
-    m_attachmentRotationOffset = 0.0f;
+    m_attachmentRotationOffset =
+        PartOrientationRadians(m_orientation) - body->GetRotation();
     m_attachmentBody = std::move(body);
 }
 
@@ -142,15 +144,19 @@ void Part::SetPhysicsBody(
     std::shared_ptr<I_RigidBody> body;
 
     switch (m_type) {
-        case PartType::SquareBlock:
+        case PartType::SquareBlock: {
+            const float containedMass = m_containedPart
+                ? GetPartDefinition(m_containedPart->GetType()).mass
+                : 0.0f;
             body = physics->CreateBox(
                 physicsPosition,
                 PartOrientationRadians(m_orientation),
                 Vector2D{cellSize, cellSize},
-                definition.mass,
+                definition.mass + containedMass,
                 BodyType::Dynamic
             );
             break;
+        }
         case PartType::CircleWheel:
             body = physics->CreateCircle(
                 physicsPosition,
@@ -186,6 +192,8 @@ void Part::SetPhysicsBody(
                 definition.mass,
                 BodyType::Dynamic
             );
+            break;
+        case PartType::Driver:
             break;
     }
 
