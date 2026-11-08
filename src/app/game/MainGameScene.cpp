@@ -4,6 +4,7 @@
 #include "math/Vector2D.hpp"
 #include "ui/UiControl.hpp"
 #include "app/AppContext.hpp"
+#include "app/AudioController.hpp"
 #include <optional>
 #include <raylib.h>
 #include <algorithm>
@@ -93,6 +94,9 @@ void MainGameScene::ProcessInput(float dt) {
     };
     if (CheckCollisionPointRec(GetMousePosition(), menuButton) &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        m_appContext->audioController->SetFanActive(false);
+        m_appContext->audioController->SetWheelActive(false);
+        m_appContext->audioController->ReturnToSelector();
         m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
         return;
     }
@@ -123,6 +127,9 @@ void MainGameScene::ProcessInput(float dt) {
 
     if (m_stateMachine.IsPlayMode()) {
         if (input.activationAction.has_value()) {
+            if (IsWindSailAction(input.activationAction.value())) {
+                m_appContext->audioController->PlaySail();
+            }
             m_playSession.ActivateAction(input.activationAction.value());
         }
     }
@@ -191,6 +198,7 @@ void MainGameScene::ProcessInput(float dt) {
                 input.toolbarPart.value()
             );
             m_buildSession.SelectPartType(partType);
+            m_appContext->audioController->PlayPartSelect();
         } else if ((m_buildSession.GetSelectedPartType().has_value() ||
                     m_buildSession.HasRepositionedPart()) &&
                    input.mouseScreenPosition.y <= 520.0f &&
@@ -206,9 +214,13 @@ void MainGameScene::ProcessInput(float dt) {
 
                 if (input.placePart) {
                     if (m_buildSession.HasRepositionedPart()) {
-                        m_buildSession.PlaceRepositionedPart(coord);
+                        if (m_buildSession.PlaceRepositionedPart(coord)) {
+                            m_appContext->audioController->PlayPartPlace();
+                        }
                     } else {
-                        m_buildSession.PlaceSelectedPart(coord);
+                        if (m_buildSession.PlaceSelectedPart(coord)) {
+                            m_appContext->audioController->PlayPartPlace();
+                        }
                     }
                 }
                 if (input.removePart) {
@@ -238,9 +250,28 @@ void MainGameScene::Update(float dt) {
                 center.x / parts.size(),
                 center.y / parts.size()
             };
+            bool fanActive = false;
+            for (ActivationAction action : m_playSession.GetActivationRegistry().GetVisibleActions()) {
+                fanActive = fanActive || (
+                    IsFanAction(action) &&
+                    m_playSession.GetActivationRegistry().IsActive(action)
+                );
+            }
+            m_appContext->audioController->SetFanActive(fanActive);
+            const bool hasWheel = std::any_of(
+                parts.begin(),
+                parts.end(),
+                [](const Part* part) {
+                    return part->GetType() == PartType::CircleWheel;
+                }
+            );
+            m_appContext->audioController->SetWheelActive(hasWheel);
             if (entireCarPassedFinish && !m_levelCompleted) {
                 m_levelCompleted = true;
+                m_appContext->audioController->SetFanActive(false);
+                m_appContext->audioController->SetWheelActive(false);
                 m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
+                m_appContext->audioController->ReturnToSelector();
                 m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
             }
         }
@@ -248,6 +279,15 @@ void MainGameScene::Update(float dt) {
 }
 
 void MainGameScene::TransitionToPlayMode() {
+    const auto& parts = m_level.GetGrid().GetActiveParts();
+    const bool hasWheel = std::any_of(
+        parts.begin(),
+        parts.end(),
+        [](const Part* part) {
+            return part->GetType() == PartType::CircleWheel;
+        }
+    );
+    m_appContext->audioController->SetWheelActive(hasWheel);
     const auto placements = m_level.GetBuildModel().GetPlacements();
     if (!placements.empty()) {
         Vector2 center{0.0f, 0.0f};
@@ -266,6 +306,8 @@ void MainGameScene::TransitionToPlayMode() {
 }
 
 void MainGameScene::ResetToBuildMode() {
+    m_appContext->audioController->SetFanActive(false);
+    m_appContext->audioController->SetWheelActive(false);
     if (!m_stateMachine.IsBuildMode()) {
         m_stateMachine.EnterBuild();
     }

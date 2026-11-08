@@ -3,6 +3,7 @@
 
 #include "app/SceneManager.hpp"
 #include "app/AppContext.hpp"
+#include "app/AudioController.hpp"
 
 #include <string>
 
@@ -11,6 +12,7 @@ private:
     SceneManager m_sceneManager;
     SceneRequester m_sceneRequester;
     AppContext m_appContext;
+    AudioController m_audioController;
 
 public:
     App(
@@ -18,7 +20,7 @@ public:
         int height,
         const std::string& title
     );
-    ~App() = default;
+    ~App();
 
     void Run();
 };

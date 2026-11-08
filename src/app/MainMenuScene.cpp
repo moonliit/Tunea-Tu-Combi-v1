@@ -1,4 +1,5 @@
 #include "app/MainMenuScene.hpp"
+#include "app/AudioController.hpp"
 #include "app/SceneManager.hpp"
 #include "app/game/Level.hpp"
 #include <raylib.h>
@@ -14,6 +15,8 @@ void StartLevel(AppContext* context, int level) {
     };
     LevelDefinition definition = LevelDefinition::FromJsonPath(paths[level]);
     definition.levelNumber = level + 1;
+    context->audioController->PlayUiClick();
+    context->audioController->StartLevel(level + 1);
     context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
 }
 
@@ -28,8 +31,10 @@ void MainMenuScene::ProcessInput(float) {
     Rectangle resetButton{static_cast<float>(m_context->windowWidth - 130), 20.0f, 110.0f, 36.0f};
     if (CheckCollisionPointRec(GetMousePosition(), resetButton) &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        m_context->audioController->PlayUiClick();
         m_context->unlockedLevel = 1;
         m_context->completedLevel = 0;
+        m_context->audioController->ResetToMenu();
         m_selectingLevel = false;
         m_selectedLevel = 0;
         return;

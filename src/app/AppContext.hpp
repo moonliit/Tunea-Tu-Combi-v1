@@ -4,6 +4,8 @@
 #include <string>
 #include "app/SceneManager.hpp"
 
+class AudioController;
+
 struct AppContext {
     int windowWidth;
     int windowHeight;
@@ -11,6 +13,7 @@ struct AppContext {
     SceneRequester* sceneRequester;
     int unlockedLevel = 1;
     int completedLevel = 0;
+    AudioController* audioController = nullptr;
 };
 
 #endif

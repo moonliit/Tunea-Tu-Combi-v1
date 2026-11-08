@@ -19,6 +19,7 @@ App::App(int width, int height, const std::string& title):
     m_sceneRequester(&m_sceneManager)
 {
     InitWindow(width, height, title.c_str());
+    m_audioController.Initialize();
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
 
@@ -26,7 +27,8 @@ App::App(int width, int height, const std::string& title):
         .windowWidth = width,
         .windowHeight = height,
         .windowTitle = title,
-        .sceneRequester = &m_sceneRequester
+        .sceneRequester = &m_sceneRequester,
+        .audioController = &m_audioController
     };
     m_sceneManager.SetAppContext(&m_appContext);
     LevelDefinition emptyDef = LevelDefinition::FromJsonPath(StartupLevelPath);
@@ -51,6 +53,12 @@ void App::Run() {
         float deltaTime = std::min(GetFrameTime(), 0.033f);
         m_sceneManager.ProcessInput(deltaTime);
         m_sceneManager.Update(deltaTime);
+        m_audioController.Update(deltaTime);
         m_sceneManager.Render();
     }
+}
+
+App::~App() {
+    m_audioController.Shutdown();
+    CloseWindow();
 }
