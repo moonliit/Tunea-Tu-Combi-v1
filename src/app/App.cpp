@@ -3,6 +3,8 @@
 #include "app/game/MainGameScene.hpp"
 #include "app/editor/EditorScene.hpp"
 #include "app/MainMenuScene.hpp"
+#include "app/CustomLevelCatalog.hpp"
+#include "app/CustomLevelEditorScene.hpp"
 
 #include <algorithm>
 #include <raylib.h>
@@ -28,7 +30,8 @@ App::App(int width, int height, const std::string& title):
         .windowHeight = height,
         .windowTitle = title,
         .sceneRequester = &m_sceneRequester,
-        .audioController = &m_audioController
+        .audioController = &m_audioController,
+        .customLevels = std::make_shared<CustomLevelCatalog>()
     };
     m_sceneManager.SetAppContext(&m_appContext);
     LevelDefinition emptyDef = LevelDefinition::FromJsonPath(StartupLevelPath);
@@ -40,6 +43,10 @@ App::App(int width, int height, const std::string& title):
     m_sceneManager.AddScene(
         SceneId::Editor,
         std::make_unique<EditorScene>(&m_appContext)
+    );
+    m_sceneManager.AddScene(
+        SceneId::CustomLevelEditor,
+        std::make_unique<CustomLevelEditorScene>(&m_appContext)
     );
     m_sceneManager.AddScene(
         SceneId::MainMenu,

@@ -10,6 +10,7 @@ struct AppContext;
 enum class SceneId {
     MainMenu,
     Editor,
+    CustomLevelEditor,
     Game,
 };
 

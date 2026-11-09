@@ -1,5 +1,6 @@
 #include "physics/Box2D_Physics.hpp"
 #include "id.h"
+#include "math/Terrain.hpp"
 #include "physics/I_Physics.hpp"
 #include <box2d/box2d.h>
 #include <box2d/types.h>
@@ -361,4 +362,34 @@ std::vector<Math::Vector2D> Box2D_PhysicsWorld::CreateTerrainChain(
 
     // Return the exact same pure vertices so rendering matches physics 1:1
     return catmullRomPoints;
+}
+
+bool Box2D_PhysicsWorld::CreateTerrainPolygon(
+    const std::vector<Math::Vector2D>& points
+) {
+    const Math::TerrainMesh mesh = Math::BuildTerrainPolygonMesh(points);
+    if (mesh.indices.empty()) return false;
+
+    b2BodyDef bodyDef = b2DefaultBodyDef();
+    bodyDef.type = b2_staticBody;
+    const b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
+    b2ShapeDef shapeDef = b2DefaultShapeDef();
+    shapeDef.density = 0.0f;
+    shapeDef.material.friction = 0.6f;
+
+    for (std::size_t index = 0; index + 2 < mesh.indices.size(); index += 3) {
+        b2Vec2 trianglePoints[3];
+        for (std::size_t corner = 0; corner < 3; ++corner) {
+            const Math::Vector2D& point =
+                mesh.vertices[mesh.indices[index + corner]];
+            trianglePoints[corner] = {
+                static_cast<float>(point.x),
+                static_cast<float>(point.y)
+            };
+        }
+        const b2Hull hull = b2ComputeHull(trianglePoints, 3);
+        const b2Polygon triangle = b2MakePolygon(&hull, 0.0f);
+        b2CreatePolygonShape(bodyId, &shapeDef, &triangle);
+    }
+    return true;
 }

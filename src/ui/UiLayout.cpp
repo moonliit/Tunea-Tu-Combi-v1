@@ -1,6 +1,7 @@
 #include "ui/UiLayout.hpp"
 
 #include "app/game/EditorGrid.hpp"
+#include "ui/UiButton.hpp"
 
 #include <algorithm>
 
@@ -174,12 +175,8 @@ std::vector<UiControl> UiLayout::BuildControls(
         ));
     }
 
-    const Rectangle largeSideButton{
-        static_cast<float>(screenWidth - 150),
-        static_cast<float>(screenHeight / 2 - 45),
-        130.0f,
-        90.0f
-    };
+    const Rectangle largeSideButton =
+        UiButton::PlaySideButton(screenWidth, screenHeight);
     if (state == GameState::Build || state == GameState::Play) {
         controls.push_back(MakeEditorControl(
             static_cast<int>(controls.size()),

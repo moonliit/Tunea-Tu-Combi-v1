@@ -70,6 +70,9 @@ public:
         const std::vector<Math::Vector2D>& controlPoints,
         bool isLoop = false
     ) = 0;
+    virtual bool CreateTerrainPolygon(
+        const std::vector<Math::Vector2D>& points
+    ) = 0;
 
     // joints creation (to connect chasis and wheels)
     virtual std::shared_ptr<I_Joint> CreateRevoluteJoint(

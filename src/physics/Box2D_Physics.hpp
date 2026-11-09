@@ -123,6 +123,9 @@ public:
         const std::vector<Math::Vector2D>& controlPoints,
         bool isLoop = false
     ) override;
+    bool CreateTerrainPolygon(
+        const std::vector<Math::Vector2D>& points
+    ) override;
 
     std::shared_ptr<I_Joint> CreateRevoluteJoint(
         std::shared_ptr<I_RigidBody> bodyA,

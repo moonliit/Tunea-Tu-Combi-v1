@@ -30,7 +30,8 @@ void SceneManager::SetCurrentScene(const SceneRequest& req) {
     }
 
     if (
-        m_currentScene == SceneId::MainMenu &&
+        (m_currentScene == SceneId::MainMenu ||
+         m_currentScene == SceneId::CustomLevelEditor) &&
         req.id == SceneId::Game &&
         req.data != nullptr
     ) {

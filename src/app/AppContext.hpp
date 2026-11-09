@@ -2,7 +2,10 @@
 #define APP_CONTEXT_HPP
 
 #include <string>
+#include <memory>
 #include "app/SceneManager.hpp"
+
+class CustomLevelCatalog;
 
 class AudioController;
 
@@ -13,7 +16,10 @@ struct AppContext {
     SceneRequester* sceneRequester;
     int unlockedLevel = 1;
     int completedLevel = 0;
+    bool returnToCustomDesign = false;
     AudioController* audioController = nullptr;
+    std::shared_ptr<CustomLevelCatalog> customLevels;
+    int activeCustomLevel = -1;
 };
 
 #endif

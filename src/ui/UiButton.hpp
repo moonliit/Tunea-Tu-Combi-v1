@@ -5,6 +5,15 @@
 
 namespace UiButton {
 
+inline Rectangle PlaySideButton(int windowWidth, int windowHeight) {
+    return Rectangle{
+        static_cast<float>(windowWidth - 150),
+        static_cast<float>(windowHeight / 2 - 45),
+        130.0f,
+        90.0f
+    };
+}
+
 inline Rectangle CenteredAtBottom(
     int windowWidth,
     int windowHeight,
@@ -30,6 +39,20 @@ inline Rectangle AtTopRight(
     return Rectangle{
         static_cast<float>(windowWidth) - rightMargin - width,
         topOffset,
+        width,
+        height
+    };
+}
+
+inline Rectangle CenteredAbove(
+    Rectangle reference,
+    float width,
+    float height,
+    float gap
+) {
+    return Rectangle{
+        reference.x + (reference.width - width) / 2.0f,
+        reference.y - gap - height,
         width,
         height
     };

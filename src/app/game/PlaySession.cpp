@@ -92,8 +92,10 @@ void PlaySession::CreatePhysicsWorld(
             closed &&
             physicsPoints.size() >= 3 &&
             AreSamePoint(section.front(), section.back());
-        const std::vector<Math::Vector2D> vertices =
-            m_physics->CreateTerrainChain(physicsPoints, sectionIsClosed);
+        const std::vector<Math::Vector2D> vertices = sectionIsClosed &&
+                m_physics->CreateTerrainPolygon(section)
+            ? section
+            : m_physics->CreateTerrainChain(physicsPoints, sectionIsClosed);
         if (vertices.size() >= 2) {
             Math::TerrainMesh mesh = BuildTerrainPolygonMesh(section);
             if (mesh.top.empty() && !closed) {

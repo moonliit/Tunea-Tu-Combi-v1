@@ -1,6 +1,7 @@
 #include "app/MainMenuScene.hpp"
 #include "app/AudioController.hpp"
 #include "app/LevelCatalog.hpp"
+#include "app/CustomLevelCatalog.hpp"
 #include "app/SceneManager.hpp"
 #include "app/game/Level.hpp"
 #include "ui/UiButton.hpp"
@@ -8,35 +9,11 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <utility>
 
 namespace {
 
 constexpr int MaxLevelNameCharacters = 24;
-constexpr const char* CustomLevelsPath = "user_data/custom_levels.json";
-
-std::vector<std::string> LoadCustomLevels() {
-    std::ifstream file(CustomLevelsPath);
-    if (!file) return {};
-
-    try {
-        const nlohmann::json data = nlohmann::json::parse(file);
-        if (!data.is_array()) return {};
-        std::vector<std::string> names;
-        for (const auto& name : data) {
-            if (name.is_string()) names.push_back(name.get<std::string>());
-        }
-        return names;
-    } catch (const nlohmann::json::exception&) {
-        return {};
-    }
-}
-
-void SaveCustomLevels(const std::vector<std::string>& names) {
-    std::filesystem::create_directories("user_data");
-    std::ofstream file(CustomLevelsPath);
-    if (file) file << nlohmann::json(names).dump(2);
-}
-
 std::size_t CountCharacters(const std::string& text) {
     return static_cast<std::size_t>(std::count_if(
         text.begin(),
@@ -80,11 +57,15 @@ void StartLevel(AppContext* context, int level) {
 
 }
 
-MainMenuScene::MainMenuScene(AppContext* context):
-    m_context(context),
-    m_customLevels(LoadCustomLevels()) {}
+MainMenuScene::MainMenuScene(AppContext* context): m_context(context) {}
 
 void MainMenuScene::ProcessInput(float) {
+    if (m_context->returnToCustomDesign) {
+        m_context->returnToCustomDesign = false;
+        m_context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
+        return;
+    }
+
     if (!m_selectingLevel) {
         if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) m_selectingLevel = true;
         return;
@@ -92,21 +73,6 @@ void MainMenuScene::ProcessInput(float) {
 
     if (m_editingLevels) {
         ProcessLevelEditorInput();
-        return;
-    }
-
-    if (m_customLevelOpen) {
-        const Rectangle menuButton = UiButton::CenteredAtBottom(
-            m_context->windowWidth,
-            m_context->windowHeight,
-            110.0f,
-            38.0f,
-            22.0f
-        );
-        if (UiButton::WasClicked(menuButton)) {
-            m_context->audioController->PlayUiClick();
-            m_customLevelOpen = false;
-        }
         return;
     }
 
@@ -173,8 +139,7 @@ void MainMenuScene::ProcessLevelEditorInput() {
             return;
         }
         if (IsKeyPressed(KEY_ENTER) && !m_newLevelName.empty()) {
-            m_customLevels.push_back(m_newLevelName);
-            SaveCustomLevels(m_customLevels);
+            m_context->customLevels->Add(m_newLevelName);
             m_newLevelName.clear();
             m_creatingLevel = false;
             return;
@@ -196,8 +161,7 @@ void MainMenuScene::ProcessLevelEditorInput() {
             m_creatingLevel = false;
             m_newLevelName.clear();
         } else if (UiButton::WasClicked(createButton) && !m_newLevelName.empty()) {
-            m_customLevels.push_back(m_newLevelName);
-            SaveCustomLevels(m_customLevels);
+            m_context->customLevels->Add(m_newLevelName);
             m_newLevelName.clear();
             m_creatingLevel = false;
         }
@@ -235,7 +199,7 @@ void MainMenuScene::ProcessLevelEditorInput() {
     const float rowHeight = 50.0f;
     const float maxScroll = std::max(
         0.0f,
-        m_customLevels.size() * rowHeight - (listBottom - listTop)
+        m_context->customLevels->GetLevels().size() * rowHeight - (listBottom - listTop)
     );
     m_customListScroll = std::clamp(
         m_customListScroll - GetMouseWheelMove() * 40.0f,
@@ -243,29 +207,30 @@ void MainMenuScene::ProcessLevelEditorInput() {
         maxScroll
     );
 
-    const float rowWidth = std::min(520.0f, m_context->windowWidth - 40.0f);
+    const float rowWidth = std::min(620.0f, m_context->windowWidth - 40.0f);
     const float rowX = (m_context->windowWidth - rowWidth) / 2.0f;
-    for (std::size_t i = 0; i < m_customLevels.size(); ++i) {
+    for (std::size_t i = 0; i < m_context->customLevels->GetLevels().size(); ++i) {
         const float rowY = listTop + i * rowHeight - m_customListScroll;
         if (rowY + rowHeight < listTop || rowY > listBottom) continue;
-        const Rectangle row{rowX, rowY, rowWidth, 42.0f};
         const Rectangle deleteButton{rowX + rowWidth - 92.0f, rowY + 4.0f, 84.0f, 34.0f};
-        const Vector2 mouse = GetMousePosition();
+        const Rectangle editButton{rowX + rowWidth - 238.0f, rowY + 4.0f, 138.0f, 34.0f};
         if (UiButton::WasClicked(deleteButton)) {
             m_context->audioController->PlayUiClick();
-            m_customLevels.erase(m_customLevels.begin() + i);
-            SaveCustomLevels(m_customLevels);
+            m_context->customLevels->Delete(i);
             return;
         }
-        if (CheckCollisionPointRec(mouse, row) &&
-            !CheckCollisionPointRec(mouse, deleteButton) &&
-            IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (UiButton::WasClicked(editButton)) {
             m_context->audioController->PlayUiClick();
-            m_customLevelOpen = true;
+            m_context->activeCustomLevel = static_cast<int>(i);
+            m_context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
             return;
         }
     }
 }
+
+
+
+
 
 void MainMenuScene::Render() const {
     BeginDrawing();
@@ -276,7 +241,7 @@ void MainMenuScene::Render() const {
         DrawText(title, (m_context->windowWidth - MeasureText(title, 40)) / 2, m_context->windowHeight / 2 - 40, 40, BLACK);
         const char* prompt = "Presiona ENTER o haz clic para continuar";
         DrawText(prompt, (m_context->windowWidth - MeasureText(prompt, 20)) / 2, m_context->windowHeight / 2 + 30, 20, DARKGRAY);
-    } else if (!m_editingLevels && !m_customLevelOpen) {
+    } else if (!m_editingLevels) {
         const char* title = "Selecciona un nivel";
         DrawText(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, m_context->windowHeight / 2 - 120, 30, BLACK);
         if (m_context->completedLevel > 0) {
@@ -318,25 +283,32 @@ void MainMenuScene::Render() const {
         const float listTop = 154.0f;
         const float listBottom = static_cast<float>(m_context->windowHeight) - 76.0f;
         const float rowHeight = 50.0f;
-        const float rowWidth = std::min(520.0f, m_context->windowWidth - 40.0f);
+        const float rowWidth = std::min(620.0f, m_context->windowWidth - 40.0f);
         const float rowX = (m_context->windowWidth - rowWidth) / 2.0f;
         bool drewLevel = false;
-        for (std::size_t i = 0; i < m_customLevels.size(); ++i) {
+        for (std::size_t i = 0; i < m_context->customLevels->GetLevels().size(); ++i) {
             const float rowY = listTop + i * rowHeight - m_customListScroll;
             if (rowY + rowHeight < listTop || rowY > listBottom) continue;
             drewLevel = true;
             const Rectangle row{rowX, rowY, rowWidth, 42.0f};
             DrawRectangleRec(row, LIGHTGRAY);
             DrawRectangleLinesEx(row, 1.0f, DARKGRAY);
-            const std::string& name = m_customLevels[i];
+            const std::string& name = m_context->customLevels->GetLevels()[i].name;
             DrawText(name.c_str(), static_cast<int>(row.x + 14), static_cast<int>(row.y + 13), 16, BLACK);
+            UiButton::Draw(
+                Rectangle{rowX + rowWidth - 238.0f, rowY + 4.0f, 138.0f, 34.0f},
+                "Editar y jugar",
+                SKYBLUE,
+                BLACK,
+                14
+            );
             UiButton::Draw(
                 Rectangle{rowX + rowWidth - 92.0f, rowY + 4.0f, 84.0f, 34.0f},
                 "Borrar",
                 RED
             );
         }
-        if (m_customLevels.empty()) {
+        if (m_context->customLevels->GetLevels().empty()) {
             const char* emptyText = "Todavía no hay niveles personalizados";
             DrawText(
                 emptyText,
@@ -396,17 +368,6 @@ void MainMenuScene::Render() const {
                 m_newLevelName.empty() ? GRAY : SKYBLUE
             );
         }
-    } else {
-        UiButton::Draw(
-            UiButton::CenteredAtBottom(
-                m_context->windowWidth,
-                m_context->windowHeight,
-                110.0f,
-                38.0f,
-                22.0f
-            ),
-            "Menú"
-        );
     }
 
     EndDrawing();

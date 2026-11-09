@@ -52,6 +52,7 @@ MainGameScene::MainGameScene(
 ):
     m_appContext(appContext),
     m_gravity(9.8f * 40.0f),
+    m_isCustomLevel(specs.levelNumber < 0),
     m_level(specs),
     m_buildSession(m_level.GetBuildModel()),
     m_playSession(
@@ -87,6 +88,24 @@ MainGameScene::MainGameScene(
 }
 
 void MainGameScene::ProcessInput(float dt) {
+    if (m_isCustomLevel && m_stateMachine.IsBuildMode()) {
+        const Rectangle designButton = UiButton::CenteredAbove(
+            UiButton::PlaySideButton(
+                m_appContext->windowWidth, m_appContext->windowHeight
+            ),
+            52.0f,
+            32.0f,
+            8.0f
+        );
+        if (UiButton::WasClicked(designButton)) {
+            m_appContext->audioController->SetFanActive(false);
+            m_appContext->audioController->SetWheelActive(false);
+            m_appContext->returnToCustomDesign = true;
+            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+            return;
+        }
+    }
+
     const Rectangle menuButton = UiButton::AtTopRight(
         m_appContext->windowWidth, 12.0f, 20.0f, 78.0f, 32.0f
     );
@@ -270,7 +289,9 @@ void MainGameScene::Update(float dt) {
                 m_levelCompleted = true;
                 m_appContext->audioController->SetFanActive(false);
                 m_appContext->audioController->SetWheelActive(false);
-                m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
+                if (!m_isCustomLevel) {
+                    m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
+                }
                 m_appContext->audioController->ReturnToSelector();
                 m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
             }
@@ -374,6 +395,22 @@ void MainGameScene::Render() const {
         11,
         false
     );
+    if (m_isCustomLevel && m_stateMachine.IsBuildMode()) {
+        UiButton::Draw(
+            UiButton::CenteredAbove(
+                UiButton::PlaySideButton(
+                    m_appContext->windowWidth, m_appContext->windowHeight
+                ),
+                52.0f,
+                32.0f,
+                8.0f
+            ),
+            "v",
+            DARKGRAY,
+            WHITE,
+            16
+        );
+    }
 
     EndDrawing();
 }

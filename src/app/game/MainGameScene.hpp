@@ -22,6 +22,7 @@ private:
     float m_editorCameraZoom = 1.0f;
     float m_gravity;
     GameStateMachine m_stateMachine;
+    bool m_isCustomLevel = false;
     Level m_level;
     BuildSession m_buildSession;
     PlaySession m_playSession;
