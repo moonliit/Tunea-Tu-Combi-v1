@@ -1,6 +1,6 @@
 # Proyecto Grafica
 
-Proyecto multiplataforma en C++23 configurado para compilar tanto nativamente en Linux como para WebAssembly (WASM) utilizando Emscripten y Raylib.
+Proyecto multiplataforma en C++23 configurado para compilar tanto nativamente en Linux/Mac como para WebAssembly (WASM) utilizando Emscripten y Raylib.
 
 ## Requisitos Previos
 
