@@ -2,6 +2,7 @@
 /build/
 /obj/
 /dep/
+/user_data/
 
 # LSP/Tooling config files
 compile_commands.json

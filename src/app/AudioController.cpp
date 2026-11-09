@@ -4,12 +4,10 @@
 
 void AudioController::Initialize() {
     InitAudioDevice();
-    m_music = {
-        LoadMusicStream("assets/audio/menu.wav"),
-        LoadMusicStream("assets/audio/level_1.wav"),
-        LoadMusicStream("assets/audio/level_2.wav"),
-        LoadMusicStream("assets/audio/level_3.wav")
-    };
+    m_music[0] = LoadMusicStream("assets/audio/menu.wav");
+    for (std::size_t index = 0; index < OfficialLevels.size(); ++index) {
+        m_music[index + 1] = LoadMusicStream(OfficialLevels[index].musicPath);
+    }
     SetMusicPitch(m_music[1], 1.08f);
     m_radioStatic = LoadSound("assets/audio/radio_static.wav");
     SetSoundVolume(m_radioStatic, 0.15f);
@@ -63,7 +61,7 @@ void AudioController::BeginTransition(int target) {
 
 void AudioController::StartLevel(int levelNumber) {
     m_returningToMenu = false;
-    BeginTransition(std::clamp(levelNumber, 1, 3));
+    BeginTransition(std::clamp(levelNumber, 1, OfficialLevelCount));
 }
 
 void AudioController::ReturnToSelector() {

@@ -1,4 +1,5 @@
 #include "app/game/MainGameScene.hpp"
+#include "ui/UiButton.hpp"
 #include "app/game/Level.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
@@ -86,14 +87,10 @@ MainGameScene::MainGameScene(
 }
 
 void MainGameScene::ProcessInput(float dt) {
-    Rectangle menuButton{
-        static_cast<float>(m_appContext->windowWidth - 90),
-        20.0f,
-        78.0f,
-        32.0f
-    };
-    if (CheckCollisionPointRec(GetMousePosition(), menuButton) &&
-        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    const Rectangle menuButton = UiButton::AtTopRight(
+        m_appContext->windowWidth, 12.0f, 20.0f, 78.0f, 32.0f
+    );
+    if (UiButton::WasClicked(menuButton)) {
         m_appContext->audioController->SetFanActive(false);
         m_appContext->audioController->SetWheelActive(false);
         m_appContext->audioController->ReturnToSelector();
@@ -365,8 +362,18 @@ void MainGameScene::Render() const {
         m_camera,
         m_playSession.GetActivationRegistry()
     );
-    DrawRectangle(m_appContext->windowWidth - 90, 20, 78, 32, DARKGRAY);
-    DrawText("Menú", m_appContext->windowWidth - 79, 28, 16, WHITE);
+    UiButton::Draw(
+        UiButton::AtTopRight(
+            m_appContext->windowWidth, 12.0f, 20.0f, 78.0f, 32.0f
+        ),
+        "Menú",
+        DARKGRAY,
+        WHITE,
+        16,
+        false,
+        11,
+        false
+    );
 
     EndDrawing();
 }

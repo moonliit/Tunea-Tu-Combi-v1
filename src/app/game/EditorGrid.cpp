@@ -205,6 +205,9 @@ bool EditorGrid::ShiftContents(Math::GridCoord delta) {
         const size_t newIndex = GetIndex(newCoord);
         shiftedCells[newIndex] = std::move(cell);
         shiftedCells[newIndex]->m_gridCoord = newCoord;
+        if (shiftedCells[newIndex]->m_containedPart) {
+            shiftedCells[newIndex]->m_containedPart->m_gridCoord = newCoord;
+        }
     }
 
     m_cells = std::move(shiftedCells);

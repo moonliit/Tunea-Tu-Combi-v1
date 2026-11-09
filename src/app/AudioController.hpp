@@ -1,11 +1,12 @@
 #ifndef AUDIO_CONTROLLER_HPP
 #define AUDIO_CONTROLLER_HPP
 
+#include "app/LevelCatalog.hpp"
 #include <array>
 #include <raylib.h>
 
 class AudioController {
-    std::array<Music, 4> m_music{};
+    std::array<Music, OfficialLevelCount + 1> m_music{};
     Sound m_radioStatic{};
     Sound m_uiClick{};
     Sound m_partSelect{};
