@@ -3,14 +3,14 @@
 using namespace Math;
 using namespace std;
 
-static Matrix2x2 Identity() {
+Matrix2x2 Matrix2x2::Identity() {
     return Matrix2x2 {
         1.0f, 0.0f,
         0.0f, 1.0f
     };
 }
 
-static Matrix2x2 Rotation(RealNum angle) {
+Matrix2x2 Matrix2x2::Rotation(RealNum angle) {
     RealNum cosTheta = cos(angle);
     RealNum sinTheta = sin(angle);
     return Matrix2x2 {

@@ -52,7 +52,16 @@ namespace Physics {
         virtual RbShape GetRbShape() const = 0;
 
         const Transform& GetTransform() const { return m_transform; }
+        Transform& GetTransformMut() { return m_transform; }
+
+        const Math::Vector2D& GetLinearVelocity() const { return m_linearVelocity; }
+        const Math::RealNum& GetAngularVelocity() const { return m_angularVelocity; }
+        Math::Vector2D& GetLinearVelocityMut() { return m_linearVelocity; }
+        Math::RealNum& GetAngularVelocityMut() { return m_angularVelocity; }
+
         const MassData& GetMassData() const { return m_massData; }
+        const Material& GetMaterial() const { return m_material; }
+
         const BodyType& GetBodyType() const { return m_bodyType; }
         const Math::AABB& GetAABB() const { return m_aabb; }
     };

@@ -17,9 +17,10 @@ bool Physics::NarrowPhase::DetectCircleEdgeCollision(
 
     // project circle center onto segment (p1, p2)
     Vector2D ab = p2 - p1;
-    if (!ab.TryNormalize()) return false;
+    RealNum abLenSq = ab.LengthSquared();
+    if (abLenSq < 1e-6f) return false;
 
-    RealNum t = (center - p1).Dot(ab);
+    RealNum t = (center - p1).Dot(ab) / abLenSq;
     t = clamp(t, RealNum(0), RealNum(1));
 
     Vector2D closestPoint = p1 + ab * t;
@@ -33,15 +34,18 @@ bool Physics::NarrowPhase::DetectCircleEdgeCollision(
     RealNum dist = std::sqrt(distSq);
     CollisionPoint coll;
 
-    if (dist == 0.0f) {
+    if (dist < 1e-6f) {
         coll.normal = bodyB.GetNormal();
+        if (coll.normal.y > 0.0f) {
+            coll.normal *= -1;
+        }
         coll.depth = radius;
         coll.position = closestPoint;
     } else {
         coll.normal = dir * (1.0f / dist);
         // ensure normal points out of the terrain
         if (coll.normal.Dot(bodyB.GetNormal()) < 0.0f) {
-            coll.normal = bodyB.GetNormal();
+            coll.normal = bodyB.GetNormal() * -1.0f;
         }
         coll.depth = radius - dist;
         coll.position = closestPoint;

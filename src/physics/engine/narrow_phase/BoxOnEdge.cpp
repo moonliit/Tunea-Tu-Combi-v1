@@ -2,7 +2,6 @@
 #include "physics/engine/narrow_phase/NarrowPhase.hpp"
 #include "physics/engine/RigidBodies.hpp"
 #include "physics/engine/Common.hpp"
-#include <algorithm>
 using namespace std;
 using namespace Math;
 
@@ -23,6 +22,11 @@ bool Physics::NarrowPhase::DetectBoxEdgeCollision(
     Vector2D p2 = bodyB.GetP2();
     Vector2D edgeNormal = bodyB.GetNormal();
 
+    // ensure edge normal points upward (-Y in Raylib)
+    if (edgeNormal.y > 0.0f) {
+        edgeNormal = edgeNormal * -1.0f;
+    }
+
     // generate box vertices in world space
     Vector2D localVertices[4] = {
         Vector2D(-halfA.x, -halfA.y),
@@ -36,56 +40,60 @@ bool Physics::NarrowPhase::DetectBoxEdgeCollision(
         worldVertices[i] = tA.ToWorldPoint(localVertices[i]);
     }
 
-    // axes to test via separating axes theorem (edge normal + box local axes)
-    Vector2D axes[3] = { edgeNormal, axisA0, axisA1 };
+    // test box vertices against edge normal for penetration depth
+    RealNum maxPenetration = -RealNum::Infinity();
+    Vector2D deepestVertex(0.0f, 0.0f);
+    bool colliding = false;
 
-    RealNum minDepth = RealNum::Infinity();
-    Vector2D bestAxis(0.0f, 0.0f);
+    Vector2D edgeDir = p2 - p1;
+    RealNum edgeLenSq = edgeDir.LengthSquared();
 
-    for (int i = 0; i < 3; ++i) {
-        Vector2D axis = axes[i];
-        if (!axis.TryNormalize()) continue;
+    for (int v = 0; v < 4; ++v) {
+        Vector2D vertex = worldVertices[v];
 
-        // project box vertices onto axis
-        RealNum minBox = RealNum::Infinity();
-        RealNum maxBox = - RealNum::Infinity();
-        for (int v = 0; v < 4; ++v) {
-            RealNum proj = worldVertices[v].Dot(axis);
-            minBox = std::min(minBox, proj);
-            maxBox = std::max(maxBox, proj);
+        // signed distance from vertex to edge line along normal
+        RealNum dist = (vertex - p1).Dot(edgeNormal);
+
+        // check if vertex has penetrated behind the edge line
+        if (dist < 0.0f) {
+            RealNum depth = -dist;
+
+            // check interval overlap along edge segment length
+            if (edgeLenSq > 1e-6f) {
+                RealNum t = (vertex - p1).Dot(edgeDir) / edgeLenSq;
+                if (t >= -0.1f && t <= 1.1f) {
+                    if (depth > maxPenetration) {
+                        maxPenetration = depth;
+                        deepestVertex = vertex;
+                        colliding = true;
+                    }
+                }
+            }
         }
+    }
 
-        // project edge endpoints onto axis
-        RealNum p1Proj = p1.Dot(axis);
-        RealNum p2Proj = p2.Dot(axis);
-        RealNum minEdge = min(p1Proj, p2Proj);
-        RealNum maxEdge = max(p1Proj, p2Proj);
-
-        // check interval overlap
-        RealNum overlap = min(maxBox, maxEdge) - max(minBox, minEdge);
-        if (overlap < 0.0f) {
-            // separating axis found (no collision)
-            return false;
-        }
-
-        if (overlap < minDepth) {
-            minDepth = overlap;
-            bestAxis = axis;
-        }
+    if (!colliding || maxPenetration <= 0.0f) {
+        // separating axis found (no collision)
+        return false;
     }
 
     // ensure normal points outward from the terrain edge toward the box
     Vector2D edgeCenter = (p1 + p2) * 0.5f;
     Vector2D boxCenter = tA.position;
-    if ((boxCenter - edgeCenter).Dot(bestAxis) < 0.0f) {
-        bestAxis = bestAxis * -1.0f;
+    if ((boxCenter - edgeCenter).Dot(edgeNormal) < 0.0f) {
+        edgeNormal = edgeNormal * -1.0f;
     }
 
     CollisionPoint coll;
-    coll.normal = bestAxis;
-    coll.depth = minDepth;
-    coll.position = boxCenter + bestAxis * (halfA.Dot(bestAxis));
+    coll.normal = edgeNormal;
+    if (coll.normal.y > 0.0f) {
+        coll.normal *= -1.0f;
+    }
+    coll.depth = maxPenetration;
+    coll.position = deepestVertex;
 
+    // assign body references to manifold
     outManifold.collisionPoints.push_back(coll);
+
     return true;
 }
