@@ -18,7 +18,7 @@ namespace Math {
                 min.y <= point.y && point.y <= max.y
             );
         }
-        constexpr inline bool Intersects(const AABB& other) const {
+        constexpr inline bool Overlaps(const AABB& other) const {
             return (
                 min.x <= other.max.x && max.x >= other.min.x &&
                 min.y <= other.max.y && max.y >= other.min.y

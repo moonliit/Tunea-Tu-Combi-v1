@@ -1,7 +1,6 @@
-#include "math/SafeReal.hpp"
-#include "physics/engine/narrow_phase/NarrowPhase.hpp"
+#include "physics/engine/step-pipeline/02_NarrowPhase.hpp"
 #include "physics/engine/RigidBodies.hpp"
-#include "physics/engine/Common.hpp"
+#include "physics/engine/common/Common.hpp"
 using namespace std;
 using namespace Math;
 

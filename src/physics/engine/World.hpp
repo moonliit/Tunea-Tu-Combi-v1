@@ -2,7 +2,7 @@
 #define PHYSICS_WORLD_HPP
 
 #include "physics/I_Physics.hpp"
-#include "physics/engine/Common.hpp"
+#include "physics/engine/common/Common.hpp"
 #include "physics/engine/BaseRigidBody.hpp"
 
 namespace Physics {
@@ -13,9 +13,21 @@ private:
     std::vector<Manifold> m_manifolds;
     Math::Vector2D m_gravity;
     int m_subStepCount;
+    int m_velocityIterations;
+    int m_positionIterations;
 
 public:
-    explicit World(Math::Vector2D gravity, int subStepCount = 4);
+    explicit World(
+        Math::Vector2D gravity,
+        int subStepCount,
+        int velocityIterations,
+        int positionIterations
+    ) :
+        m_gravity(gravity),
+        m_subStepCount(subStepCount),
+        m_velocityIterations(velocityIterations),
+        m_positionIterations(positionIterations) {}
+
     ~World() override = default;
     void Step(float deltaTime) override;
 

@@ -7,8 +7,8 @@
 
 namespace Physics {
     inline void CorrectPositions(std::vector<Manifold>& manifolds) {
-        const Math::RealNum k_slop = 0.000001f; // allowed penetration threshold (slop)
-        const Math::RealNum k_beta = 0.4f;  // baumgarte stabilization factor (beta)
+        const Math::RealNum k_slop = 0.01f; // allowed penetration threshold (slop)
+        const Math::RealNum k_beta = 0.4f;  // positional correction factor (beta)
 
         for (auto& manifold : manifolds) {
             auto bodyA = manifold.bodyA.lock();
@@ -20,7 +20,7 @@ namespace Physics {
             if (isStaticA && isStaticB) continue;
 
             for (const auto& coll : manifold.collisionPoints) {
-                // Penetration constant: C
+                // penetration constant: C
                 Math::RealNum C = std::max(Math::RealNum(0), coll.depth - k_slop);
                 if (C <= 0.0f) continue;
 
@@ -52,12 +52,13 @@ namespace Physics {
                 if (!isStaticA) {
                     Transform& tA = bodyA->GetTransformMut();
                     tA.position = tA.position - n * (invMassA * lambda);
+                    tA.rotation -= invInertiaA * lambda * rA_x_n;
                     bodyA->UpdateAABB();
                 }
-
                 if (!isStaticB) {
                     Transform& tB = bodyB->GetTransformMut();
                     tB.position = tB.position + n * (invMassB * lambda);
+                    tB.rotation += invInertiaB * lambda * rB_x_n;
                     bodyB->UpdateAABB();
                 }
             }

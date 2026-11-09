@@ -34,7 +34,7 @@ namespace Physics {
                         continue;
                     }
 
-                    if (bodyA->GetAABB().Intersects(bodyB->GetAABB())) {
+                    if (bodyA->GetAABB().Overlaps(bodyB->GetAABB())) {
                         candidatePairs.emplace_back(bodyA, bodyB);
                     }
                 }

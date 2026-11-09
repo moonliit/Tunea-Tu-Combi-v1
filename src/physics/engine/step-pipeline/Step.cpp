@@ -1,15 +1,12 @@
-#include "physics/engine/Common.hpp"
 #include "physics/engine/World.hpp"
-#include "physics/engine/BroadPhase.hpp"
-#include "physics/engine/narrow_phase/NarrowPhase.hpp"
-#include "physics/engine/VelocitiesResolution.hpp"
-#include "physics/engine/PositionsCorrection.hpp"
+#include "physics/engine/common/Common.hpp"
+#include "physics/engine/step-pipeline/01_BroadPhase.hpp"
+#include "physics/engine/step-pipeline/02_NarrowPhase.hpp"
+#include "physics/engine/step-pipeline/03_VelocitiesResolution.hpp"
+#include "physics/engine/step-pipeline/04_PositionsCorrection.hpp"
 using namespace std;
 using namespace Math;
 using namespace Physics;
-
-World::World(Math::Vector2D gravity, int subStepCount):
-    m_gravity(gravity), m_subStepCount(subStepCount) {}
 
 void World::Step(float deltaTime) {
     float subDt = deltaTime / m_subStepCount;
@@ -40,7 +37,11 @@ void World::Step(float deltaTime) {
             }
         }
 
-        ResolveVelocities(m_manifolds, subDt);
-        CorrectPositions(m_manifolds);
+        for (int j = 0; j < m_velocityIterations; ++j) {
+            ResolveVelocities(m_manifolds, subDt);
+        }
+        for (int j = 0; j < m_positionIterations; ++j) {
+            CorrectPositions(m_manifolds);
+        }
     }
 }

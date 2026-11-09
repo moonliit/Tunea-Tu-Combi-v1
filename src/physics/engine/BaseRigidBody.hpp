@@ -2,7 +2,8 @@
 #define PHYSICS_BASE_HPP
 
 #include "physics/I_Physics.hpp"
-#include "physics/engine/Common.hpp"
+#include "physics/engine/common/Common.hpp"
+#include "physics/engine/common/Transform.hpp"
 
 #include "math/Vector2D.hpp"
 #include "math/AABB.hpp"

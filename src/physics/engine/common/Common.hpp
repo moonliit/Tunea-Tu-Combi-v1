@@ -1,30 +1,24 @@
 #ifndef PHYSICS_COMMON_HPP
 #define PHYSICS_COMMON_HPP
 
+#include "math/Vector2D.hpp"
 #include <memory>
 #include <vector>
-#include "math/Vector2D.hpp"
+#include <cmath>
 
 namespace Physics {
     class BaseRigidBody;
 
-    struct Transform {
-        Math::Vector2D position;
-        Math::RealNum rotation;
-
-        Math::Vector2D ToWorldPoint(const Math::Vector2D& localPoint) const;
-        Math::Vector2D ToLocalPoint(const Math::Vector2D& worldPoint) const;
-        Math::Vector2D ToWorldVector(const Math::Vector2D& localVector) const;
-        Math::Vector2D ToLocalVector(const Math::Vector2D& worldVector) const;
-    };
-
-    struct Shape {
-        std::vector<Math::Vector2D> vertices;
-    };
-
     struct Material {
         Math::RealNum friction = 0.4f;
         Math::RealNum restitution = 0.2f;
+
+        static inline Material FromCombined(const Material& matA, const Material& matB) {
+            Material combined;
+            combined.friction = std::sqrt(matA.friction * matB.friction);
+            combined.restitution = std::max(matA.restitution, matB.restitution);
+            return combined;
+        }
     };
 
     struct MassData {
@@ -46,6 +40,7 @@ namespace Physics {
         std::weak_ptr<BaseRigidBody> bodyA;
         std::weak_ptr<BaseRigidBody> bodyB;
         std::vector<CollisionPoint> collisionPoints;
+        Material material;
     };
 
     struct JointDef {

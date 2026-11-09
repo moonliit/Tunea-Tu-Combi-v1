@@ -13,7 +13,12 @@ int main() {
 
     // 2. Create Physics World
     // Note: Positive Y gravity pulls objects down toward the bottom of the Raylib window
-    Physics::World world(Math::Vector2D(0.0f, 400.f), 10);
+    Physics::World world(
+        Math::Vector2D(0.0f, 400.f),
+        10, // subStepCount
+        8,  // velocityIterations
+        3   // positionIterations
+    );
 
     // 3. Create Terrain Floor & Walls
     // Screen center is roughly around Y=300, floor at Y=500
@@ -33,6 +38,19 @@ int main() {
         BodyType::Dynamic
     );
     auto box = static_pointer_cast<Physics::BoxRigidBody>(_box);
+
+    int boxCount = 5;
+    std::vector<std::shared_ptr<Physics::BoxRigidBody>> boxes(boxCount, nullptr);
+    for (int i = 0; i < boxCount; ++i) {
+        auto _box = world.CreateBox(
+            Math::Vector2D(250.0f, 250.0f - i * 100.0f), // position (x, y)
+            0.0f,                           // rotation in radians
+            Math::Vector2D(60.0f, 60.0f),   // size (width, height)
+            2.0f,                           // mass
+            BodyType::Dynamic
+        );
+        boxes[i] = static_pointer_cast<Physics::BoxRigidBody>(_box);
+    }
 
     // A falling circle next to it
     auto _circle = world.CreateCircle(
@@ -71,6 +89,12 @@ int main() {
             Rectangle rec = { t.position.x, t.position.y, size.x, size.y };
             // Raylib expects rotation in degrees
             DrawRectanglePro(rec, Vector2{size.x * 0.5f, size.y * 0.5f}, float(t.rotation) * RAD2DEG, BLUE);
+            for (const auto& b : boxes) {
+                const Physics::Transform& t = b->GetTransform();
+                Math::Vector2D size = b->GetSize();
+                Rectangle rec = { t.position.x, t.position.y, size.x, size.y };
+                DrawRectanglePro(rec, Vector2{size.x * 0.5f, size.y * 0.5f}, float(t.rotation) * RAD2DEG, BLUE);
+            }
         }
 
         // Draw the Circle
