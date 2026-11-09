@@ -7,10 +7,10 @@ using namespace Physics;
 
 using PhysMat = Physics::Material;
 
-std::shared_ptr<I_RigidBody> World::CreateBox(
-    Math::Vector2D position,
+shared_ptr<I_RigidBody> World::CreateBox(
+    Vector2D position,
     float rotation,
-    Math::Vector2D size,
+    Vector2D size,
     float mass,
     BodyType type
 ) {
@@ -27,8 +27,8 @@ std::shared_ptr<I_RigidBody> World::CreateBox(
     return box;
 }
 
-std::shared_ptr<I_RigidBody> World::CreateCircle(
-    Math::Vector2D position,
+shared_ptr<I_RigidBody> World::CreateCircle(
+    Vector2D position,
     float radius,
     float mass,
     BodyType type
@@ -45,8 +45,8 @@ std::shared_ptr<I_RigidBody> World::CreateCircle(
     return circle;
 }
 
-std::shared_ptr<I_RigidBody> World::CreateCapsule(
-    Math::Vector2D position,
+shared_ptr<I_RigidBody> World::CreateCapsule(
+    Vector2D position,
     float rotation,
     float height,
     float radius,
@@ -67,10 +67,10 @@ std::shared_ptr<I_RigidBody> World::CreateCapsule(
     return capsule;
 }
 
-std::shared_ptr<I_RigidBody> World::CreateTriangle(
-    Math::Vector2D position,
+shared_ptr<I_RigidBody> World::CreateTriangle(
+    Vector2D position,
     float rotation,
-    Math::Vector2D size,
+    Vector2D size,
     float mass,
     BodyType type
 ) {
@@ -87,25 +87,36 @@ std::shared_ptr<I_RigidBody> World::CreateTriangle(
     return triangle;
 }
 
-std::vector<Math::Vector2D> World::CreateTerrainChain(
-    const std::vector<Math::Vector2D>& controlPoints,
+vector<Vector2D> World::CreateTerrainChain(
+    const vector<Vector2D>& controlPoints,
     bool isLoop
 ) {
+     if (controlPoints.size() < 2) return {};
 
+    // if segment is not looped, theres one less control point
+    size_t segmentCount = controlPoints.size() - static_cast<size_t>(!isLoop);
+
+    for (size_t i = 0; i < segmentCount; ++i) {
+        Vector2D p1 = controlPoints[i];
+        Vector2D p2 = controlPoints[(i + 1) % controlPoints.size()];
+        auto edgeBody = make_shared<EdgeRigidBody>(p1, p2);
+        m_bodies.push_back(edgeBody);
+    }
+    return controlPoints;
 }
 
-std::shared_ptr<I_Joint> World::CreateRevoluteJoint(
-    std::shared_ptr<I_RigidBody> bodyA,
-    std::shared_ptr<I_RigidBody> bodyB,
-    Math::Vector2D anchor
+shared_ptr<I_Joint> World::CreateRevoluteJoint(
+    shared_ptr<I_RigidBody> bodyA,
+    shared_ptr<I_RigidBody> bodyB,
+    Vector2D anchor
 ) {
 
 }
 
-std::shared_ptr<I_Joint> World::CreateWeldJoint(
-    std::shared_ptr<I_RigidBody> bodyA,
-    std::shared_ptr<I_RigidBody> bodyB,
-    Math::Vector2D anchor
+shared_ptr<I_Joint> World::CreateWeldJoint(
+    shared_ptr<I_RigidBody> bodyA,
+    shared_ptr<I_RigidBody> bodyB,
+    Vector2D anchor
 ) {
 
 }

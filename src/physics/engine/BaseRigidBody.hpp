@@ -9,6 +9,14 @@
 
 namespace Physics {
 
+    enum class RbShape {
+        Box,
+        Circle,
+        Capsule,
+        Triangle,
+        Edge
+    };
+
     class BaseRigidBody : public I_RigidBody {
     protected:
         Transform m_transform;
@@ -41,9 +49,11 @@ namespace Physics {
         }
 
         virtual void UpdateAABB() = 0;
+        virtual RbShape GetRbShape() const = 0;
 
         const Transform& GetTransform() const { return m_transform; }
         const MassData& GetMassData() const { return m_massData; }
+        const BodyType& GetBodyType() const { return m_bodyType; }
         const Math::AABB& GetAABB() const { return m_aabb; }
     };
 

@@ -51,6 +51,7 @@ public:
     arithmetic(T) SafeReal operator-(T value) const;
     arithmetic(T) SafeReal operator*(T value) const;
     arithmetic(T) SafeReal operator/(T value) const;
+    SafeReal operator-() const;
 
     // assigning
     arithmetic(T) SafeReal& operator=(T value);

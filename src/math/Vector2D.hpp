@@ -18,12 +18,22 @@ namespace Math {
 
         static Vector2D FromAngle(const RealNum& angle);
         static Vector2D FromJson(const nlohmann::json& j);
+
         static Vector2D Zero();
+        static Vector2D Up();
+        static Vector2D Down();
+        static Vector2D Left();
+        static Vector2D Right();
 
         Vector2D operator+(const Vector2D& other) const;
         Vector2D operator-(const Vector2D& other) const;
         Vector2D operator*(const RealNum& value) const;
         Vector2D operator/(const RealNum& value) const;
+
+        RealNum Length() const;
+        RealNum LengthSquared() const;
+        std::optional<Vector2D> Normal() const;
+        bool TryNormalize();
 
         RealNum Dot(const Vector2D& other) const;
         RealNum Cross(const Vector2D& other) const;

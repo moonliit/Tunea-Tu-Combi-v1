@@ -28,6 +28,11 @@ arithmetic(T) SafeReal<U> SafeReal<U>::operator/(T value) const {
     return SafeReal<U>(m_value / denom);
 }
 
+template <Arithmetic U>
+SafeReal<U> SafeReal<U>::operator-() const {
+    return SafeReal<U>(-m_value);
+}
+
 // assigning
 
 template <Arithmetic U>

@@ -2,12 +2,15 @@
 #define PHYSICS_WORLD_HPP
 
 #include "physics/I_Physics.hpp"
+#include "physics/engine/Common.hpp"
+#include "physics/engine/BaseRigidBody.hpp"
 
 namespace Physics {
 
 class World : public I_PhysicsWorld {
 private:
-    std::vector<std::shared_ptr<I_RigidBody>> m_bodies;
+    std::vector<std::shared_ptr<BaseRigidBody>> m_bodies;
+    std::vector<Manifold> m_manifolds;
     Math::Vector2D m_gravity;
     int m_subStepCount;
 

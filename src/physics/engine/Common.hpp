@@ -3,11 +3,13 @@
 
 #include <memory>
 #include <vector>
-#include "physics/I_Physics.hpp"
 #include "math/Vector2D.hpp"
 #include "math/Matrix2x2.hpp"
 
+
 namespace Physics {
+    class BaseRigidBody;
+
     struct Transform {
         Math::Vector2D position;
         Math::RealNum rotation;
@@ -37,20 +39,20 @@ namespace Physics {
     struct CollisionPoint {
         Math::Vector2D position;
         Math::Vector2D normal;
-        Math::RealNum penetrationDepth;
+        Math::RealNum depth;
         Math::RealNum normalImpulse = 0.0f;
         Math::RealNum tangentImpulse = 0.0f;
     };
 
     struct Manifold {
-        std::shared_ptr<I_RigidBody> bodyA;
-        std::shared_ptr<I_RigidBody> bodyB;
+        std::weak_ptr<BaseRigidBody> bodyA;
+        std::weak_ptr<BaseRigidBody> bodyB;
         std::vector<CollisionPoint> collisionPoints;
     };
 
     struct JointDef {
-        std::shared_ptr<I_RigidBody> bodyA;
-        std::shared_ptr<I_RigidBody> bodyB;
+        std::weak_ptr<BaseRigidBody> bodyA;
+        std::weak_ptr<BaseRigidBody> bodyB;
         Math::Vector2D anchorA;
         Math::Vector2D anchorB;
         bool collideConnected = false;

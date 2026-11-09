@@ -195,3 +195,27 @@ void TriangleRigidBody::UpdateAABB() {
     m_aabb.min = minCoord;
     m_aabb.max = maxCoord;
 }
+
+EdgeRigidBody::EdgeRigidBody(Math::Vector2D p1, Math::Vector2D p2)
+    : m_localPoint1(p1), m_localPoint2(p2)
+{
+    m_bodyType = BodyType::Static;
+    UpdateAABB();
+}
+
+void EdgeRigidBody::UpdateAABB() {
+    m_worldPoint1 = m_transform.ToWorldPoint(m_localPoint1);
+    m_worldPoint2 = m_transform.ToWorldPoint(m_localPoint2);
+
+    // outward normal
+    Vector2D delta = m_worldPoint2 - m_worldPoint1;
+    m_normal = Vector2D(-delta.y, delta.x).Normal().value_or(Vector2D::Up());
+
+    // AABB enclosing both points
+    float minX = min(m_worldPoint1.x, m_worldPoint2.x);
+    float maxX = max(m_worldPoint1.x, m_worldPoint2.x);
+    float minY = min(m_worldPoint1.y, m_worldPoint2.y);
+    float maxY = max(m_worldPoint1.y, m_worldPoint2.y);
+
+    m_aabb = Math::AABB(Vector2D(minX, minY), Vector2D(maxX, maxY));
+}
