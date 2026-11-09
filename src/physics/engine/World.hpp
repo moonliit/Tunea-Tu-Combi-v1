@@ -4,12 +4,14 @@
 #include "physics/I_Physics.hpp"
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/BaseRigidBody.hpp"
+#include "physics/engine/Joint.hpp"
 
 namespace Physics {
 
 class World : public I_PhysicsWorld {
 private:
     std::vector<std::shared_ptr<BaseRigidBody>> m_bodies;
+    std::vector<std::shared_ptr<BaseJoint>> m_joints;
     std::vector<Manifold> m_manifolds;
     Math::Vector2D m_gravity;
     int m_subStepCount;

@@ -72,6 +72,7 @@ public:
     inline SafeReal Abs() const;
     inline bool IsZero() const;
     inline int Sign() const;
+    arithmetic(T) static SafeReal WrapAngle(T angle);
 
 private:
     U m_value;

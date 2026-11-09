@@ -110,7 +110,16 @@ shared_ptr<I_Joint> World::CreateRevoluteJoint(
     shared_ptr<I_RigidBody> bodyB,
     Vector2D anchor
 ) {
+    JointDef def;
+    def.bodyA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
+    def.bodyB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
+    def.anchorA = anchor; // Or transform anchor into local body space if your constructor expects local anchors!
+    def.anchorB = anchor;
+    def.collideConnected = false;
 
+    auto joint = make_shared<RevoluteJoint>(def);
+    m_joints.push_back(joint);
+    return joint;
 }
 
 shared_ptr<I_Joint> World::CreateWeldJoint(
@@ -118,5 +127,14 @@ shared_ptr<I_Joint> World::CreateWeldJoint(
     shared_ptr<I_RigidBody> bodyB,
     Vector2D anchor
 ) {
+    JointDef def;
+    def.bodyA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
+    def.bodyB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
+    def.anchorA = anchor;
+    def.anchorB = anchor;
+    def.collideConnected = false;
 
+    auto joint = make_shared<WeldJoint>(def);
+    m_joints.push_back(joint);
+    return joint;
 }

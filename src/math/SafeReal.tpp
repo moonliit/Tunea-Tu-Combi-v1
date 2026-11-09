@@ -1,4 +1,5 @@
 #include "math/SafeReal.hpp"
+#include <cmath>
 
 namespace Math {
 
@@ -121,6 +122,19 @@ inline int SafeReal<U>::Sign() const {
     if (IsZero()) return 0;
     if (m_value < 0) return -1;
     return 1;
+}
+
+template <Arithmetic U>
+arithmetic(T) SafeReal<U> SafeReal<U>::WrapAngle(T angle) {
+    // wrap angle to [-pi, pi]
+    const U twoPi = static_cast<U>(2.0 * M_PI);
+    U wrapped = std::fmod(static_cast<U>(angle), twoPi);
+    if (wrapped < -static_cast<U>(M_PI)) {
+        wrapped += twoPi;
+    } else if (wrapped > static_cast<U>(M_PI)) {
+        wrapped -= twoPi;
+    }
+    return SafeReal<U>(wrapped);
 }
 
 }

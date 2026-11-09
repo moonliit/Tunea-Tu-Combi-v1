@@ -38,10 +38,12 @@ void World::Step(float deltaTime) {
         }
 
         for (int j = 0; j < m_velocityIterations; ++j) {
-            ResolveVelocities(m_manifolds, subDt);
+            ResolveJointVelocities(m_joints, subDt);
+            ResolveManifoldVelocities(m_manifolds, subDt);
         }
         for (int j = 0; j < m_positionIterations; ++j) {
-            CorrectPositions(m_manifolds);
+            CorrectJointPositions(m_joints);
+            CorrectManifoldPositions(m_manifolds);
         }
     }
 }

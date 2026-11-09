@@ -3,6 +3,13 @@
 using namespace Math;
 using namespace std;
 
+Matrix2x2 Matrix2x2::Zero() {
+    return Matrix2x2 {
+        0.0f, 0.0f,
+        0.0f, 0.0f
+    };
+}
+
 Matrix2x2 Matrix2x2::Identity() {
     return Matrix2x2 {
         1.0f, 0.0f,
@@ -16,6 +23,20 @@ Matrix2x2 Matrix2x2::Rotation(RealNum angle) {
     return Matrix2x2 {
         cosTheta, -sinTheta,
         sinTheta, cosTheta
+    };
+}
+
+Matrix2x2 Matrix2x2::FromRows(const Vector2D& row1, const Vector2D& row2) {
+    return Matrix2x2 {
+        row1.x, row1.y,
+        row2.x, row2.y
+    };
+}
+
+Matrix2x2 Matrix2x2::FromCols(const Vector2D& col1, const Vector2D& col2) {
+    return Matrix2x2 {
+        col1.x, col2.x,
+        col1.y, col2.y
     };
 }
 

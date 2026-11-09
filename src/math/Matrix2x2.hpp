@@ -14,6 +14,10 @@ namespace Math {
         RealNum a, b;
         RealNum c, d;
 
+        static Matrix2x2 FromRows(const Vector2D& row1, const Vector2D& row2);
+        static Matrix2x2 FromCols(const Vector2D& col1, const Vector2D& col2);
+
+        static Matrix2x2 Zero();
         static Matrix2x2 Identity();
         static Matrix2x2 Rotation(RealNum angle);
 
