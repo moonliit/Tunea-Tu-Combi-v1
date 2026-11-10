@@ -74,7 +74,7 @@ void PlaySession::CreatePhysicsWorld(
     constexpr int subStepCount = 10;
     constexpr int velocityIterations = 8;
     constexpr int positionIterations = 3;
-    
+
     m_physics = std::make_unique<Physics::World>(
         m_gravity, subStepCount, velocityIterations, positionIterations
     );

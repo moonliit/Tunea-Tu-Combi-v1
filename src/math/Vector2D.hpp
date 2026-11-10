@@ -42,6 +42,7 @@ namespace Math {
             const Vector2D& b,
             const Vector2D& c
         );
+        Vector2D Perpendicular() const;
 
         Vector2D& operator=(const Vector2D& other);
         Vector2D& operator+=(const Vector2D& other);

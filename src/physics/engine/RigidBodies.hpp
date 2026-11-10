@@ -75,7 +75,6 @@ public:
 class TriangleRigidBody : public BaseRigidBody {
 private:
     Math::Vector2D m_size;
-    std::array<Math::Vector2D, 3> m_vertices;
 
 public:
     explicit TriangleRigidBody(
@@ -89,6 +88,7 @@ public:
     virtual ~TriangleRigidBody() override = default;
 
     Math::Vector2D GetSize() const { return m_size; }
+    std::array<Math::Vector2D, 3> GetWorldVertices() const;
 
     void UpdateAABB() override;
     RbShape GetRbShape() const override { return RbShape::Triangle; }

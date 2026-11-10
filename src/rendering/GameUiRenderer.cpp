@@ -170,9 +170,7 @@ void GameUiRenderer::Render(
     const Vector2 mouseScreen = GetMousePosition();
     const Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
     const auto coord = grid.WorldToCoord({mouseWorld.x, mouseWorld.y});
-    const std::string coordText = coord.has_value()
-        ? std::format("{}, {}", coord->x, coord->y)
-        : "none";
+    const std::string coordText = std::format("{}, {}", mouseWorld.x, mouseWorld.y);
     const std::string worldText = coord.has_value()
         ? std::format(
             "{}, {}",

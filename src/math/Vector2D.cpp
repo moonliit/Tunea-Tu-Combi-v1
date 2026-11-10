@@ -129,6 +129,10 @@ RealNum Vector2D::TripleCross(
     return u.Cross(v);
 }
 
+Vector2D Vector2D::Perpendicular() const {
+    return Vector2D(-y, x);
+}
+
 Vector2D& Vector2D::operator=(const Vector2D& other) {
     if (this == &other) return *this;
     x = other.x;

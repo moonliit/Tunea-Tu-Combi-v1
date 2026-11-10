@@ -58,7 +58,7 @@ bool Physics::NarrowPhase::DetectBoxEdgeCollision(
             RealNum depth = -dist;
 
             // check interval overlap along edge segment length
-            if (edgeLenSq > 1e-6f) {
+            if (edgeLenSq > RealNum::epsilon) {
                 RealNum t = (vertex - p1).Dot(edgeDir) / edgeLenSq;
                 if (t >= -0.1f && t <= 1.1f) {
                     if (depth > maxPenetration) {

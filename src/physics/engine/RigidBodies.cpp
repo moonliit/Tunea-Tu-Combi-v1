@@ -153,14 +153,6 @@ TriangleRigidBody::TriangleRigidBody(
 ): m_size(size) {
     m_transform.position = position;
     m_transform.rotation = rotation;
-
-    RealNum halfW = m_size.x * 0.5f;
-    RealNum halfH = m_size.y * 0.5f;
-
-    m_vertices[0] = { 0.0f  ,  halfH }; // top vertex
-    m_vertices[1] = { -halfW, -halfH }; // bottom left vertex
-    m_vertices[2] = { halfW , -halfH }; // bottom right vertex
-
     m_massData.mass = (type == BodyType::Static) ? RealNum(0) : mass;
     m_massData.invMass = (m_massData.mass > 0.0f) ? (RealNum(1) / m_massData.mass) : RealNum(0);
 
@@ -179,13 +171,34 @@ TriangleRigidBody::TriangleRigidBody(
     UpdateAABB();
 }
 
+array<Vector2D, 3> TriangleRigidBody::GetWorldVertices() const {
+    RealNum halfW = m_size.x * 0.5f;
+    RealNum halfH = m_size.y * 0.5f;
+
+    // Local vertex layout matching your original definition
+    Vector2D localVertices[3] = {
+        { -halfH,      0 }, // Vertex 0
+        {  halfW, -halfH }, // Vertex 1 (bottom left)
+        {  halfW,  halfH }  // Vertex 2 (bottom right)
+    };
+
+    array<Vector2D, 3> worldVertices;
+    const auto& transform = GetTransform();
+    for (int i = 0; i < 3; ++i) {
+        worldVertices[i] = transform.ToWorldPoint(localVertices[i]);
+    }
+    return worldVertices;
+}
+
 void TriangleRigidBody::UpdateAABB() {
-    Vector2D firstVert = m_transform.ToWorldPoint(m_vertices[0]);
+    array<Vector2D, 3> worldVertices = GetWorldVertices();
+
+    Vector2D firstVert = worldVertices[0];
     Vector2D minCoord = firstVert;
     Vector2D maxCoord = firstVert;
 
     for (int i = 0; i < 3; ++i) {
-        Vector2D worldVert = m_transform.ToWorldPoint(m_vertices[i]);
+        Vector2D worldVert = worldVertices[i];
         minCoord.x = min(minCoord.x, worldVert.x);
         minCoord.y = min(minCoord.y, worldVert.y);
         maxCoord.x = max(maxCoord.x, worldVert.x);

@@ -18,7 +18,7 @@ bool Physics::NarrowPhase::DetectCircleEdgeCollision(
     // project circle center onto segment (p1, p2)
     Vector2D ab = p2 - p1;
     RealNum abLenSq = ab.LengthSquared();
-    if (abLenSq < 1e-6f) return false;
+    if (abLenSq < RealNum::epsilon) return false;
 
     RealNum t = (center - p1).Dot(ab) / abLenSq;
     t = clamp(t, RealNum(0), RealNum(1));
@@ -34,7 +34,7 @@ bool Physics::NarrowPhase::DetectCircleEdgeCollision(
     RealNum dist = std::sqrt(distSq);
     CollisionPoint coll;
 
-    if (dist < 1e-6f) {
+    if (dist < RealNum::epsilon) {
         coll.normal = bodyB.GetNormal();
         if (coll.normal.y > 0.0f) {
             coll.normal *= -1;
