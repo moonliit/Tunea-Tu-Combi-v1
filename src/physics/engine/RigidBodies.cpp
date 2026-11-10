@@ -1,5 +1,6 @@
 #include "physics/engine/RigidBodies.hpp"
 #include "math/Vector2D.hpp"
+#include "physics/engine/common/CollisionPolygon.hpp"
 using namespace std;
 using namespace Math;
 using namespace Physics;
@@ -31,6 +32,25 @@ BoxRigidBody::BoxRigidBody(
     }
 
     UpdateAABB();
+}
+
+CollisionPolygon BoxRigidBody::GetCollisionPolygon() const {
+    RealNum halfW = m_size.x * 0.5f;
+    RealNum halfH = m_size.y * 0.5f;
+
+    vector<Vector2D> localVertices = {
+        { -halfW, -halfH }, // Bottom-left
+        {  halfW, -halfH }, // Bottom-right
+        {  halfW,  halfH }, // Top-right
+        { -halfW,  halfH }  // Top-left
+    };
+
+    vector<Vector2D> worldVertices(localVertices.size());
+    const auto& transform = GetTransform();
+    for (size_t i = 0; i < localVertices.size(); ++i) {
+        worldVertices[i] = transform.ToWorldPoint(localVertices[i]);
+    }
+    return CollisionPolygon { worldVertices };
 }
 
 void BoxRigidBody::UpdateAABB() {
@@ -171,27 +191,26 @@ TriangleRigidBody::TriangleRigidBody(
     UpdateAABB();
 }
 
-array<Vector2D, 3> TriangleRigidBody::GetWorldVertices() const {
+CollisionPolygon TriangleRigidBody::GetCollisionPolygon() const {
     RealNum halfW = m_size.x * 0.5f;
     RealNum halfH = m_size.y * 0.5f;
 
-    // Local vertex layout matching your original definition
     Vector2D localVertices[3] = {
-        { -halfH,      0 }, // Vertex 0
+        { -halfW,      0 }, // Vertex 0
         {  halfW, -halfH }, // Vertex 1 (bottom left)
         {  halfW,  halfH }  // Vertex 2 (bottom right)
     };
 
-    array<Vector2D, 3> worldVertices;
+    vector<Vector2D> worldVertices(3);
     const auto& transform = GetTransform();
     for (int i = 0; i < 3; ++i) {
         worldVertices[i] = transform.ToWorldPoint(localVertices[i]);
     }
-    return worldVertices;
+    return CollisionPolygon { worldVertices };
 }
 
 void TriangleRigidBody::UpdateAABB() {
-    array<Vector2D, 3> worldVertices = GetWorldVertices();
+    vector<Vector2D> worldVertices = GetCollisionPolygon().vertices;
 
     Vector2D firstVert = worldVertices[0];
     Vector2D minCoord = firstVert;

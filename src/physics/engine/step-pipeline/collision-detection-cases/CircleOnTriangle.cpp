@@ -1,4 +1,5 @@
 #include "physics/engine/step-pipeline/02_NarrowPhase.hpp"
+#include "physics/engine/BaseRigidBody.hpp"
 #include "physics/engine/RigidBodies.hpp"
 #include "physics/engine/common/Common.hpp"
 using namespace std;
@@ -9,6 +10,6 @@ bool Physics::NarrowPhase::DetectCircleTriangleCollision(
     const TriangleRigidBody& bodyB,
     Manifold& outManifold
 ) {
-    // TODO:
-    return false;
+    const PolygonRigidBody& polyB = bodyB;
+    return DetectPolygonCircleCollision(polyB, bodyA, outManifold);
 }

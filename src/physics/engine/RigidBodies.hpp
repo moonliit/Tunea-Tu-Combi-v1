@@ -3,11 +3,11 @@
 
 #include "math/Vector2D.hpp"
 #include "physics/engine/BaseRigidBody.hpp"
-#include <array>
+#include "physics/engine/common/CollisionPolygon.hpp"
 
 namespace Physics {
 
-class BoxRigidBody : public BaseRigidBody {
+class BoxRigidBody : public PolygonRigidBody {
 private:
     Math::Vector2D m_size;
 
@@ -23,6 +23,7 @@ public:
     virtual ~BoxRigidBody() override = default;
 
     Math::Vector2D GetSize() const { return m_size; }
+    CollisionPolygon GetCollisionPolygon() const override;
 
     void UpdateAABB() override;
     RbShape GetRbShape() const override { return RbShape::Box; }
@@ -72,7 +73,7 @@ public:
     RbShape GetRbShape() const override { return RbShape::Capsule; }
 };
 
-class TriangleRigidBody : public BaseRigidBody {
+class TriangleRigidBody : public PolygonRigidBody {
 private:
     Math::Vector2D m_size;
 
@@ -88,7 +89,7 @@ public:
     virtual ~TriangleRigidBody() override = default;
 
     Math::Vector2D GetSize() const { return m_size; }
-    std::array<Math::Vector2D, 3> GetWorldVertices() const;
+    CollisionPolygon GetCollisionPolygon() const override;
 
     void UpdateAABB() override;
     RbShape GetRbShape() const override { return RbShape::Triangle; }

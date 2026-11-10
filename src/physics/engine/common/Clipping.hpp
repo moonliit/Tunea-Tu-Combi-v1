@@ -25,5 +25,4 @@ inline int ClipSegmentToLine(
     return numOut;
 }
 
-
 #endif

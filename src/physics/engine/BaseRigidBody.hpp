@@ -2,6 +2,7 @@
 #define PHYSICS_BASE_HPP
 
 #include "physics/I_Physics.hpp"
+#include "physics/engine/common/CollisionPolygon.hpp"
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/common/Transform.hpp"
 
@@ -69,6 +70,11 @@ namespace Physics {
         const Math::AABB& GetAABB() const { return m_aabb; }
     };
 
+    class PolygonRigidBody : public BaseRigidBody {
+    public:
+        virtual ~PolygonRigidBody() = default;
+        virtual CollisionPolygon GetCollisionPolygon() const = 0;
+    };
 }
 
 #endif

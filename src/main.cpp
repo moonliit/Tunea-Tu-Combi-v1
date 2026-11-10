@@ -1,263 +1,118 @@
-#include "raylib.h"
-#include "rlgl.h"
-#include "physics/engine/World.hpp"
-#include "physics/engine/RigidBodies.hpp"
-#include <memory>
-#include <vector>
-#include <array>
-using namespace Math;
-
-static Vector2 ToRaylib(const Vector2D& v) {
-    return { v.x, v.y };
-}
-static void DrawTriangleBody(
-    const std::shared_ptr<Physics::TriangleRigidBody>& body,
-    Color color
-) {
-    const Physics::Transform& t = body->GetTransform();
-    const Vector2D size = body->GetSize();
-
-    const float halfWidth = size.x * 0.5f;
-    const float halfHeight = size.y * 0.5f;
-
-    const Vector2 tip{-halfWidth, 0.0f};
-    const Vector2 baseTop{halfWidth, -halfHeight};
-    const Vector2 baseBottom{halfWidth, halfHeight};
-
-    const float rotationDeg = float(t.rotation) * RAD2DEG;
-
-    rlPushMatrix();
-
-    rlTranslatef(t.position.x, t.position.y, 0.0f);
-    rlRotatef(rotationDeg, 0.0f, 0.0f, 1.0f);
-
-    DrawTriangle(
-        tip,
-        baseBottom,
-        baseTop,
-        color
-    );
-
-    DrawTriangleLines(
-        tip,
-        baseBottom,
-        baseTop,
-        BLACK
-    );
-
-    rlPopMatrix();
-
-    // Optional: show the body's orientation.
-    DrawLineEx(
-        { t.position.x, t.position.y },
-        {
-            t.position.x + cosf(t.rotation) * halfHeight,
-            t.position.y + sinf(t.rotation) * halfHeight
-        },
-        2.0f,
-        RED
-    );
-
-    DrawCircleV(
-        { t.position.x, t.position.y },
-        3.0f,
-        RED
-    );
-}
-
-int main() {
-    const int screenWidth = 1000;
-    const int screenHeight = 700;
-
-    InitWindow(
-        screenWidth,
-        screenHeight,
-        "Custom Physics Engine - Triangle Collision Test"
-    );
-
-    SetTargetFPS(60);
-
-    Physics::World world(
-        Vector2D(0.0f, 500.0f), // Gravity
-        10,                     // Substeps
-        8,                      // Velocity iterations
-        3                       // Position iterations
-    );
-
-    // -------------------------------------------------
-    // Terrain
-    // -------------------------------------------------
-
-    const std::vector<Vector2D> terrainPoints = {
-        { 50.0f, 550.0f },
-        { 350.0f, 550.0f },
-        { 500.0f, 450.0f },
-        { 650.0f, 550.0f },
-        { 950.0f, 550.0f }
-    };
-
-    world.CreateTerrainChain(terrainPoints);
-
-    // -------------------------------------------------
-    // Dynamic triangles
-    // -------------------------------------------------
-
-    std::vector<std::shared_ptr<Physics::TriangleRigidBody>> triangles;
-
-    auto CreateTestTriangle = [&](Vector2D position,
-                                  float rotation,
-                                  Vector2D size,
-                                  float mass) {
-        auto body = world.CreateTriangle(
-            position,
-            rotation,
-            size,
-            mass,
-            BodyType::Dynamic
-        );
-
-        auto triangle =
-            std::static_pointer_cast<Physics::TriangleRigidBody>(body);
-
-        triangles.push_back(triangle);
-    };
-
-    CreateTestTriangle(
-        { 180.0f, 100.0f },
-        0.0f,
-        { 60.0f, 60.0f },
-        2.0f
-    );
-
-    CreateTestTriangle(
-        { 300.0f, 50.0f },
-        0.3f,
-        { 80.0f, 70.0f },
-        2.0f
-    );
-
-    CreateTestTriangle(
-        { 430.0f, 100.0f },
-        -0.2f,
-        { 70.0f, 70.0f },
-        2.0f
-    );
-
-    CreateTestTriangle(
-        { 600.0f, 50.0f },
-        0.5f,
-        { 90.0f, 70.0f },
-        2.0f
-    );
-
-    // -------------------------------------------------
-    // Camera
-    // -------------------------------------------------
-
-    Camera2D camera = { 0 };
-
-    camera.target = { 500.0f, 350.0f };
-    camera.offset = {
-        screenWidth * 0.5f,
-        screenHeight * 0.5f
-    };
-    camera.rotation = 0.0f;
-    camera.zoom = 1.0f;
-
-    // -------------------------------------------------
-    // Main loop
-    // -------------------------------------------------
-
-    while (!WindowShouldClose()) {
-        float dt = GetFrameTime();
-
-        // Camera controls.
-        float panSpeed = 400.0f * dt;
-
-        if (IsKeyDown(KEY_W)) camera.target.y -= panSpeed;
-        if (IsKeyDown(KEY_S)) camera.target.y += panSpeed;
-        if (IsKeyDown(KEY_A)) camera.target.x -= panSpeed;
-        if (IsKeyDown(KEY_D)) camera.target.x += panSpeed;
-
-        if (IsKeyDown(KEY_Q)) camera.zoom *= 1.0f + 1.0f * dt;
-        if (IsKeyDown(KEY_E)) camera.zoom *= 1.0f - 1.0f * dt;
-
-        // Spawn another triangle.
-        if (IsKeyPressed(KEY_SPACE)) {
-            CreateTestTriangle(
-                { 500.0f, 100.0f },
-                0.0f,
-                { 70.0f, 70.0f },
-                2.0f
-            );
-        }
-
-        world.Step(dt);
-
-        // Rendering.
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        BeginMode2D(camera);
-
-        // Grid.
-        for (int x = 0; x <= 1000; x += 50) {
-            DrawLine(x, 0, x, 700, Fade(LIGHTGRAY, 0.5f));
-        }
-
-        for (int y = 0; y <= 700; y += 50) {
-            DrawLine(0, y, 1000, y, Fade(LIGHTGRAY, 0.5f));
-        }
-
-        // Terrain.
-        for (size_t i = 0; i + 1 < terrainPoints.size(); ++i) {
-            DrawLineEx(
-                ToRaylib(terrainPoints[i]),
-                ToRaylib(terrainPoints[i + 1]),
-                6.0f,
-                DARKGRAY
-            );
-        }
-
-        // Triangles.
-        const std::array<Color, 4> colors = {
-            BLUE,
-            RED,
-            GREEN,
-            PURPLE
-        };
-
-        for (size_t i = 0; i < triangles.size(); ++i) {
-            DrawTriangleBody(
-                triangles[i],
-                colors[i % colors.size()]
-            );
-        }
-
-        EndMode2D();
-
-        // HUD.
-        DrawText("Triangle-Triangle Collision Test", 20, 20, 20, DARKGRAY);
-        DrawText("WASD: Move camera", 20, 50, 16, GRAY);
-        DrawText("Q/E: Zoom", 20, 70, 16, GRAY);
-        DrawText("SPACE: Spawn triangle", 20, 90, 16, GRAY);
-
-        EndDrawing();
-    }
-
-    CloseWindow();
-
-    return 0;
-}
-
-// #include "app/App.hpp"
+// #include "raylib.h"
+// #include "physics/engine/World.hpp"
+// #include "physics/I_Physics.hpp"
+// #include "physics/engine/RigidBodies.hpp"
+// #include <vector>
+// #include <memory>
+//
+// using namespace std;
+// using namespace Math;
+// using namespace Physics;
 //
 // int main() {
-//     const int windowWidth = 800;
-//     const int windowHeight = 600;
-//     const std::string windowTitle = "Bad Piggies Clone";
+//     const int screenWidth = 800;
+//     const int screenHeight = 600;
+//     InitWindow(screenWidth, screenHeight, "Physics World Test - Box & Circle");
+//     SetTargetFPS(60);
 //
-//     App app(windowWidth, windowHeight, windowTitle);
-//     app.Run();
+//     // Initialize World with gravity, substeps, and solver iterations
+//     // gravity = {0, 980}, substeps = 4, velocityiters = 8, positioniters = 3
+//     World world(Vector2D(0.0f, 980.0f), 4, 8, 3);
+//
+//     // Create a static terrain chain at the bottom
+//     vector<Vector2D> controlPoints = {
+//         Vector2D(50.0f, 500.0f),
+//         Vector2D(400.0f, 530.0f),
+//         Vector2D(750.0f, 500.0f)
+//     };
+//     world.CreateTerrainChain(controlPoints, false);
+//
+//     // Create a dynamic box above the slope
+//     auto box = world.CreateBox(
+//         Vector2D(350.0f, 200.0f),
+//         0.2f,                  // slight initial rotation
+//         Vector2D(50.0f, 40.0f), // size (width, height)
+//         10.0f,                 // mass
+//         BodyType::Dynamic
+//     );
+//
+//     // Create a dynamic circle that will roll or drop onto the box/terrain
+//     auto circle = world.CreateCircle(
+//         Vector2D(500.0f, 100.0f),
+//         22.0f,                 // radius
+//         8.0f,                  // mass
+//         BodyType::Dynamic
+//     );
+//
+//     while (!WindowShouldClose()) {
+//         float dt = GetFrameTime();
+//         if (dt > 0.1f) dt = 0.1f;
+//
+//         // Step the physics simulation world
+//         world.Step(dt);
+//
+//         // Render loop
+//         BeginDrawing();
+//         ClearBackground(RAYWHITE);
+//
+//         // Draw dynamic box by downcasting to BoxRigidBody to get its world vertices
+//         auto boxBody = dynamic_pointer_cast<BoxRigidBody>(box);
+//         if (boxBody) {
+//             // BoxRigidBody has 4 world vertices if you use GetCollisionPolygon(), or you can transform its local corners:
+//             auto poly = boxBody->GetCollisionPolygon();
+//             if (poly.vertices.size() >= 4) {
+//                 DrawTriangle(
+//                     Vector2{poly.vertices[0].x, poly.vertices[0].y},
+//                     Vector2{poly.vertices[1].x, poly.vertices[1].y},
+//                     Vector2{poly.vertices[2].x, poly.vertices[2].y},
+//                     RED
+//                 );
+//                 DrawTriangle(
+//                     Vector2{poly.vertices[0].x, poly.vertices[0].y},
+//                     Vector2{poly.vertices[2].x, poly.vertices[2].y},
+//                     Vector2{poly.vertices[3].x, poly.vertices[3].y},
+//                     RED
+//                 );
+//                 // Outline
+//                 for (size_t i = 0; i < poly.vertices.size(); ++i) {
+//                     Vector2D p1 = poly.vertices[i];
+//                     Vector2D p2 = poly.vertices[(i + 1) % poly.vertices.size()];
+//                     DrawLineV(Vector2{p1.x, p1.y}, Vector2{p2.x, p2.y}, BLACK);
+//                 }
+//             }
+//         }
+//
+//         // Draw dynamic circle
+//         auto circBody = dynamic_pointer_cast<CircleRigidBody>(circle);
+//         if (circBody) {
+//             Vector2D cPos = circBody->GetTransform().position;
+//             DrawCircleV(Vector2{cPos.x, cPos.y}, circBody->GetRadius(), DARKBLUE);
+//             DrawCircleLines(Vector2{cPos.x, cPos.y}.x, Vector2{cPos.x, cPos.y}.y, circBody->GetRadius(), BLACK);
+//         }
+//
+//         // Note: Terrain chain edges are automatically stepped and managed inside World,
+//         // you can also render them if your World exposes them or via custom ground lines.
+//         for (size_t i = 0; i < controlPoints.size() - 1; ++i) {
+//             Vector2D p1 = controlPoints[i];
+//             Vector2D p2 = controlPoints[i + 1];
+//             DrawLineV(Vector2{p1.x, p1.y}, Vector2{p2.x, p2.y}, DARKGRAY);
+//         }
+//
+//         EndDrawing();
+//     }
+//
+//     CloseWindow();
 //     return 0;
 // }
+
+#include "app/App.hpp"
+
+int main() {
+    const int windowWidth = 800;
+    const int windowHeight = 600;
+    const std::string windowTitle = "Bad Piggies Clone";
+
+    App app(windowWidth, windowHeight, windowTitle);
+    app.Run();
+    return 0;
+}

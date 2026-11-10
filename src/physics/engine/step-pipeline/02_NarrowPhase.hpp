@@ -243,6 +243,28 @@ namespace Physics {
              const EdgeRigidBody& bodyB,
              Manifold& outManifold
         );
+
+        // polygon
+        static bool DetectPolygonPolygonCollision(
+             const PolygonRigidBody& bodyA,
+             const PolygonRigidBody& bodyB,
+             Manifold& outManifold
+        );
+        static bool DetectPolygonCircleCollision(
+             const PolygonRigidBody& bodyA,
+             const CircleRigidBody& bodyB,
+             Manifold& outManifold
+        );
+        // static bool DetectPolygonCapsuleCollision(
+        //      const PolygonRigidBody& bodyA,
+        //      const CapsuleRigidBody& bodyB,
+        //      Manifold& outManifold
+        // );
+        static bool DetectPolygonEdgeCollision(
+             const PolygonRigidBody& bodyA,
+             const EdgeRigidBody& bodyB,
+             Manifold& outManifold
+        );
     };
 }
 
