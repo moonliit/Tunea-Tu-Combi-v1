@@ -1,5 +1,6 @@
 #include "app/game/PlaySession.hpp"
 #include "physics/Box2D_Physics.hpp"
+#include "physics/engine/World.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -70,7 +71,14 @@ void PlaySession::CreatePhysicsWorld(
     const std::vector<std::vector<Math::Vector2D>>& terrainSections,
     bool closed
 ) {
-    m_physics = std::make_unique<Box2D_PhysicsWorld>(m_gravity);
+    constexpr int subStepCount = 10;
+    constexpr int velocityIterations = 8;
+    constexpr int positionIterations = 3;
+    
+    m_physics = std::make_unique<Physics::World>(
+        m_gravity, subStepCount, velocityIterations, positionIterations
+    );
+
     m_terrainMeshes.clear();
     for (const auto& section : terrainSections) {
         std::vector<Math::Vector2D> physicsPoints = section;

@@ -5,6 +5,8 @@
 using namespace Math;
 using namespace std;
 
+static constexpr float k_beta = 0.2f;
+
 namespace Physics {
 
 void ResolveJointVelocities(vector<shared_ptr<BaseJoint>>& joints, float dt) {
@@ -82,8 +84,13 @@ void ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt) {
     Matrix2x2 massMatrix = KInverseOpt.value();
 
     // 5. Compute bias for positional error correction (Baumgarte)
-    Vector2D bias = (pB - pA) * (0.2f / dt);
+    Vector2D bias = (pB - pA) * (k_beta / dt);
     Vector2D lambdaNew = massMatrix * ((vRel + bias) * -1.0f);
+
+    constexpr RealNum maxBiasVelocity = 5.0f;
+    if (bias.Length() > maxBiasVelocity) {
+        bias = bias.Normal().value() * maxBiasVelocity;
+    }
 
     Vector2D oldImpulse = joint.GetAccumulatedLinearImpulse();
     Vector2D totalImpulse = oldImpulse + lambdaNew;
@@ -134,7 +141,7 @@ void ResolveWeldJointVelocity(WeldJoint& joint, float dt) {
     // Positional angular error (thetaB - thetaA - targetAngle)
     RealNum currentAngleDiff = tB.rotation - tA.rotation;
     RealNum angleError = RealNum::WrapAngle((tB.rotation - tA.rotation) - joint.GetRelativeAngle());
-    RealNum angularBias = angleError * (0.2f / dt);
+    RealNum angularBias = angleError * (k_beta / dt);
 
     // Scalar angular impulse lambda_angle
     RealNum lambdaNewAngle = -(wRel + angularBias) / angularDenom;

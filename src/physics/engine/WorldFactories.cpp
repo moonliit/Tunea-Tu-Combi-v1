@@ -108,13 +108,17 @@ vector<Vector2D> World::CreateTerrainChain(
 shared_ptr<I_Joint> World::CreateRevoluteJoint(
     shared_ptr<I_RigidBody> bodyA,
     shared_ptr<I_RigidBody> bodyB,
-    Vector2D anchor
+    Vector2D worldAnchor
 ) {
+    auto baseA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
+    auto baseB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
+
     JointDef def;
-    def.bodyA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
-    def.bodyB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
-    def.anchorA = anchor; // Or transform anchor into local body space if your constructor expects local anchors!
-    def.anchorB = anchor;
+    def.bodyA = baseA;
+    def.bodyB = baseB;
+
+    def.anchorA = baseA->GetTransform().ToLocalPoint(worldAnchor);
+    def.anchorB = baseB->GetTransform().ToLocalPoint(worldAnchor);
     def.collideConnected = false;
 
     auto joint = make_shared<RevoluteJoint>(def);
@@ -125,13 +129,17 @@ shared_ptr<I_Joint> World::CreateRevoluteJoint(
 shared_ptr<I_Joint> World::CreateWeldJoint(
     shared_ptr<I_RigidBody> bodyA,
     shared_ptr<I_RigidBody> bodyB,
-    Vector2D anchor
+    Vector2D worldAnchor
 ) {
+    auto baseA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
+    auto baseB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
+
     JointDef def;
-    def.bodyA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
-    def.bodyB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
-    def.anchorA = anchor;
-    def.anchorB = anchor;
+    def.bodyA = baseA;
+    def.bodyB = baseB;
+
+    def.anchorA = baseA->GetTransform().ToLocalPoint(worldAnchor);
+    def.anchorB = baseB->GetTransform().ToLocalPoint(worldAnchor);
     def.collideConnected = false;
 
     auto joint = make_shared<WeldJoint>(def);

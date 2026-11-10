@@ -18,8 +18,14 @@ void World::Step(float deltaTime) {
             if (body->GetBodyType() == BodyType::Static) continue;
 
             Vector2D& vel = body->GetLinearVelocityMut();
+            RealNum invMass = body->GetMassData().invMass;
+            Vector2D force = body->GetForceMut();
+
+            vel.x += body->GetForce().x * invMass * subDt;
+            vel.y += body->GetForce().y * invMass * subDt;
             vel += m_gravity * subDt;
 
+            // integration phase
             Transform& t = body->GetTransformMut();
             t.position += body->GetLinearVelocity() * subDt;
             t.rotation += body->GetAngularVelocityMut() * subDt;
@@ -45,5 +51,10 @@ void World::Step(float deltaTime) {
             CorrectJointPositions(m_joints);
             CorrectManifoldPositions(m_manifolds);
         }
+    }
+
+    // clear accumlated forces after the step
+    for (auto& body: m_bodies) {
+        body->GetForceMut() = Vector2D::Zero();
     }
 }

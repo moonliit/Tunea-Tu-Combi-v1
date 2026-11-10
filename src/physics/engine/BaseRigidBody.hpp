@@ -28,7 +28,6 @@ namespace Physics {
         Math::RealNum m_angularVelocity;
 
         Math::Vector2D m_force;
-        Math::RealNum m_torque;
 
         BodyType m_bodyType;
         Math::AABB m_aabb;
@@ -40,11 +39,11 @@ namespace Physics {
         Math::Vector2D GetPosition() const override { return m_transform.position; }
         Math::RealNum GetRotation() const override { return m_transform.rotation; }
 
-        void ApplyForce(Math::Vector2D force) override {
+        inline void ApplyForce(Math::Vector2D force) override {
             if (m_bodyType == BodyType::Static) return;
             m_force += force;
         }
-        void ApplyLinearImpulse(Math::Vector2D impulse) override {
+        inline void ApplyLinearImpulse(Math::Vector2D impulse) override {
             if (m_bodyType == BodyType::Static) return;
             m_linearVelocity += impulse * m_massData.invMass;
         }
@@ -57,8 +56,11 @@ namespace Physics {
 
         const Math::Vector2D& GetLinearVelocity() const { return m_linearVelocity; }
         const Math::RealNum& GetAngularVelocity() const { return m_angularVelocity; }
+        const Math::Vector2D& GetForce() const { return m_force; }
+
         Math::Vector2D& GetLinearVelocityMut() { return m_linearVelocity; }
         Math::RealNum& GetAngularVelocityMut() { return m_angularVelocity; }
+        Math::Vector2D& GetForceMut() { return m_force; }
 
         const MassData& GetMassData() const { return m_massData; }
         const Material& GetMaterial() const { return m_material; }
