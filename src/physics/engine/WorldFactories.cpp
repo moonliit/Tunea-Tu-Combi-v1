@@ -1,5 +1,6 @@
 #include "physics/engine/RigidBodies.hpp"
 #include "physics/engine/World.hpp"
+#include "physics/engine/common/BodyPairHash.hpp"
 #include <memory>
 using namespace std;
 using namespace Math;
@@ -112,6 +113,7 @@ shared_ptr<I_Joint> World::CreateRevoluteJoint(
 ) {
     auto baseA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
     auto baseB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
+    m_jointConnectedCache.insert(MakeBodyPairKey(baseA, baseB));
 
     JointDef def;
     def.bodyA = baseA;
@@ -133,6 +135,7 @@ shared_ptr<I_Joint> World::CreateWeldJoint(
 ) {
     auto baseA = dynamic_pointer_cast<BaseRigidBody>(bodyA);
     auto baseB = dynamic_pointer_cast<BaseRigidBody>(bodyB);
+    m_jointConnectedCache.insert(MakeBodyPairKey(baseA, baseB));
 
     JointDef def;
     def.bodyA = baseA;
