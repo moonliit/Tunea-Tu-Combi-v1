@@ -48,6 +48,10 @@ namespace Physics {
                             EdgeRigidBody edgeB = *static_pointer_cast<EdgeRigidBody>(bodyB);
                             return DetectBoxEdgeCollision(boxA, edgeB, outManifold);
                         }
+                        case RbShape::TerrainMesh: {
+                            TerrainMeshRigidBody terrainMeshB = *static_pointer_cast<TerrainMeshRigidBody>(bodyB);
+                            return DetectBoxTerrainMeshCollision(boxA, terrainMeshB, outManifold);
+                        }
                         default:
                             return false;
                     }
@@ -74,6 +78,10 @@ namespace Physics {
                         case RbShape::Edge: {
                             EdgeRigidBody edgeB = *static_pointer_cast<EdgeRigidBody>(bodyB);
                             return DetectCircleEdgeCollision(circleA, edgeB, outManifold);
+                        }
+                        case RbShape::TerrainMesh: {
+                            TerrainMeshRigidBody terrainMeshB = *static_pointer_cast<TerrainMeshRigidBody>(bodyB);
+                            return DetectCircleTerrainMeshCollision(circleA, terrainMeshB, outManifold);
                         }
                         default:
                             return false;
@@ -102,6 +110,10 @@ namespace Physics {
                             EdgeRigidBody edgeB = *static_pointer_cast<EdgeRigidBody>(bodyB);
                             return DetectCapsuleEdgeCollision(capsuleA, edgeB, outManifold);
                         }
+                        case RbShape::TerrainMesh: {
+                            TerrainMeshRigidBody terrainMeshB = *static_pointer_cast<TerrainMeshRigidBody>(bodyB);
+                            return DetectCapsuleTerrainMeshCollision(capsuleA, terrainMeshB, outManifold);
+                        }
                         default:
                             return false;
                     }
@@ -129,6 +141,10 @@ namespace Physics {
                             EdgeRigidBody edgeB = *static_pointer_cast<EdgeRigidBody>(bodyB);
                             return DetectTriangleEdgeCollision(triangleA, edgeB, outManifold);
                         }
+                        case RbShape::TerrainMesh: {
+                            TerrainMeshRigidBody terrainMeshB = *static_pointer_cast<TerrainMeshRigidBody>(bodyB);
+                            return DetectTriangleTerrainMeshCollision(triangleA, terrainMeshB, outManifold);
+                        }
                         default:
                             return false;
                     }
@@ -152,8 +168,28 @@ namespace Physics {
                             TriangleRigidBody triangleB = *static_pointer_cast<TriangleRigidBody>(bodyB);
                             return DetectTriangleEdgeCollision(triangleB, edgeA, outManifold);
                         }
-                        case RbShape::Edge: {
+                        default:
                             return false;
+                    }
+                }
+                case RbShape::TerrainMesh: {
+                    TerrainMeshRigidBody terrainMeshA = *static_pointer_cast<TerrainMeshRigidBody>(bodyA);
+                    switch (shapeB) {
+                        case RbShape::Box: {
+                            BoxRigidBody boxB = *static_pointer_cast<BoxRigidBody>(bodyB);
+                            return DetectBoxTerrainMeshCollision(boxB, terrainMeshA, outManifold);
+                        }
+                        case RbShape::Circle: {
+                            CircleRigidBody circleB = *static_pointer_cast<CircleRigidBody>(bodyB);
+                            return DetectCircleTerrainMeshCollision(circleB, terrainMeshA, outManifold);
+                        }
+                        case RbShape::Capsule: {
+                            CapsuleRigidBody capsuleB = *static_pointer_cast<CapsuleRigidBody>(bodyB);
+                            return DetectCapsuleTerrainMeshCollision(capsuleB, terrainMeshA, outManifold);
+                        }
+                        case RbShape::Triangle: {
+                            TriangleRigidBody triangleB = *static_pointer_cast<TriangleRigidBody>(bodyB);
+                            return DetectTriangleTerrainMeshCollision(triangleB, terrainMeshA, outManifold);
                         }
                         default:
                             return false;
@@ -201,6 +237,11 @@ namespace Physics {
              const EdgeRigidBody& bodyB,
              Manifold& outManifold
         );
+        static bool DetectBoxTerrainMeshCollision(
+             const BoxRigidBody& bodyA,
+             const TerrainMeshRigidBody& bodyB,
+             Manifold& outManifold
+        );
 
         // circle collision detection
         static bool DetectCircleCircleCollision(
@@ -223,6 +264,11 @@ namespace Physics {
              const EdgeRigidBody& bodyB,
              Manifold& outManifold
         );
+        static bool DetectCircleTerrainMeshCollision(
+             const CircleRigidBody& bodyA,
+             const TerrainMeshRigidBody& bodyB,
+             Manifold& outManifold
+        );
 
         // capsule collision detection
         static bool DetectCapsuleCapsuleCollision(
@@ -240,6 +286,11 @@ namespace Physics {
              const EdgeRigidBody& bodyB,
              Manifold& outManifold
         );
+        static bool DetectCapsuleTerrainMeshCollision(
+             const CapsuleRigidBody& bodyA,
+             const TerrainMeshRigidBody& bodyB,
+             Manifold& outManifold
+        );
 
         // triangle collision detection
         static bool DetectTriangleTriangleCollision(
@@ -250,6 +301,11 @@ namespace Physics {
         static bool DetectTriangleEdgeCollision(
              const TriangleRigidBody& bodyA,
              const EdgeRigidBody& bodyB,
+             Manifold& outManifold
+        );
+        static bool DetectTriangleTerrainMeshCollision(
+             const TriangleRigidBody& bodyA,
+             const TerrainMeshRigidBody& bodyB,
              Manifold& outManifold
         );
 
@@ -272,6 +328,11 @@ namespace Physics {
         static bool DetectPolygonEdgeCollision(
              const PolygonRigidBody& bodyA,
              const EdgeRigidBody& bodyB,
+             Manifold& outManifold
+        );
+        static bool DetectPolygonTerrainMeshCollision(
+             const PolygonRigidBody& bodyA,
+             const TerrainMeshRigidBody& bodyB,
              Manifold& outManifold
         );
     };

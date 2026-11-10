@@ -1,6 +1,7 @@
 #include "physics/engine/RigidBodies.hpp"
 #include "physics/engine/World.hpp"
 #include "physics/engine/common/BodyPairHash.hpp"
+#include "math/Terrain.hpp"
 #include <algorithm>
 #include <memory>
 using namespace std;
@@ -136,7 +137,41 @@ vector<Vector2D> World::CreateTerrainChain(
         auto edgeBody = make_shared<EdgeRigidBody>(p1, p2);
         m_bodies.push_back(edgeBody);
     }
+    sort(
+        m_bodies.begin(), m_bodies.end(),
+        [](const shared_ptr<BaseRigidBody>& a, const shared_ptr<BaseRigidBody>& b) {
+            uint8_t aType = static_cast<uint8_t>(a->GetRbShape());
+            uint8_t bType = static_cast<uint8_t>(b->GetRbShape());
+            return aType < bType;
+        }
+    );
     return controlPoints;
+}
+
+bool World::CreateTerrainPolygon(const std::vector<Math::Vector2D>& points) {
+    Math::TerrainMesh mesh = Math::BuildTerrainPolygonMesh(points);
+    if (mesh.indices.empty() || mesh.vertices.empty()) {
+        return false;
+    }
+
+    // iterate through the mesh indices in groups of 3 to form triangles
+    for (std::size_t index = 0; index + 2 < mesh.indices.size(); index += 3) {
+        std::vector<Math::Vector2D> triangleVertices(3);
+        for (std::size_t corner = 0; corner < 3; ++corner) {
+            triangleVertices[corner] = mesh.vertices[mesh.indices[index + corner]];
+        }
+        auto triangleBody = std::make_shared<TerrainMeshRigidBody>(triangleVertices);
+        m_bodies.push_back(triangleBody);
+    }
+    sort(
+        m_bodies.begin(), m_bodies.end(),
+        [](const shared_ptr<BaseRigidBody>& a, const shared_ptr<BaseRigidBody>& b) {
+            uint8_t aType = static_cast<uint8_t>(a->GetRbShape());
+            uint8_t bType = static_cast<uint8_t>(b->GetRbShape());
+            return aType < bType;
+        }
+    );
+    return true;
 }
 
 shared_ptr<I_Joint> World::CreateRevoluteJoint(

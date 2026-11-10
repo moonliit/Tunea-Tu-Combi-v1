@@ -70,6 +70,7 @@ public:
         const std::vector<Math::Vector2D>& controlPoints,
         bool isLoop = false
     ) = 0;
+
     virtual bool CreateTerrainPolygon(
         const std::vector<Math::Vector2D>& points
     ) = 0;

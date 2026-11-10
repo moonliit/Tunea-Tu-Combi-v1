@@ -18,6 +18,14 @@ struct CollisionPolygon {
         return poly;
     }
 
+    static inline CollisionPolygon FromVertices(
+        const std::vector<Math::Vector2D>& verts
+    ) {
+        CollisionPolygon poly;
+        poly.vertices = verts;
+        return poly;
+    }
+
     inline Math::Vector2D GetCenter() const {
         Math::Vector2D center = Math::Vector2D::Zero();
         for (const auto& vertex: vertices) {

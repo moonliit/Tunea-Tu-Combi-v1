@@ -251,3 +251,36 @@ void EdgeRigidBody::UpdateAABB() {
 
     m_aabb = Math::AABB(Vector2D(minX, minY), Vector2D(maxX, maxY));
 }
+
+TerrainMeshRigidBody::TerrainMeshRigidBody(const std::vector<Math::Vector2D>& vertices) {
+    m_collisionPolygon = CollisionPolygon::FromVertices(vertices);
+
+    m_transform.position = m_collisionPolygon.GetCenter();
+    m_transform.rotation = 0.0f;
+
+    m_massData.mass = 0.0f;
+    m_massData.invMass = 0.0f;
+    m_massData.inertia = 0.0f;
+    m_massData.invInertia = 0.0f;
+
+    m_linearVelocity = Math::Vector2D::Zero();
+    m_angularVelocity = 0.0f;
+    m_force = Math::Vector2D::Zero();
+    m_bodyType = BodyType::Static;
+
+    UpdateAABB();
+}
+
+void TerrainMeshRigidBody::UpdateAABB() {
+    for (const auto& vertex : m_collisionPolygon.vertices) {
+        if (&vertex == &m_collisionPolygon.vertices[0]) {
+            m_aabb.min = vertex;
+            m_aabb.max = vertex;
+        } else {
+            m_aabb.min.x = min(m_aabb.min.x, vertex.x);
+            m_aabb.min.y = min(m_aabb.min.y, vertex.y);
+            m_aabb.max.x = max(m_aabb.max.x, vertex.x);
+            m_aabb.max.y = max(m_aabb.max.y, vertex.y);
+        }
+    }
+}

@@ -1,6 +1,7 @@
 #ifndef PHYSICS_RIGIDBODIES_HPP
 #define PHYSICS_RIGIDBODIES_HPP
 
+#include "common/CollisionPolygon.hpp"
 #include "math/Vector2D.hpp"
 #include "physics/engine/BaseRigidBody.hpp"
 #include "physics/engine/common/CollisionPolygon.hpp"
@@ -113,6 +114,20 @@ public:
 
     void UpdateAABB() override;
     RbShape GetRbShape() const override { return RbShape::Edge; }
+};
+
+class TerrainMeshRigidBody : public PolygonRigidBody {
+private:
+    CollisionPolygon m_collisionPolygon;
+
+public:
+    explicit TerrainMeshRigidBody(const std::vector<Math::Vector2D>& vertices);
+    virtual ~TerrainMeshRigidBody() override = default;
+
+    Math::AABB GetAABB() const { return m_aabb; }
+    void UpdateAABB() override;
+    CollisionPolygon GetCollisionPolygon() const override { return m_collisionPolygon; }
+    RbShape GetRbShape() const override { return RbShape::TerrainMesh; }
 };
 
 }

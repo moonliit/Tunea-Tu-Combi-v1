@@ -123,6 +123,7 @@ public:
         const std::vector<Math::Vector2D>& controlPoints,
         bool isLoop = false
     ) override;
+
     bool CreateTerrainPolygon(
         const std::vector<Math::Vector2D>& points
     ) override;

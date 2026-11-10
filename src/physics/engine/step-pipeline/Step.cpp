@@ -46,6 +46,18 @@ void World::Step(float deltaTime) {
                 continue;
             }
 
+            auto shapeToString = [](RbShape shape) {
+                switch (shape) {
+                    case RbShape::Edge: return "Edge";
+                    case RbShape::TerrainMesh: return "TerrainMesh";
+                    case RbShape::Box: return "Box";
+                    case RbShape::Circle: return "Circle";
+                    case RbShape::Capsule: return "Capsule";
+                    case RbShape::Triangle: return "Triangle";
+                    default: return "Unknown";
+                }
+            };
+
             if (NarrowPhase::DetectCollision(pair.first, pair.second, manifold)) {
                 m_manifolds.push_back(manifold);
             }

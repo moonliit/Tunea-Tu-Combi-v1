@@ -13,10 +13,11 @@ namespace Physics {
 
     enum class RbShape: uint8_t {
         Edge = 0,
-        Box = 1,
-        Circle = 2,
-        Capsule = 3,
-        Triangle = 4,
+        TerrainMesh = 1,
+        Box = 2,
+        Circle = 3,
+        Capsule = 4,
+        Triangle = 5,
     };
 
     class BaseRigidBody : public I_RigidBody {
