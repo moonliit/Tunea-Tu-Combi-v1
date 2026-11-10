@@ -18,6 +18,9 @@ CustomLevelCatalog::CustomLevelCatalog(std::string path): m_path(std::move(path)
                 level.name = item["name"].get<std::string>();
                 if (item.contains("definition") && item["definition"].is_object())
                     level.definition = LevelDefinition::FromJson(item["definition"]);
+                level.musicPath = item.value("musicPath", level.musicPath);
+                level.musicTitle = item.value("musicTitle", level.musicTitle);
+                level.musicArtist = item.value("musicArtist", level.musicArtist);
                 level.hasTerrain = item.value("hasTerrain", false);
                 level.hasGrid = item.value("hasGrid", false);
                 level.hasGoal = item.value("hasGoal", false);
@@ -34,6 +37,8 @@ void CustomLevelCatalog::Save() const {
     nlohmann::json data = nlohmann::json::array();
     for (const auto& level : m_levels) data.push_back({
         {"name", level.name}, {"definition", level.definition.ToJson()},
+        {"musicPath", level.musicPath}, {"musicTitle", level.musicTitle},
+        {"musicArtist", level.musicArtist},
         {"hasTerrain", level.hasTerrain}, {"hasGrid", level.hasGrid},
         {"hasGoal", level.hasGoal}
     });

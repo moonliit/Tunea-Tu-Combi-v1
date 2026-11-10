@@ -11,6 +11,10 @@ class CustomLevelEditorScene final : public I_Scene {
     enum class DesignTool { Terrain, Grid, Goal };
     DesignTool m_designTool = DesignTool::Terrain;
     std::vector<Math::Vector2D> m_terrainWorkPoints;
+    bool m_musicPickerOpen = false;
+    int m_musicCategory = 0;
+    int m_musicTrack = 0;
+    float m_musicListScroll = 0.0f;
 public:
     explicit CustomLevelEditorScene(AppContext* context);
     void ProcessInput(float) override;

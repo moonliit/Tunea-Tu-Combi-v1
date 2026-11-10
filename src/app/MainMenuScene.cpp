@@ -55,6 +55,13 @@ void StartLevel(AppContext* context, int level) {
     context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
 }
 
+void CreateCustomLevel(AppContext* context, const std::string& name) {
+    context->customLevels->Add(name);
+    context->activeCustomLevel = static_cast<int>(context->customLevels->GetLevels().size()) - 1;
+    context->openCustomMusicPicker = true;
+    context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
+}
+
 }
 
 MainMenuScene::MainMenuScene(AppContext* context): m_context(context) {}
@@ -139,7 +146,7 @@ void MainMenuScene::ProcessLevelEditorInput() {
             return;
         }
         if (IsKeyPressed(KEY_ENTER) && !m_newLevelName.empty()) {
-            m_context->customLevels->Add(m_newLevelName);
+            CreateCustomLevel(m_context, m_newLevelName);
             m_newLevelName.clear();
             m_creatingLevel = false;
             return;
@@ -161,7 +168,7 @@ void MainMenuScene::ProcessLevelEditorInput() {
             m_creatingLevel = false;
             m_newLevelName.clear();
         } else if (UiButton::WasClicked(createButton) && !m_newLevelName.empty()) {
-            m_context->customLevels->Add(m_newLevelName);
+            CreateCustomLevel(m_context, m_newLevelName);
             m_newLevelName.clear();
             m_creatingLevel = false;
         }

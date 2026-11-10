@@ -8,6 +8,9 @@
 struct CustomLevelData {
     std::string name;
     LevelDefinition definition = LevelDefinition::Default();
+    std::string musicPath = "assets/audio/custom/N2 - Soy Provinciano.ogg";
+    std::string musicTitle = "Soy Provinciano";
+    std::string musicArtist = "Chacalón";
     bool hasTerrain = false;
     bool hasGrid = false;
     bool hasGoal = false;

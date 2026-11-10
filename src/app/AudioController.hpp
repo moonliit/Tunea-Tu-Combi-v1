@@ -4,6 +4,7 @@
 #include "app/LevelCatalog.hpp"
 #include <array>
 #include <raylib.h>
+#include <string>
 
 class AudioController {
     std::array<Music, OfficialLevelCount + 1> m_music{};
@@ -16,6 +17,9 @@ class AudioController {
     int m_nextHorn = 0;
     Music m_fanSound{};
     Music m_wheelSound{};
+    Music m_customMusic{};
+    bool m_customMusicLoaded = false;
+    bool m_customMusicActive = false;
     bool m_fanActive = false;
     bool m_wheelActive = false;
     int m_current = 0;
@@ -31,6 +35,7 @@ public:
     void Initialize();
     void Shutdown();
     void StartLevel(int levelNumber);
+    void StartCustomMusic(const std::string& path);
     void ReturnToSelector();
     void ResetToMenu();
     void PlayUiClick();

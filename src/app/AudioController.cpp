@@ -40,6 +40,7 @@ void AudioController::Initialize() {
 
 void AudioController::Shutdown() {
     if (!m_initialized) return;
+    if (m_customMusicLoaded) UnloadMusicStream(m_customMusic);
     for (Music music : m_music) UnloadMusicStream(music);
     UnloadMusicStream(m_fanSound);
     UnloadMusicStream(m_wheelSound);
@@ -60,15 +61,43 @@ void AudioController::BeginTransition(int target) {
 }
 
 void AudioController::StartLevel(int levelNumber) {
+    if (m_customMusicActive) {
+        StopMusicStream(m_customMusic);
+        m_customMusicActive = false;
+    }
     m_returningToMenu = false;
     BeginTransition(std::clamp(levelNumber, 1, OfficialLevelCount));
 }
 
+void AudioController::StartCustomMusic(const std::string& path) {
+    if (!m_initialized || path.empty()) return;
+    if (m_customMusicLoaded) {
+        StopMusicStream(m_customMusic);
+        UnloadMusicStream(m_customMusic);
+    }
+    StopMusicStream(m_music[m_current]);
+    m_customMusic = LoadMusicStream(path.c_str());
+    m_customMusic.looping = true;
+    SetMusicVolume(m_customMusic, 0.8f);
+    PlayMusicStream(m_customMusic);
+    m_customMusicLoaded = true;
+    m_customMusicActive = true;
+    m_returningToMenu = false;
+}
+
 void AudioController::ReturnToSelector() {
+    if (m_customMusicActive) {
+        StopMusicStream(m_customMusic);
+        m_customMusicActive = false;
+    }
     m_returningToMenu = true;
 }
 
 void AudioController::ResetToMenu() {
+    if (m_customMusicActive) {
+        StopMusicStream(m_customMusic);
+        m_customMusicActive = false;
+    }
     PlaySound(m_radioStatic);
     m_returningToMenu = false;
     BeginTransition(0);
@@ -105,9 +134,11 @@ void AudioController::SetWheelActive(bool active) {
 
 void AudioController::Update(float deltaTime) {
     if (!m_initialized) return;
-    UpdateMusicStream(m_music[m_current]);
+    if (!m_customMusicActive) UpdateMusicStream(m_music[m_current]);
+    if (m_customMusicActive) UpdateMusicStream(m_customMusic);
     if (m_fanActive) UpdateMusicStream(m_fanSound);
     if (m_wheelActive) UpdateMusicStream(m_wheelSound);
+    if (m_customMusicActive) return;
 
     if (m_transitioning) {
         m_volume = std::max(0.0f, m_volume - deltaTime / 1.25f);

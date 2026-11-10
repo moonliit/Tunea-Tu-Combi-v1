@@ -20,6 +20,7 @@ struct AppContext {
     AudioController* audioController = nullptr;
     std::shared_ptr<CustomLevelCatalog> customLevels;
     int activeCustomLevel = -1;
+    bool openCustomMusicPicker = false;
 };
 
 #endif

@@ -4,12 +4,30 @@
 #include "app/CustomLevelData.hpp"
 #include "app/SceneManager.hpp"
 #include "app/AudioController.hpp"
+#include "app/CustomMusicCatalog.hpp"
 #include "app/game/Level.hpp"
 #include "app/SceneManager.hpp"
 #include "ui/UiButton.hpp"
 #include <raylib.h>
 #include <algorithm>
 #include <utility>
+
+namespace {
+
+void LocateMusic(const std::string& path, int& categoryIndex, int& trackIndex) {
+    const auto& categories = GetCustomMusicCategories();
+    for (std::size_t category = 0; category < categories.size(); ++category) {
+        for (std::size_t track = 0; track < categories[category].tracks.size(); ++track) {
+            if (categories[category].tracks[track].path == path) {
+                categoryIndex = static_cast<int>(category);
+                trackIndex = static_cast<int>(track);
+                return;
+            }
+        }
+    }
+}
+
+}
 
 CustomLevelEditorScene::CustomLevelEditorScene(AppContext* context): m_context(context) {
     m_designCamera.offset = {context->windowWidth / 2.0f, context->windowHeight / 2.0f};
@@ -24,10 +42,16 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
     CustomLevelData& custom = m_context->customLevels->GetLevels()[m_context->activeCustomLevel];
+    if (m_context->openCustomMusicPicker) {
+        m_context->openCustomMusicPicker = false;
+        m_musicPickerOpen = true;
+        LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
+    }
 
     const Rectangle terrainButton{20.0f, 16.0f, 120.0f, 36.0f};
     const Rectangle gridButton{146.0f, 16.0f, 120.0f, 36.0f};
     const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
+    const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
     const Rectangle editButton{
         static_cast<float>(m_context->windowWidth - 132), 16.0f, 112.0f, 36.0f
     };
@@ -39,20 +63,75 @@ void CustomLevelEditorScene::ProcessInput(float) {
         18.0f
     );
 
-    if (UiButton::WasClicked(terrainButton)) {
+    if (!m_musicPickerOpen && UiButton::WasClicked(terrainButton)) {
         m_designTool = DesignTool::Terrain;
         return;
     }
-    if (UiButton::WasClicked(gridButton)) {
+    if (!m_musicPickerOpen && UiButton::WasClicked(gridButton)) {
         m_designTool = DesignTool::Grid;
         return;
     }
-    if (UiButton::WasClicked(goalButton)) {
+    if (!m_musicPickerOpen && UiButton::WasClicked(goalButton)) {
         m_designTool = DesignTool::Goal;
+        return;
+    }
+    if (!m_musicPickerOpen && UiButton::WasClicked(musicButton)) {
+        m_musicCategory = 0;
+        m_musicTrack = 0;
+        LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
+        m_musicListScroll = 0.0f;
+        m_musicPickerOpen = true;
+        return;
+    }
+    if (m_musicPickerOpen) {
+        const auto& categories = GetCustomMusicCategories();
+        const float panelX = (m_context->windowWidth - 700.0f) / 2.0f;
+        const float panelY = (m_context->windowHeight - 540.0f) / 2.0f;
+        for (std::size_t i = 0; i < categories.size(); ++i) {
+            const Rectangle tab{panelX + 18.0f + (i % 4) * 164.0f,
+                panelY + 50.0f + (i / 4) * 36.0f, 158.0f, 30.0f};
+            if (UiButton::WasClicked(tab)) {
+                m_musicCategory = static_cast<int>(i);
+                m_musicTrack = 0;
+                m_musicListScroll = 0.0f;
+                return;
+            }
+        }
+        const auto& tracks = categories[m_musicCategory].tracks;
+        const Rectangle list{panelX + 18.0f, panelY + 164.0f, 664.0f, 300.0f};
+        m_musicListScroll = std::clamp(m_musicListScroll - GetMouseWheelMove() * 36.0f,
+            0.0f, std::max(0.0f, tracks.size() * 52.0f - list.height));
+        for (std::size_t i = 0; i < tracks.size(); ++i) {
+            const float y = list.y + i * 52.0f - m_musicListScroll;
+            if (y < list.y || y + 46.0f > list.y + list.height) continue;
+            if (UiButton::WasClicked(Rectangle{list.x, y, list.width, 46.0f})) {
+                m_musicTrack = static_cast<int>(i);
+                m_context->audioController->StartCustomMusic(tracks[i].path);
+                return;
+            }
+        }
+        const Rectangle confirm{panelX + 372.0f, panelY + 484.0f, 150.0f, 38.0f};
+        const Rectangle cancel{panelX + 532.0f, panelY + 484.0f, 150.0f, 38.0f};
+        if (UiButton::WasClicked(confirm)) {
+            const auto& track = tracks[m_musicTrack];
+            custom.musicPath = track.path;
+            custom.musicTitle = track.title;
+            custom.musicArtist = track.artist;
+            m_context->customLevels->Save();
+            m_context->audioController->StartCustomMusic(custom.musicPath);
+            m_musicPickerOpen = false;
+            return;
+        }
+        if (UiButton::WasClicked(cancel)) {
+            m_context->audioController->StartCustomMusic(custom.musicPath);
+            m_musicPickerOpen = false;
+            return;
+        }
         return;
     }
     if (UiButton::WasClicked(menuButton)) {
         m_context->audioController->PlayUiClick();
+        m_context->audioController->ReturnToSelector();
         m_context->sceneRequester->RequestSceneChange({SceneId::MainMenu});
         m_terrainWorkPoints.clear();
         return;
@@ -64,7 +143,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         LevelDefinition definition = custom.definition;
         definition.levelNumber = -1;
         definition.initialCamera.reset();
-        m_context->audioController->StartLevel(1);
+        m_context->audioController->StartCustomMusic(custom.musicPath);
         m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
         return;
     }
@@ -222,6 +301,7 @@ void CustomLevelEditorScene::Render() const {
     const Rectangle terrainButton{20.0f, 16.0f, 120.0f, 36.0f};
     const Rectangle gridButton{146.0f, 16.0f, 120.0f, 36.0f};
     const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
+    const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
     const Rectangle editButton{
         static_cast<float>(m_context->windowWidth - 132), 16.0f, 112.0f, 36.0f
     };
@@ -240,6 +320,7 @@ void CustomLevelEditorScene::Render() const {
         "Meta",
         m_designTool == DesignTool::Goal ? SKYBLUE : LIGHTGRAY
     );
+    UiButton::Draw(musicButton, "Música", SKYBLUE);
     const bool ready = custom.hasTerrain && custom.hasGrid && custom.hasGoal;
     UiButton::Draw(editButton, "EDIT", ready ? SKYBLUE : GRAY);
 
@@ -271,5 +352,36 @@ void CustomLevelEditorScene::Render() const {
         ),
         "Lista"
     );
+    if (m_musicPickerOpen) {
+        const auto& categories = GetCustomMusicCategories();
+        const auto& tracks = categories[m_musicCategory].tracks;
+        const float panelX = (m_context->windowWidth - 700.0f) / 2.0f;
+        const float panelY = (m_context->windowHeight - 540.0f) / 2.0f;
+        DrawRectangle(0, 0, m_context->windowWidth, m_context->windowHeight, Fade(BLACK, 0.5f));
+        const Rectangle panel{panelX, panelY, 700.0f, 540.0f};
+        DrawRectangleRec(panel, RAYWHITE);
+        DrawRectangleLinesEx(panel, 2.0f, DARKGRAY);
+        DrawText("Música del nivel", static_cast<int>(panelX + 18), static_cast<int>(panelY + 18), 22, BLACK);
+        for (std::size_t i = 0; i < categories.size(); ++i) {
+            const Rectangle tab{panelX + 18.0f + (i % 4) * 164.0f,
+                panelY + 50.0f + (i / 4) * 36.0f, 158.0f, 30.0f};
+            UiButton::Draw(tab, categories[i].name.c_str(),
+                static_cast<int>(i) == m_musicCategory ? SKYBLUE : LIGHTGRAY, BLACK, 13);
+        }
+        const Rectangle list{panelX + 18.0f, panelY + 164.0f, 664.0f, 300.0f};
+        DrawRectangleRec(list, RAYWHITE);
+        for (std::size_t i = 0; i < tracks.size(); ++i) {
+            const float y = list.y + i * 52.0f - m_musicListScroll;
+            if (y < list.y || y + 46.0f > list.y + list.height) continue;
+            const Rectangle row{list.x, y, list.width, 46.0f};
+            DrawRectangleRec(row, static_cast<int>(i) == m_musicTrack ? Fade(SKYBLUE, 0.45f) : Fade(LIGHTGRAY, 0.35f));
+            const std::string label = tracks[i].artist.empty()
+                ? tracks[i].title
+                : tracks[i].title + " - " + tracks[i].artist;
+            DrawText(label.c_str(), static_cast<int>(row.x + 12), static_cast<int>(row.y + 13), 16, BLACK);
+        }
+        UiButton::Draw(Rectangle{panelX + 372.0f, panelY + 484.0f, 150.0f, 38.0f}, "Confirmar", SKYBLUE);
+        UiButton::Draw(Rectangle{panelX + 532.0f, panelY + 484.0f, 150.0f, 38.0f}, "Cancelar", LIGHTGRAY);
+    }
     EndDrawing();
 }
