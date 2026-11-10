@@ -1,4 +1,5 @@
 #include "app/SceneManager.hpp"
+#include "app/AppContext.hpp"
 #include "app/game/MainGameScene.hpp"
 #include "app/game/Level.hpp"
 #include <stdexcept>
@@ -27,6 +28,10 @@ void SceneManager::SetCurrentScene(const SceneRequest& req) {
     }
     if (m_currentScene == req.id) {
         return; // no change needed
+    }
+
+    if (req.id == SceneId::MainMenu && m_appContext != nullptr) {
+        m_appContext->returnedToSelector = true;
     }
 
     if (

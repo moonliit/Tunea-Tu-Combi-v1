@@ -64,9 +64,16 @@ void CreateCustomLevel(AppContext* context, const std::string& name) {
 
 }
 
-MainMenuScene::MainMenuScene(AppContext* context): m_context(context) {}
+MainMenuScene::MainMenuScene(AppContext* context):
+    m_context(context),
+    m_selectedLevel(std::clamp(context->unlockedLevel - 1, 0, OfficialLevelCount - 1)) {}
 
 void MainMenuScene::ProcessInput(float) {
+    if (m_context->returnedToSelector) {
+        m_context->returnedToSelector = false;
+        m_selectedLevel = std::clamp(m_context->unlockedLevel - 1, 0, OfficialLevelCount - 1);
+    }
+
     if (m_context->returnToCustomDesign) {
         m_context->returnToCustomDesign = false;
         m_context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
@@ -107,24 +114,38 @@ void MainMenuScene::ProcessInput(float) {
         return;
     }
 
+    const int previousUnlockedLevel = m_context->unlockedLevel;
     if (m_context->completedLevel > 0) {
         m_context->unlockedLevel = std::max(
             m_context->unlockedLevel,
             std::min(OfficialLevelCount, m_context->completedLevel + 1)
         );
     }
+    if (m_context->unlockedLevel > previousUnlockedLevel) {
+        m_selectedLevel = m_context->unlockedLevel - 1;
+    }
 
-    if (IsKeyPressed(KEY_LEFT)) m_selectedLevel = (m_selectedLevel + OfficialLevelCount - 1) % OfficialLevelCount;
-    if (IsKeyPressed(KEY_RIGHT)) m_selectedLevel = (m_selectedLevel + 1) % OfficialLevelCount;
+    const float cardWidth = std::min(200.0f, (m_context->windowWidth - 180.0f) / 3.0f);
+    const float sideCardWidth = cardWidth * 0.68f;
+    const float cardGap = 20.0f;
+    const float centerX = m_context->windowWidth / 2.0f;
+    const float cardY = static_cast<float>(m_context->windowHeight) / 2.0f - 60.0f;
+    const Rectangle leftArrow{centerX - cardWidth / 2.0f - cardGap - sideCardWidth - 48.0f, cardY + 38.0f, 40.0f, 44.0f};
+    const Rectangle rightArrow{centerX + cardWidth / 2.0f + cardGap + sideCardWidth + 8.0f, cardY + 38.0f, 40.0f, 44.0f};
+    if (IsKeyPressed(KEY_LEFT) || UiButton::WasClicked(leftArrow))
+        m_selectedLevel = (m_selectedLevel + OfficialLevelCount - 1) % OfficialLevelCount;
+    if (IsKeyPressed(KEY_RIGHT) || UiButton::WasClicked(rightArrow))
+        m_selectedLevel = (m_selectedLevel + 1) % OfficialLevelCount;
     if (IsKeyPressed(KEY_ENTER) && m_selectedLevel < m_context->unlockedLevel) StartLevel(m_context, m_selectedLevel);
 
-    const float cardWidth = 200.0f;
-    const float gap = 24.0f;
-    const float startX = (m_context->windowWidth - (cardWidth * OfficialLevelCount + gap * (OfficialLevelCount - 1))) / 2.0f;
-    for (int i = 0; i < OfficialLevelCount; ++i) {
-        Rectangle card{startX + i * (cardWidth + gap), static_cast<float>(m_context->windowHeight) / 2 - 60, cardWidth, 120};
-        if (i < m_context->unlockedLevel && UiButton::WasClicked(card)) {
-            StartLevel(m_context, i);
+    for (int offset = -1; offset <= 1; ++offset) {
+        const int levelIndex = (m_selectedLevel + offset + OfficialLevelCount) % OfficialLevelCount;
+        const float width = offset == 0 ? cardWidth : sideCardWidth;
+        const float height = offset == 0 ? 120.0f : 82.0f;
+        const float cardCenterX = centerX + offset * (cardWidth / 2.0f + sideCardWidth / 2.0f + cardGap);
+        Rectangle card{cardCenterX - width / 2.0f, cardY + (120.0f - height) / 2.0f, width, height};
+        if (levelIndex < m_context->unlockedLevel && UiButton::WasClicked(card)) {
+            StartLevel(m_context, levelIndex);
         }
     }
 }
@@ -258,15 +279,26 @@ void MainMenuScene::Render() const {
         Rectangle resetButton{static_cast<float>(m_context->windowWidth - 130), 20.0f, 110.0f, 36.0f};
         UiButton::Draw(resetButton, "Reiniciar", LIGHTGRAY, BLACK, 16, false, 18);
 
-        const float cardWidth = 200.0f;
-        const float gap = 24.0f;
-        const float startX = (m_context->windowWidth - (cardWidth * OfficialLevelCount + gap * (OfficialLevelCount - 1))) / 2.0f;
-        for (int i = 0; i < OfficialLevelCount; ++i) {
-            Rectangle card{startX + i * (cardWidth + gap), static_cast<float>(m_context->windowHeight) / 2 - 60, cardWidth, 120};
-            DrawRectangleRec(card, i < m_context->unlockedLevel ? SKYBLUE : GRAY);
-            DrawRectangleLinesEx(card, 2, DARKGRAY);
-            const char* level = OfficialLevels[i].label;
-            DrawText(level, static_cast<int>(card.x + (card.width - MeasureText(level, 24)) / 2), static_cast<int>(card.y + 48), 24, BLACK);
+        const float cardWidth = std::min(200.0f, (m_context->windowWidth - 180.0f) / 3.0f);
+        const float sideCardWidth = cardWidth * 0.68f;
+        const float gap = 20.0f;
+        const float centerX = m_context->windowWidth / 2.0f;
+        const float cardY = static_cast<float>(m_context->windowHeight) / 2.0f - 60.0f;
+        UiButton::Draw(Rectangle{centerX - cardWidth / 2.0f - gap - sideCardWidth - 48.0f, cardY + 38.0f, 40.0f, 44.0f}, "<", LIGHTGRAY, BLACK, 24);
+        UiButton::Draw(Rectangle{centerX + cardWidth / 2.0f + gap + sideCardWidth + 8.0f, cardY + 38.0f, 40.0f, 44.0f}, ">", LIGHTGRAY, BLACK, 24);
+        for (int offset = -1; offset <= 1; ++offset) {
+            const int levelIndex = (m_selectedLevel + offset + OfficialLevelCount) % OfficialLevelCount;
+            const float width = offset == 0 ? cardWidth : sideCardWidth;
+            const float height = offset == 0 ? 120.0f : 82.0f;
+            const float cardCenterX = centerX + offset * (cardWidth / 2.0f + sideCardWidth / 2.0f + gap);
+            Rectangle card{cardCenterX - width / 2.0f, cardY + (120.0f - height) / 2.0f, width, height};
+            const bool unlocked = levelIndex < m_context->unlockedLevel;
+            const Color cardColor = unlocked ? (offset == 0 ? SKYBLUE : Fade(SKYBLUE, 0.65f)) : GRAY;
+            DrawRectangleRec(card, cardColor);
+            DrawRectangleLinesEx(card, offset == 0 ? 3.0f : 2.0f, DARKGRAY);
+            const char* level = OfficialLevels[levelIndex].label;
+            const int fontSize = offset == 0 ? 24 : 18;
+            DrawText(level, static_cast<int>(card.x + (card.width - MeasureText(level, fontSize)) / 2), static_cast<int>(card.y + (card.height - fontSize) / 2), fontSize, BLACK);
         }
         UiButton::Draw(
             UiButton::CenteredAtBottom(

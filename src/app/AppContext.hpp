@@ -17,6 +17,7 @@ struct AppContext {
     int unlockedLevel = 1;
     int completedLevel = 0;
     bool returnToCustomDesign = false;
+    bool returnedToSelector = false;
     AudioController* audioController = nullptr;
     std::shared_ptr<CustomLevelCatalog> customLevels;
     int activeCustomLevel = -1;

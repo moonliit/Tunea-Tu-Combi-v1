@@ -10,9 +10,10 @@ struct LevelMenuEntry {
 };
 
 inline constexpr std::array OfficialLevels{
-    LevelMenuEntry{"assets/levels/level_1.json", "Nivel 1", "assets/audio/level_1.wav"},
-    LevelMenuEntry{"assets/levels/level_2.json", "Nivel 2", "assets/audio/level_2.wav"},
-    LevelMenuEntry{"assets/levels/level_3.json", "Nivel 3", "assets/audio/level_3.wav"}
+    LevelMenuEntry{"assets/levels/level_1.json", "Nivel 1", "assets/audio/custom/N1 - La Colegiala.ogg"},
+    LevelMenuEntry{"assets/levels/level_2.json", "Nivel 2", "assets/audio/custom/N2 - Soy Provinciano.ogg"},
+    LevelMenuEntry{"assets/levels/level_3.json", "Nivel 3", "assets/audio/custom/N3 - El Aguajal.ogg"},
+    LevelMenuEntry{"assets/levels/level_4.json", "Nivel 4", "assets/audio/custom/N4 - A Patricia.ogg"}
 };
 
 inline constexpr int OfficialLevelCount =
