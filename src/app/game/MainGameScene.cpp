@@ -44,6 +44,13 @@ Vector2 CalculateGridTarget(const LevelDefinition& specs) {
     };
 }
 
+// El chofer puede ser una pieza propia o ir dentro de otra (GetContainedPart).
+bool IsOrContainsDriver(const Part* part) {
+    if (part->GetType() == PartType::Driver) return true;
+    const Part* contained = part->GetContainedPart();
+    return contained && contained->GetType() == PartType::Driver;
+}
+
 }
 
 MainGameScene::MainGameScene(
@@ -257,18 +264,26 @@ void MainGameScene::Update(float dt) {
         const auto& parts = m_level.GetGrid().GetActiveParts();
         if (!parts.empty()) {
             Vector2 center{0.0f, 0.0f};
+            std::optional<Vector2> driverPosition;
             bool entireCarPassedFinish = true;
             for (const Part* part : parts) {
                 const auto position = part->GetRenderState(m_level.GetGrid()).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
+                if (!driverPosition && IsOrContainsDriver(part)) {
+                    driverPosition = Vector2{
+                        static_cast<float>(position.x),
+                        static_cast<float>(position.y)
+                    };
+                }
                 entireCarPassedFinish = entireCarPassedFinish &&
                     position.x > m_level.GetDefinition().goal.position.x;
             }
-            m_camera.target = {
+            // La cámara sigue al chofer; si no se encuentra, usa el centro de las piezas.
+            m_camera.target = driverPosition.value_or(Vector2{
                 center.x / parts.size(),
                 center.y / parts.size()
-            };
+            });
             bool fanActive = false;
             for (ActivationAction action : m_playSession.GetActivationRegistry().GetVisibleActions()) {
                 fanActive = fanActive || (
@@ -310,18 +325,16 @@ void MainGameScene::TransitionToPlayMode() {
         }
     );
     m_appContext->audioController->SetWheelActive(hasWheel);
-    const auto placements = m_level.GetBuildModel().GetPlacements();
-    if (!placements.empty()) {
-        Vector2 center{0.0f, 0.0f};
-        for (const auto& placement : placements) {
-            const auto position = m_level.GetGrid().CoordToWorld(placement.coord);
-            center.x += static_cast<float>(position.x);
-            center.y += static_cast<float>(position.y);
+    // Centra la cámara en el chofer al empezar.
+    for (const Part* part : parts) {
+        if (IsOrContainsDriver(part)) {
+            const auto position = part->GetRenderState(m_level.GetGrid()).position;
+            m_camera.target = {
+                static_cast<float>(position.x),
+                static_cast<float>(position.y)
+            };
+            break;
         }
-        m_camera.target = {
-            center.x / placements.size(),
-            center.y / placements.size()
-        };
     }
     m_stateMachine.EnterPlay();
     m_playSession.Start();
