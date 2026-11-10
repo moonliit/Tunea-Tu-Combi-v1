@@ -57,7 +57,7 @@ namespace Physics {
                     switch (shapeB) {
                         case RbShape::Box: {
                             BoxRigidBody boxB = *static_pointer_cast<BoxRigidBody>(bodyB);
-                            return DetectBoxCircleCollision(boxB, circleA, outManifold);
+                            return Invert(DetectBoxCircleCollision(boxB, circleA, outManifold), outManifold);
                         }
                         case RbShape::Circle: {
                             CircleRigidBody circleB = *static_pointer_cast<CircleRigidBody>(bodyB);
@@ -84,11 +84,11 @@ namespace Physics {
                     switch (shapeB) {
                         case RbShape::Box: {
                             BoxRigidBody boxB = *static_pointer_cast<BoxRigidBody>(bodyB);
-                            return DetectBoxCapsuleCollision(boxB, capsuleA, outManifold);
+                            return Invert(DetectBoxCapsuleCollision(boxB, capsuleA, outManifold), outManifold);
                         }
                         case RbShape::Circle: {
                             CircleRigidBody circleB = *static_pointer_cast<CircleRigidBody>(bodyB);
-                            return DetectCircleCapsuleCollision(circleB, capsuleA, outManifold); // or dedicated function
+                            return Invert(DetectCircleCapsuleCollision(circleB, capsuleA, outManifold), outManifold);
                         }
                         case RbShape::Capsule: {
                             CapsuleRigidBody capsuleB = *static_pointer_cast<CapsuleRigidBody>(bodyB);
@@ -111,15 +111,15 @@ namespace Physics {
                     switch (shapeB) {
                         case RbShape::Box: {
                             BoxRigidBody boxB = *static_pointer_cast<BoxRigidBody>(bodyB);
-                            return DetectBoxTriangleCollision(boxB, triangleA, outManifold);
+                            return Invert(DetectBoxTriangleCollision(boxB, triangleA, outManifold), outManifold);
                         }
                         case RbShape::Circle: {
                             CircleRigidBody circleB = *static_pointer_cast<CircleRigidBody>(bodyB);
-                            return DetectCircleTriangleCollision(circleB, triangleA, outManifold);
+                            return Invert(DetectCircleTriangleCollision(circleB, triangleA, outManifold), outManifold);
                         }
                         case RbShape::Capsule: {
                             CapsuleRigidBody capsuleB = *static_pointer_cast<CapsuleRigidBody>(bodyB);
-                            return DetectCapsuleTriangleCollision(capsuleB, triangleA, outManifold);
+                            return Invert(DetectCapsuleTriangleCollision(capsuleB, triangleA, outManifold), outManifold);
                         }
                         case RbShape::Triangle: {
                             TriangleRigidBody triangleB = *static_pointer_cast<TriangleRigidBody>(bodyB);
@@ -166,6 +166,15 @@ namespace Physics {
         }
 
     private:
+        static bool Invert(bool prevResult, Manifold& outManifold) {
+            if (!prevResult) return false;
+            for (CollisionPoint& coll : outManifold.collisionPoints) {
+                coll.normal = coll.normal * -1;
+            }
+            std::swap(outManifold.bodyA, outManifold.bodyB);
+            return true;
+        }
+
         // box collision detection
         static bool DetectBoxBoxCollision(
              const BoxRigidBody& bodyA,

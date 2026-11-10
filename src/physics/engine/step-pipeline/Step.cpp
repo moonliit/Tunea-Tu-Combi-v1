@@ -61,7 +61,8 @@ void World::Step(float deltaTime) {
         }
 
         // --- EMERGENCY SAFETY & VELOCITY DAMPENING PASS ---
-        EmergencyFallbackCorrection(m_manifolds, subDt);
+        // NOTE: currently disabled as physics seem stable for now
+        // EmergencyFallbackCorrection(m_manifolds, subDt);
     }
 
     // clear accumlated forces after the step

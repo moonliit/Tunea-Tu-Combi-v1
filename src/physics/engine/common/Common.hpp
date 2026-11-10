@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 #include <cmath>
+#include <print>
 
 namespace Physics {
     class BaseRigidBody;
@@ -34,6 +35,13 @@ namespace Physics {
         Math::RealNum depth;
         Math::RealNum normalImpulse = 0.0f;
         Math::RealNum tangentImpulse = 0.0f;
+
+        void Print() const {
+            std::println("CollisionPoint: position = ({}, {}), normal = ({}, {}), depth = {}, normalImpulse = {}, tangentImpulse = {}",
+                float(position.x), float(position.y),
+                float(normal.x), float(normal.y),
+                float(depth), float(normalImpulse), float(tangentImpulse));
+        }
     };
 
     struct Manifold {

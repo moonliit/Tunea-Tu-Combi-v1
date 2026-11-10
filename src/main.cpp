@@ -30,21 +30,21 @@
 //     world.CreateTerrainChain(controlPoints, false);
 //
 //     // Create a dynamic triangle in the center
+//     Vector2D offset = Vector2D(1000.0f, 170.0f);
+//
 //     auto triangle = world.CreateTriangle(
-//         Vector2D(400.0f, 300.0f),
+//         Vector2D(-570.0f, -170.0f) + offset,
 //         0.0f,                  // rotation
-//         Vector2D(70.0f, 60.0f), // size (width, height)
-//         12.0f,                 // mass
+//         Vector2D(40.0f, 40.0f), // size (width, height)
+//         1.0f,                 // mass
 //         BodyType::Dynamic
 //     );
 //
 //     // Create a dynamic capsule above the triangle
-//     auto capsule = world.CreateCapsule(
-//         Vector2D(390.0f, 150.0f),
-//         0.5f,                  // initial rotation (radians)
-//         40.0f,                 // height
-//         15.0f,                 // radius
-//         10.0f,                 // mass
+//     auto circle = world.CreateCircle(
+//         Vector2D(-570.0f, -322.8f) + offset,
+//         12.799999f,                 // radius
+//         1.0f,                 // mass
 //         BodyType::Dynamic
 //     );
 //
@@ -80,32 +80,11 @@
 //         }
 //
 //         // Draw dynamic capsule using transform and RLGL matrix pushes (matching your reference snippet)
-//         auto capBody = dynamic_pointer_cast<CapsuleRigidBody>(capsule);
-//         if (capBody) {
-//             Physics::Transform t = capBody->GetTransform();
-//             float height = capBody->GetHeight();
-//             float radius = capBody->GetRadius();
-//
-//             float width = radius * 2.0f;
-//             float halfHeight = height / 2.0f;
-//             float halfSegment = std::max(0.0f, halfHeight - radius);
-//             float rotationDeg = t.rotation * RAD2DEG;
-//
-//             rlPushMatrix();
-//             rlTranslatef(t.position.x, t.position.y, 0.0f);
-//             rlRotatef(rotationDeg, 0.0f, 0.0f, 1.0f);
-//
-//             Color capColor = MAROON;
-//             // Draw central rectangle of the pill
-//             DrawRectangleRec(
-//                 Rectangle{-width / 2.0f, -halfSegment, width, halfSegment * 2.0f},
-//                 capColor
-//             );
-//             // Draw top and bottom hemispherical end caps
-//             DrawCircle(0.0f, -halfSegment, radius, capColor);
-//             DrawCircle(0.0f, halfSegment, radius, capColor);
-//
-//             rlPopMatrix();
+//         auto circleBody = dynamic_pointer_cast<CircleRigidBody>(circle);
+//         if (circleBody) {
+//             Physics::Transform t = circleBody->GetTransform();
+//             float radius = circleBody->GetRadius();
+//             DrawCircleV(Vector2{t.position.x, t.position.y}, radius, BLUE);
 //         }
 //
 //         for (size_t i = 0; i < controlPoints.size() - 1; ++i) {

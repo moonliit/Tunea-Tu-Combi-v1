@@ -1,6 +1,7 @@
 #include "physics/engine/RigidBodies.hpp"
 #include "physics/engine/World.hpp"
 #include "physics/engine/common/BodyPairHash.hpp"
+#include <algorithm>
 #include <memory>
 using namespace std;
 using namespace Math;
@@ -25,6 +26,14 @@ shared_ptr<I_RigidBody> World::CreateBox(
          defaultMaterial
     );
     m_bodies.push_back(box);
+    sort(
+        m_bodies.begin(), m_bodies.end(),
+        [](const shared_ptr<BaseRigidBody>& a, const shared_ptr<BaseRigidBody>& b) {
+            uint8_t aType = static_cast<uint8_t>(a->GetRbShape());
+            uint8_t bType = static_cast<uint8_t>(b->GetRbShape());
+            return aType < bType;
+        }
+    );
     return box;
 }
 
@@ -43,6 +52,14 @@ shared_ptr<I_RigidBody> World::CreateCircle(
          defaultMaterial
     );
     m_bodies.push_back(circle);
+    sort(
+        m_bodies.begin(), m_bodies.end(),
+        [](const shared_ptr<BaseRigidBody>& a, const shared_ptr<BaseRigidBody>& b) {
+            uint8_t aType = static_cast<uint8_t>(a->GetRbShape());
+            uint8_t bType = static_cast<uint8_t>(b->GetRbShape());
+            return aType < bType;
+        }
+    );
     return circle;
 }
 
@@ -65,6 +82,14 @@ shared_ptr<I_RigidBody> World::CreateCapsule(
          defaultMaterial
     );
     m_bodies.push_back(capsule);
+    sort(
+        m_bodies.begin(), m_bodies.end(),
+        [](const shared_ptr<BaseRigidBody>& a, const shared_ptr<BaseRigidBody>& b) {
+            uint8_t aType = static_cast<uint8_t>(a->GetRbShape());
+            uint8_t bType = static_cast<uint8_t>(b->GetRbShape());
+            return aType < bType;
+        }
+    );
     return capsule;
 }
 
@@ -85,6 +110,14 @@ shared_ptr<I_RigidBody> World::CreateTriangle(
          defaultMaterial
     );
     m_bodies.push_back(triangle);
+    sort(
+        m_bodies.begin(), m_bodies.end(),
+        [](const shared_ptr<BaseRigidBody>& a, const shared_ptr<BaseRigidBody>& b) {
+            uint8_t aType = static_cast<uint8_t>(a->GetRbShape());
+            uint8_t bType = static_cast<uint8_t>(b->GetRbShape());
+            return aType < bType;
+        }
+    );
     return triangle;
 }
 

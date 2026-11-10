@@ -89,6 +89,27 @@ bool Physics::NarrowPhase::DetectPolygonCircleCollision(
         }
     }
 
+    // Vector2D polyCenter = poly.GetCenter();
+    // Vector2D expectedDir = center - polyCenter;
+    //
+    // if (expectedDir.TryNormalize() && normal.TryNormalize()) {
+    //     RealNum alignment = expectedDir.Dot(normal);
+    //
+    //     if (abs(alignment) < RealNum(0.2)) {
+    //         // normal is not aligned with the expected direction.
+    //         // flip the normal to point from A to B.
+    //         Vector2D fallbackNormal = center - closestPoint;
+    //         if (fallbackNormal.TryNormalize()) {
+    //             normal = fallbackNormal;
+    //         }
+    //     }
+    //
+    //     // Final directional check to ensure it points A -> B
+    //     if (expectedDir.Dot(normal) < 0.0f) {
+    //         normal = normal * -1.0f;
+    //     }
+    // }
+
     CollisionPoint coll{
         .position = closestPoint,
         .normal = normal,

@@ -44,7 +44,7 @@ bool Physics::NarrowPhase::DetectCircleCapsuleCollision(
     }
 
     // compute distance from circle center to the closest point on the capsule segment
-    Vector2D dir = circleCenter - closestPointOnSegment;
+    Vector2D dir = closestPointOnSegment - circleCenter;
     RealNum distSq = dir.LengthSquared();
     RealNum combinedRadius = circleRadius + capsuleRadius;
     if (distSq >= combinedRadius * combinedRadius) return false;

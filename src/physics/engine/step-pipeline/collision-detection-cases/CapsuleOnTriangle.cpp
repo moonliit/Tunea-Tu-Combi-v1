@@ -10,5 +10,11 @@ bool Physics::NarrowPhase::DetectCapsuleTriangleCollision(
     Manifold& outManifold
 ) {
     const PolygonRigidBody& polyB = bodyB;
-    return DetectPolygonCapsuleCollision(polyB, bodyA, outManifold);
+    if (!DetectPolygonCapsuleCollision(polyB, bodyA, outManifold)) {
+        return false;
+    }
+    for (CollisionPoint& coll : outManifold.collisionPoints) {
+        coll.normal = coll.normal * -1;
+    }
+    return true;
 }

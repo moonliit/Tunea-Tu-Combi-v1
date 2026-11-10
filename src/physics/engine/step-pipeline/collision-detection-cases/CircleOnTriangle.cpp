@@ -11,5 +11,11 @@ bool Physics::NarrowPhase::DetectCircleTriangleCollision(
     Manifold& outManifold
 ) {
     const PolygonRigidBody& polyB = bodyB;
-    return DetectPolygonCircleCollision(polyB, bodyA, outManifold);
+    if(!DetectPolygonCircleCollision(polyB, bodyA, outManifold)) {
+        return false;
+    }
+    for (CollisionPoint& coll : outManifold.collisionPoints) {
+        coll.normal = coll.normal * -1;
+    }
+    return true;
 }
