@@ -255,11 +255,11 @@ namespace Physics {
              const CircleRigidBody& bodyB,
              Manifold& outManifold
         );
-        // static bool DetectPolygonCapsuleCollision(
-        //      const PolygonRigidBody& bodyA,
-        //      const CapsuleRigidBody& bodyB,
-        //      Manifold& outManifold
-        // );
+        static bool DetectPolygonCapsuleCollision(
+             const PolygonRigidBody& bodyA,
+             const CapsuleRigidBody& bodyB,
+             Manifold& outManifold
+        );
         static bool DetectPolygonEdgeCollision(
              const PolygonRigidBody& bodyA,
              const EdgeRigidBody& bodyB,

@@ -9,6 +9,6 @@ bool Physics::NarrowPhase::DetectBoxCapsuleCollision(
     const CapsuleRigidBody& bodyB,
     Manifold& outManifold
 ) {
-    // TODO:
-    return false;
+    const PolygonRigidBody& polyA = bodyA;
+    return DetectPolygonCapsuleCollision(polyA, bodyB, outManifold);
 }

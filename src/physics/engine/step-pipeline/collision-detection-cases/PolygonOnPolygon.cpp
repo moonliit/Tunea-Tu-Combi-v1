@@ -46,7 +46,7 @@ bool Physics::NarrowPhase::DetectPolygonPolygonCollision(
         return false;
 
     // determine the best edge normal for collision resolution
-    Math::Vector2D bestEdge = bestEdgeFromA
+    Vector2D bestEdge = bestEdgeFromA
         ? polyA.GetOutwardNormal(bestEdgeIndex, isCCWA)
         : polyB.GetOutwardNormal(bestEdgeIndex, isCCWB);
 
@@ -116,7 +116,7 @@ bool Physics::NarrowPhase::DetectPolygonPolygonCollision(
         }
     );
 
-    int contactCount = std::min(2, static_cast<int>(candidates.size()));
+    int contactCount = min(2, static_cast<int>(candidates.size()));
     for (int i = 0; i < contactCount; ++i) {
         const ContactCandidate& candidate = candidates[i];
 
