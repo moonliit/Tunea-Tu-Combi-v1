@@ -12,9 +12,14 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <random>
 #include <utility>
 
 namespace {
+
+float PassengerEditorScale(float zoom) {
+    return std::clamp(1.5f / zoom, 0.9f, 3.0f);
+}
 
 void LocateMusic(const std::string& path, int& categoryIndex, int& trackIndex) {
     const auto& categories = GetCustomMusicCategories();
@@ -47,7 +52,8 @@ bool IsInsidePolygon(
 
 std::optional<float> FindTerrainSurfaceY(
     const Math::TerrainDefinition& terrain,
-    float x
+    float x,
+    float nearY
 ) {
     std::optional<float> surfaceY;
     for (const auto& boundary : Math::SampleTerrain(terrain)) {
@@ -67,7 +73,8 @@ std::optional<float> FindTerrainSurfaceY(
                 const float t = (x - x1) / (x2 - x1);
                 intersectionY = y1 + t * (y2 - y1);
             }
-            if (!surfaceY.has_value() || intersectionY < surfaceY.value()) {
+            if (!surfaceY.has_value() ||
+                std::abs(intersectionY - nearY) < std::abs(surfaceY.value() - nearY)) {
                 surfaceY = intersectionY;
             }
         }
@@ -101,6 +108,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
     const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
     const Rectangle eraserButton{504.0f, 16.0f, 120.0f, 36.0f};
+    const Rectangle passengerButton{632.0f, 16.0f, 112.0f, 36.0f};
     const Rectangle menuButton{
         static_cast<float>(m_context->windowWidth - 128), 16.0f, 110.0f, 38.0f
     };
@@ -130,6 +138,10 @@ void CustomLevelEditorScene::ProcessInput(float) {
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(eraserButton)) {
         m_designTool = DesignTool::Eraser;
+        return;
+    }
+    if (!m_musicPickerOpen && UiButton::WasClicked(passengerButton)) {
+        m_designTool = DesignTool::Passenger;
         return;
     }
     if (m_musicPickerOpen) {
@@ -208,25 +220,79 @@ void CustomLevelEditorScene::ProcessInput(float) {
     );
 
     const Vector2 screenMouse = GetMousePosition();
+    if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT) ||
+        m_designTool != DesignTool::Eraser) {
+        m_lastEraserMouseScreen.reset();
+        m_erasedPassengerPositions.clear();
+    }
     if (screenMouse.y < 65.0f || screenMouse.y > m_context->windowHeight - 58.0f) {
         return;
     }
     const Vector2 worldMouse = GetScreenToWorld2D(screenMouse, m_designCamera);
     const Math::Vector2D point{worldMouse.x, worldMouse.y};
 
-    if (m_designTool == DesignTool::Eraser &&
-        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        const auto boundaries = Math::SampleTerrain(custom.definition.terrain);
-        for (std::size_t i = 0; i < boundaries.size(); ++i) {
-            if (!IsInsidePolygon(point, boundaries[i])) continue;
-            custom.definition.terrain.polygons.erase(
-                custom.definition.terrain.polygons.begin() + i
+    if (m_designTool == DesignTool::Eraser && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        const Vector2 start = m_lastEraserMouseScreen.value_or(screenMouse);
+        const float distance = std::hypot(screenMouse.x - start.x, screenMouse.y - start.y);
+        const int steps = std::max(1, static_cast<int>(std::ceil(distance / 8.0f)));
+        const float scale = PassengerEditorScale(m_designCamera.zoom);
+        bool changed = false;
+        bool terrainChanged = false;
+        for (int step = 0; step <= steps; ++step) {
+            const float t = static_cast<float>(step) / steps;
+            const Vector2 sampleScreen{
+                start.x + (screenMouse.x - start.x) * t,
+                start.y + (screenMouse.y - start.y) * t
+            };
+            if (sampleScreen.y < 65.0f ||
+                sampleScreen.y > m_context->windowHeight - 58.0f) continue;
+            const Vector2 sampleWorld = GetScreenToWorld2D(sampleScreen, m_designCamera);
+            const Math::Vector2D samplePoint{sampleWorld.x, sampleWorld.y};
+            const auto hitsPassenger = [&](const Math::Vector2D& position) {
+                const Vector2 feet = GetWorldToScreen2D(
+                    {static_cast<float>(position.x), static_cast<float>(position.y)},
+                    m_designCamera
+                );
+                const float dx = std::abs(sampleScreen.x - feet.x);
+                const float dy = sampleScreen.y - feet.y;
+                return dx <= 12.0f * scale * m_designCamera.zoom + 8.0f &&
+                    dy >= -28.0f * scale * m_designCamera.zoom - 8.0f &&
+                    dy <= 10.0f * scale * m_designCamera.zoom + 8.0f;
+            };
+            bool overPassenger = std::any_of(
+                m_erasedPassengerPositions.begin(), m_erasedPassengerPositions.end(),
+                hitsPassenger
             );
+            for (std::size_t i = 0; i < custom.definition.passengers.size();) {
+                if (!hitsPassenger(custom.definition.passengers[i].position)) {
+                    ++i;
+                    continue;
+                }
+                m_erasedPassengerPositions.push_back(custom.definition.passengers[i].position);
+                custom.definition.passengers.erase(custom.definition.passengers.begin() + i);
+                overPassenger = true;
+                changed = true;
+            }
+            if (overPassenger) continue;
+            const auto boundaries = Math::SampleTerrain(custom.definition.terrain);
+            for (std::size_t i = 0; i < boundaries.size(); ++i) {
+                if (!IsInsidePolygon(samplePoint, boundaries[i])) continue;
+                custom.definition.terrain.polygons.erase(
+                    custom.definition.terrain.polygons.begin() + i
+                );
+                terrainChanged = true;
+                changed = true;
+                break;
+            }
+        }
+        m_lastEraserMouseScreen = screenMouse;
+        if (terrainChanged) {
             custom.hasTerrain = !custom.definition.terrain.polygons.empty();
             if (custom.hasGoal) {
                 const auto surfaceY = FindTerrainSurfaceY(
                     custom.definition.terrain,
-                    static_cast<float>(custom.definition.goal.position.x)
+                    static_cast<float>(custom.definition.goal.position.x),
+                    static_cast<float>(custom.definition.goal.position.y)
                 );
                 if (surfaceY.has_value()) {
                     custom.definition.goal.position.y = surfaceY.value();
@@ -234,9 +300,28 @@ void CustomLevelEditorScene::ProcessInput(float) {
                     custom.hasGoal = false;
                 }
             }
-            m_context->customLevels->Save();
-            return;
         }
+        if (changed) m_context->customLevels->Save();
+        return;
+    }
+
+    if (m_designTool == DesignTool::Passenger &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(point.x),
+            static_cast<float>(point.y)
+        );
+        if (surfaceY.has_value()) {
+            static std::mt19937 randomEngine{std::random_device{}()};
+            static std::bernoulli_distribution skirtChance(0.5);
+            custom.definition.passengers.push_back({
+                .position = {point.x, surfaceY.value()},
+                .hasSkirt = skirtChance(randomEngine)
+            });
+            m_context->customLevels->Save();
+        }
+        return;
     }
 
     if (m_designTool == DesignTool::Terrain &&
@@ -259,7 +344,8 @@ void CustomLevelEditorScene::ProcessInput(float) {
         if (custom.hasGoal) {
             const auto surfaceY = FindTerrainSurfaceY(
                 custom.definition.terrain,
-                static_cast<float>(custom.definition.goal.position.x)
+                static_cast<float>(custom.definition.goal.position.x),
+                static_cast<float>(custom.definition.goal.position.y)
             );
             if (surfaceY.has_value()) {
                 custom.definition.goal.position.y = surfaceY.value();
@@ -283,7 +369,8 @@ void CustomLevelEditorScene::ProcessInput(float) {
                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         const auto surfaceY = FindTerrainSurfaceY(
             custom.definition.terrain,
-            static_cast<float>(point.x)
+            static_cast<float>(point.x),
+            static_cast<float>(point.y)
         );
         if (surfaceY.has_value()) {
             custom.definition.goal.position = {point.x, surfaceY.value()};
@@ -320,6 +407,22 @@ void CustomLevelEditorScene::Render() const {
                 terrainOutline
             );
         }
+    }
+    for (const auto& passenger : custom.definition.passengers) {
+        const float x = static_cast<float>(passenger.position.x);
+        const float y = static_cast<float>(passenger.position.y);
+        const float scale = PassengerEditorScale(m_designCamera.zoom);
+        DrawCircleV({x, y - 19.0f * scale}, 6.0f * scale, BLACK);
+        DrawLineEx({x, y - 13.0f * scale}, {x, y - 2.0f * scale}, 3.0f * scale, BLACK);
+        DrawLineEx({x, y - 9.0f * scale}, {x - 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
+        DrawLineEx({x, y - 9.0f * scale}, {x + 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
+        if (passenger.hasSkirt) {
+            DrawTriangle({x - 5.0f * scale, y - 2.0f * scale},
+                {x + 5.0f * scale, y - 2.0f * scale},
+                {x, y + 4.0f * scale}, PINK);
+        }
+        DrawLineEx({x, y - 2.0f * scale}, {x - 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
+        DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
     }
     for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {
         const Vector2 point = m_terrainWorkPoints[i].ToRayVec();
@@ -391,6 +494,7 @@ void CustomLevelEditorScene::Render() const {
     const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
     const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
     const Rectangle eraserButton{504.0f, 16.0f, 120.0f, 36.0f};
+    const Rectangle passengerButton{632.0f, 16.0f, 112.0f, 36.0f};
     const Rectangle menuButton{
         static_cast<float>(m_context->windowWidth - 128), 16.0f, 110.0f, 38.0f
     };
@@ -422,6 +526,8 @@ void CustomLevelEditorScene::Render() const {
             static_cast<int>(goalButton.y + goalButton.height + 2.0f), 12, RED);
     }
     UiButton::Draw(musicButton, "Música", SKYBLUE);
+    UiButton::Draw(passengerButton, "Pasajero",
+        m_designTool == DesignTool::Passenger ? SKYBLUE : LIGHTGRAY);
     UiButton::Draw(
         eraserButton,
         "Borrador",
@@ -471,6 +577,8 @@ void CustomLevelEditorScene::Render() const {
         ? "Haz clic donde comenzará la esquina superior izquierda del grid"
         : m_designTool == DesignTool::Eraser
         ? "Haz clic dentro de una forma de terreno para borrarla"
+        : m_designTool == DesignTool::Passenger
+        ? "Haz clic sobre el terreno para colocar un pasajero"
         : "Haz clic sobre el terreno para colocar la meta en su superficie";
     DrawText(instructions, 20, 64, 16, DARKGRAY);
     DrawText(

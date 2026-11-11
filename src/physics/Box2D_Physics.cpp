@@ -21,6 +21,13 @@ RealNum Box2D_IRigidBody::GetRotation() const {
     return Math::RealNum {b2Rot_GetAngle(rot)};
 }
 
+void Box2D_IRigidBody::AddMass(float mass) {
+    b2BodyId bodyId = GetInternalId();
+    b2MassData massData = b2Body_GetMassData(bodyId);
+    massData.mass += mass;
+    b2Body_SetMassData(bodyId, massData);
+}
+
 void Box2D_IRigidBody::ApplyForce(Math::Vector2D force) {
     b2Body_ApplyForceToCenter(
         GetInternalId(),

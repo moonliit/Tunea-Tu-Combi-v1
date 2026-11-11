@@ -3,14 +3,17 @@
 #include "app/I_Scene.hpp"
 #include "math/Vector2D.hpp"
 #include <raylib.h>
+#include <optional>
 #include <vector>
 struct AppContext;
 class CustomLevelEditorScene final : public I_Scene {
     AppContext* m_context;
     Camera2D m_designCamera{};
-    enum class DesignTool { Terrain, Grid, Goal, Eraser };
+    enum class DesignTool { Terrain, Grid, Goal, Eraser, Passenger };
     DesignTool m_designTool = DesignTool::Terrain;
     std::vector<Math::Vector2D> m_terrainWorkPoints;
+    std::optional<Vector2> m_lastEraserMouseScreen;
+    std::vector<Math::Vector2D> m_erasedPassengerPositions;
     bool m_musicPickerOpen = false;
     int m_musicCategory = 0;
     int m_musicTrack = 0;
