@@ -56,6 +56,28 @@ void RenderTerrainMesh(
     }
 }
 
+// drawn outside the camera so it doesn't move or scale with zoom
+void RenderBackground(const Texture2D& background) {
+    DrawTexturePro(
+        background,
+        Rectangle{
+            0.0f,
+            0.0f,
+            static_cast<float>(background.width),
+            static_cast<float>(background.height)
+        },
+        Rectangle{
+            0.0f,
+            0.0f,
+            static_cast<float>(GetScreenWidth()),
+            static_cast<float>(GetScreenHeight())
+        },
+        Vector2{0.0f, 0.0f},
+        0.0f,
+        WHITE
+    );
+}
+
 }
 
 void WorldRenderer::Render(
@@ -68,6 +90,7 @@ void WorldRenderer::Render(
     const std::optional<PartType>& repositionedPartType,
     PartOrientation repositionedOrientation
 ) const {
+    RenderBackground(m_textures.GetBackground(m_background));
     BeginMode2D(camera);
 
     for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {

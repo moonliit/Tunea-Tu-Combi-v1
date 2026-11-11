@@ -4,6 +4,7 @@
 #include "app/SceneManager.hpp"
 #include "app/AppContext.hpp"
 #include "app/AudioController.hpp"
+#include "rendering/TextureLibrary.hpp"
 
 #include <string>
 
@@ -13,6 +14,7 @@ private:
     SceneRequester m_sceneRequester;
     AppContext m_appContext;
     AudioController m_audioController;
+    TextureLibrary m_textureLibrary;
 
 public:
     App(

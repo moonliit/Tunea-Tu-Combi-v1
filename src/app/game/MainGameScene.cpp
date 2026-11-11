@@ -7,6 +7,7 @@
 #include "ui/UiControl.hpp"
 #include "app/AppContext.hpp"
 #include "app/AudioController.hpp"
+#include "rendering/Background.hpp"
 #include <optional>
 #include <raylib.h>
 #include <algorithm>
@@ -83,7 +84,8 @@ MainGameScene::MainGameScene(
         m_level.GetBuildModel(),
         m_level.GetTerrain(),
         Vector2D{0.0f, m_gravity}
-    )
+    ),
+    m_worldRenderer(*appContext->textureLibrary, GetLevelBackground(specs.levelNumber))
 {
     m_camera = Camera2D(Vector2{0});
     const Vector2 automaticTarget = CalculateGridTarget(specs);

@@ -2,9 +2,16 @@
 #define RENDERING_PART_RENDERER_HPP
 
 #include "app/game/Part.hpp"
+#include "rendering/TextureLibrary.hpp"
 
 class PartRenderer {
+private:
+    const TextureLibrary& m_textures;
+
 public:
+    explicit PartRenderer(const TextureLibrary& textures):
+        m_textures(textures) {}
+
     void Render(const PartRenderState& state) const;
     void RenderContained(
         const Part& part,

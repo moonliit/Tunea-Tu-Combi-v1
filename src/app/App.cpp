@@ -22,6 +22,7 @@ App::App(int width, int height, const std::string& title):
 {
     InitWindow(width, height, title.c_str());
     m_audioController.Initialize();
+    m_textureLibrary.Initialize();
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
 
@@ -31,6 +32,7 @@ App::App(int width, int height, const std::string& title):
         .windowTitle = title,
         .sceneRequester = &m_sceneRequester,
         .audioController = &m_audioController,
+        .textureLibrary = &m_textureLibrary,
         .customLevels = std::make_shared<CustomLevelCatalog>()
     };
     m_sceneManager.SetAppContext(&m_appContext);
@@ -66,6 +68,7 @@ void App::Run() {
 }
 
 App::~App() {
+    m_textureLibrary.Shutdown();
     m_audioController.Shutdown();
     CloseWindow();
 }

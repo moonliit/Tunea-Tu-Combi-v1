@@ -4,16 +4,25 @@
 #include "app/game/GameState.hpp"
 #include "app/game/EditorGrid.hpp"
 #include "app/game/PlaySession.hpp"
+#include "rendering/Background.hpp"
 #include "rendering/PartRenderer.hpp"
+#include "rendering/TextureLibrary.hpp"
 
 #include <raylib.h>
 #include <optional>
 
 class WorldRenderer {
 private:
+    const TextureLibrary& m_textures;
     PartRenderer m_partRenderer;
+    BackgroundId m_background;
 
 public:
+    WorldRenderer(const TextureLibrary& textures, BackgroundId background):
+        m_textures(textures),
+        m_partRenderer(textures),
+        m_background(background) {}
+
     void Render(
         const Camera2D& camera,
         GameState state,
