@@ -111,6 +111,8 @@ MainGameScene::MainGameScene(
     m_camera.zoom = std::max(minimumZoom, cameraDefinition.zoom);
     m_editorCameraTarget = m_camera.target;
     m_editorCameraZoom = m_camera.zoom;
+    // parallax starts from here
+    m_worldRenderer.SetBackgroundOrigin(m_camera.target.x);
     m_passengerCollected.assign(m_level.GetDefinition().passengers.size(), false);
 }
 

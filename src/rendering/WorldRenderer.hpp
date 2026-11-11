@@ -16,12 +16,15 @@ private:
     const TextureLibrary& m_textures;
     PartRenderer m_partRenderer;
     BackgroundId m_background;
+    float m_backgroundOriginX = 0.0f;
 
 public:
     WorldRenderer(const TextureLibrary& textures, BackgroundId background):
         m_textures(textures),
         m_partRenderer(textures),
         m_background(background) {}
+
+    void SetBackgroundOrigin(float cameraX) { m_backgroundOriginX = cameraX; }
 
     void Render(
         const Camera2D& camera,

@@ -13,6 +13,9 @@ enum class BackgroundId : std::size_t {
 
 inline constexpr std::size_t BackgroundCount = 4;
 
+// how fast the background scrolls compared to the world
+inline constexpr float BackgroundParallaxFactor = 0.1f;
+
 const char* GetBackgroundPath(BackgroundId id);
 
 // fixed per official level, custom levels use Miraflores
