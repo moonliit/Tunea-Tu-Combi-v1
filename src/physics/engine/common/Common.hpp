@@ -56,6 +56,7 @@ namespace Physics {
         std::weak_ptr<BaseRigidBody> bodyB;
         Math::Vector2D anchorA;
         Math::Vector2D anchorB;
+        Math::RealNum breakResistance = 1.0f;
         bool collideConnected = false;
     };
 }

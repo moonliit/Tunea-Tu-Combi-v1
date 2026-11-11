@@ -28,7 +28,7 @@ void ResolveJointVelocities(list<shared_ptr<BaseJoint>>& joints, float dt) {
                 break;
             }
         }
-        joint->AccumulateAndFilterStress(instantStress);
+        joint->RecordSolverStress(instantStress);
     }
 }
 

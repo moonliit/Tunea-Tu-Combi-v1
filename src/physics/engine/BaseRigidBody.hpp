@@ -20,6 +20,21 @@ namespace Physics {
         Triangle = 5,
     };
 
+    inline Math::RealNum BreakResistanceForShape(RbShape shape) {
+        switch (shape) {
+            case RbShape::Box:
+                return 0.8495f;
+            case RbShape::Circle:
+                return 1.2225f;
+            case RbShape::Capsule:
+                return 1.195f;
+            case RbShape::Triangle:
+                return 1.195f;
+            default:
+                return Math::RealNum::Infinity();
+        }
+    }
+
     class BaseRigidBody : public I_RigidBody {
     protected:
         Transform m_transform;

@@ -14,6 +14,12 @@ using namespace Physics;
 void World::Step(float deltaTime) {
     float subDt = deltaTime / m_subStepCount;
 
+    for (auto& joint : m_joints) {
+        if (!joint) continue;
+        joint->ResetStress();
+    }
+    m_structuralGraph.Rebuild(m_bodies, m_joints);
+
     for (int i = 0; i < m_subStepCount; ++i) {
         m_manifolds.clear();
 
@@ -66,13 +72,14 @@ void World::Step(float deltaTime) {
         // EmergencyFallbackCorrection(m_manifolds, subDt);
     }
 
-    for (auto& joint: m_joints) {
+    for (auto& joint : m_joints) {
         if (!joint) continue;
-        if (joint->GetCurrentStress() > BaseJoint::breakThreshold) {
-            std::println("Broken! On stress: {}", float(joint->GetCurrentStress()));
-        } else if (joint->GetCurrentStress() > RealNum(100)) {
-            std::println("Joint stress: {}", float(joint->GetCurrentStress()));
-        }
+        auto bodyA = joint->GetBodyA();
+        auto bodyB = joint->GetBodyB();
+        if (!bodyA || !bodyB) continue;
+
+        auto load = m_structuralGraph.Evaluate(*joint, *bodyA, *bodyB);
+        joint->UpdateLocalStress(load);
     }
 
     // clear accumlated forces after the step

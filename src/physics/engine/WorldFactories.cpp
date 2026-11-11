@@ -189,6 +189,10 @@ shared_ptr<I_Joint> World::CreateRevoluteJoint(
 
     def.anchorA = baseA->GetTransform().ToLocalPoint(worldAnchor);
     def.anchorB = baseB->GetTransform().ToLocalPoint(worldAnchor);
+    def.breakResistance = (
+        BreakResistanceForShape(baseA->GetRbShape()) *
+        BreakResistanceForShape(baseB->GetRbShape())
+    );
     def.collideConnected = false;
 
     auto joint = make_shared<RevoluteJoint>(def);
@@ -211,6 +215,10 @@ shared_ptr<I_Joint> World::CreateWeldJoint(
 
     def.anchorA = baseA->GetTransform().ToLocalPoint(worldAnchor);
     def.anchorB = baseB->GetTransform().ToLocalPoint(worldAnchor);
+    def.breakResistance = (
+        BreakResistanceForShape(baseA->GetRbShape()) *
+        BreakResistanceForShape(baseB->GetRbShape())
+    );
     def.collideConnected = false;
 
     auto joint = make_shared<WeldJoint>(def);

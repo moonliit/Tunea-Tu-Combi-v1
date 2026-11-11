@@ -5,6 +5,7 @@
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/BaseRigidBody.hpp"
 #include "physics/engine/Joint.hpp"
+#include "physics/engine/StructuralAnalysis.hpp"
 #include "physics/engine/common/BodyPairHash.hpp"
 #include <unordered_set>
 #include <list>
@@ -18,6 +19,7 @@ private:
     std::unordered_set<RigidBodyPair, BodyPairHash> m_jointConnectedCache;
     std::vector<Manifold> m_manifolds;
     Math::Vector2D m_gravity;
+    Structural::Graph m_structuralGraph;
     int m_subStepCount;
     int m_velocityIterations;
     int m_positionIterations;
@@ -30,6 +32,7 @@ public:
         int positionIterations
     ) :
         m_gravity(gravity),
+        m_structuralGraph(gravity),
         m_subStepCount(subStepCount),
         m_velocityIterations(velocityIterations),
         m_positionIterations(positionIterations) {}
