@@ -7,6 +7,7 @@
 #include "ui/UiControl.hpp"
 #include "app/AppContext.hpp"
 #include "app/AudioController.hpp"
+#include "rendering/Background.hpp"
 #include <optional>
 #include <raylib.h>
 #include <algorithm>
@@ -83,7 +84,8 @@ MainGameScene::MainGameScene(
         m_level.GetBuildModel(),
         m_level.GetTerrain(),
         Vector2D{0.0f, m_gravity}
-    )
+    ),
+    m_worldRenderer(*appContext->textureLibrary, GetLevelBackground(specs.levelNumber))
 {
     m_camera = Camera2D(Vector2{0});
     const Vector2 automaticTarget = CalculateGridTarget(specs);
@@ -109,6 +111,8 @@ MainGameScene::MainGameScene(
     m_camera.zoom = std::max(minimumZoom, cameraDefinition.zoom);
     m_editorCameraTarget = m_camera.target;
     m_editorCameraZoom = m_camera.zoom;
+    // parallax starts from here
+    m_worldRenderer.SetBackgroundOrigin(m_camera.target.x);
     m_passengerCollected.assign(m_level.GetDefinition().passengers.size(), false);
 }
 

@@ -8,6 +8,7 @@
 class CustomLevelCatalog;
 
 class AudioController;
+class TextureLibrary;
 
 struct AppContext {
     int windowWidth;
@@ -19,6 +20,7 @@ struct AppContext {
     bool returnToCustomDesign = false;
     bool returnedToSelector = false;
     AudioController* audioController = nullptr;
+    TextureLibrary* textureLibrary = nullptr;
     std::shared_ptr<CustomLevelCatalog> customLevels;
     int activeCustomLevel = -1;
     bool openCustomMusicPicker = false;
