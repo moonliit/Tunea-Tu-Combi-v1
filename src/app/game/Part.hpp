@@ -12,7 +12,7 @@ class EditorGrid;
 enum class PartType {
     SquareBlock,
     CircleWheel,
-    TNTBarrel,    // Future item with box collision but custom rendering/behavior
+    TNTBarrel,    // Box shape
     Fan,          // Capsule shape
     WindSail,     // Triangle shape
     Driver
@@ -82,18 +82,25 @@ public:
         PartOrientation orientation = PartOrientation::Up,
         PartId id = 0
     );
+    Part(const Part& other);
+    Part& operator=(const Part& other);
+    Part(Part&&) noexcept = default;
+    Part& operator=(Part&&) noexcept = default;
     bool IsActive() const { return m_physicsBody != nullptr; }
     std::shared_ptr<I_RigidBody> GetPhysicsBody() const {
         return m_physicsBody;
     }
     void SetAttachmentBody(std::shared_ptr<I_RigidBody> body);
-    void SetContainedBody(std::shared_ptr<I_RigidBody> body);
+    void SetContainedBody(
+        std::shared_ptr<I_RigidBody> body,
+        I_PhysicsWorld* physicsWorld
+    );
     void SetPropulsionActive(bool active) { m_propulsionActive = active; }
     void Activate();
     void UpdateActivation(float deltaTime);
     bool IsActivationActive() const { return m_activationActive; }
 
-    void SetPhysicsBody(const EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics);
+    void SetPhysicsBody(EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics);
     void ResetPhysicsBody() {
         m_physicsBody = nullptr;
         m_attachmentBody = nullptr;
@@ -102,6 +109,7 @@ public:
         m_activationActive = false;
         m_activeTimeRemaining = 0.0f;
         m_cooldownRemaining = 0.0f;
+        m_removalRequested = false;
         if (m_containedPart) {
             m_containedPart->ResetPhysicsBody();
         }
@@ -119,6 +127,9 @@ public:
     bool ContainPart(std::unique_ptr<Part> part);
     std::unique_ptr<Part> RemoveContainedPart();
     void ApplyPropulsionForce(float magnitude);
+    void ApplyRadialImpulseForce(float magnitude, float radius);
+    bool IsRemovalRequested() const { return m_removalRequested; }
+    void ClearRemovalRequest() { m_removalRequested = false; }
 
 private:
     Math::GridCoord m_gridCoord;
@@ -126,6 +137,8 @@ private:
     PartOrientation m_orientation;
     PartId m_id;
     size_t m_activeCacheIndex;
+    I_PhysicsWorld* m_physicsWorld = nullptr;
+    EditorGrid* m_grid;
 
     std::shared_ptr<I_RigidBody> m_physicsBody = nullptr; // Physics handle (only valid when in Play mode)
     std::shared_ptr<I_RigidBody> m_attachmentBody = nullptr;
@@ -134,6 +147,7 @@ private:
     bool m_activationActive = false;
     float m_activeTimeRemaining = 0.0f;
     float m_cooldownRemaining = 0.0f;
+    bool m_removalRequested = false;
     std::unique_ptr<Part> m_containedPart;
 
     friend class EditorGrid;

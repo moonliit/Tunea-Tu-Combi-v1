@@ -18,6 +18,7 @@ private:
     std::list<std::shared_ptr<BaseJoint>> m_joints;
     std::unordered_set<RigidBodyPair, BodyPairHash> m_jointConnectedCache;
     std::vector<Manifold> m_manifolds;
+    std::vector<PhysicsImpact> m_impactEvents;
     Math::Vector2D m_gravity;
     Structural::Graph m_structuralGraph;
     int m_subStepCount;
@@ -39,6 +40,15 @@ public:
 
     ~World() override = default;
     void Step(float deltaTime) override;
+    std::vector<PhysicsImpact> ConsumeImpactEvents() override;
+    void RemoveBody(
+        const std::shared_ptr<I_RigidBody>& body
+    ) override;
+    void ApplyExplosion(
+        const Math::Vector2D& center,
+        float impulseForce,
+        float radius
+    ) override;
 
     std::shared_ptr<I_RigidBody> CreateBox(
         Math::Vector2D position,

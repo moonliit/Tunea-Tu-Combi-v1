@@ -254,12 +254,13 @@ void MainGameScene::ProcessInput(float dt) {
 void MainGameScene::Update(float dt) {
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
-        const auto& parts = m_level.GetGrid().GetActiveParts();
+        const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+        const auto& parts = runtimeGrid.GetActiveParts();
         if (!parts.empty()) {
             Vector2 center{0.0f, 0.0f};
             bool entireCarPassedFinish = true;
             for (const Part* part : parts) {
-                const auto position = part->GetRenderState(m_level.GetGrid()).position;
+                const auto position = part->GetRenderState(runtimeGrid).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
                 entireCarPassedFinish = entireCarPassedFinish &&
@@ -310,21 +311,24 @@ void MainGameScene::TransitionToPlayMode() {
         }
     );
     m_appContext->audioController->SetWheelActive(hasWheel);
-    const auto placements = m_level.GetBuildModel().GetPlacements();
-    if (!placements.empty()) {
+    m_stateMachine.EnterPlay();
+    m_playSession.Start();
+
+    const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+    const auto& runtimeParts = runtimeGrid.GetActiveParts();
+    if (!runtimeParts.empty()) {
         Vector2 center{0.0f, 0.0f};
-        for (const auto& placement : placements) {
-            const auto position = m_level.GetGrid().CoordToWorld(placement.coord);
+        for (const Part* part : runtimeParts) {
+            const Math::Vector2D position =
+                part->GetRenderState(runtimeGrid).position;
             center.x += static_cast<float>(position.x);
             center.y += static_cast<float>(position.y);
         }
         m_camera.target = {
-            center.x / placements.size(),
-            center.y / placements.size()
+            center.x / runtimeParts.size(),
+            center.y / runtimeParts.size()
         };
     }
-    m_stateMachine.EnterPlay();
-    m_playSession.Start();
 }
 
 void MainGameScene::ResetToBuildMode() {

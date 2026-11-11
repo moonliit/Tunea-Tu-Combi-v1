@@ -5,6 +5,13 @@
 #include <vector>
 #include <memory>
 
+class Part;
+
+struct PhysicsImpact {
+    Part* part;
+    float impulse;
+};
+
 enum class BodyType {
     Static,
     Dynamic
@@ -12,12 +19,16 @@ enum class BodyType {
 
 // abstract representation of a rigid body
 class I_RigidBody {
+protected:
+    Part* m_part = nullptr; // associated part
+    friend class Part;
 public:
     virtual ~I_RigidBody() = default;
     virtual Math::Vector2D GetPosition() const = 0;
     virtual Math::RealNum GetRotation() const = 0;
     virtual void ApplyForce(Math::Vector2D force) = 0;
     virtual void ApplyLinearImpulse(Math::Vector2D impulse) = 0;
+    Part* GetPart() const { return m_part; }
 };
 
 // abstract representation of a joint
@@ -31,6 +42,15 @@ class I_PhysicsWorld {
 public:
     virtual ~I_PhysicsWorld() = default;
     virtual void Step(float deltaTime) = 0;
+    virtual std::vector<PhysicsImpact> ConsumeImpactEvents() = 0;
+    virtual void RemoveBody(
+        const std::shared_ptr<I_RigidBody>& body
+    ) = 0;
+    virtual void ApplyExplosion(
+        const Math::Vector2D& center,
+        float impulseForce,
+        float radius
+    ) = 0;
 
     // rigidbody creation
     virtual std::shared_ptr<I_RigidBody> CreateBox(

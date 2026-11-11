@@ -13,6 +13,7 @@
 class PlaySession {
 private:
     BuildModel& m_model;
+    BuildModel m_runtimeModel;
     std::vector<Math::Vector2D> m_terrainVertices;
     Math::TerrainDefinition m_terrainDefinition;
     std::vector<Math::TerrainMesh> m_terrainMeshes;
@@ -65,9 +66,14 @@ public:
     const ActivationRegistry& GetActivationRegistry() const {
         return m_activationRegistry;
     }
+    const EditorGrid& GetRuntimeGrid() const {
+        return m_runtimeModel.GetGrid();
+    }
 
 private:
     void BuildActivationSubscriptions();
+    void ProcessTntImpacts();
+    void RemoveConsumedTnt();
 };
 
 #endif

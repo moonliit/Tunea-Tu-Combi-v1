@@ -7,9 +7,14 @@ using namespace Math;
 namespace {
 
 constexpr float FanForce = 750.0f;
+
 constexpr float WindSailForce = 1750.0f;
 constexpr float WindSailActiveDuration = 0.75f;
 constexpr float WindSailCooldownDuration = 1.25f;
+
+constexpr float TntExplosionForce = 1000.0f;
+constexpr float TntExplosionRadius = 750.0f;
+constexpr float ContainedTntExplosionMultiplier = 1.75f;
 
 Vector2D RotateLocalOffset(Vector2D offset, PartOrientation orientation) {
     switch (orientation) {
@@ -28,7 +33,7 @@ Vector2D RotateLocalOffset(Vector2D offset, PartOrientation orientation) {
 }
 
 void Part::Activate() {
-    if (!m_physicsBody) return;
+    if (!m_physicsBody && !m_attachmentBody) return;
 
     switch (m_type) {
         case PartType::Fan:
@@ -44,6 +49,7 @@ void Part::Activate() {
             m_cooldownRemaining = WindSailCooldownDuration;
             break;
         case PartType::TNTBarrel:
+            m_activationActive = true;
         case PartType::SquareBlock:
         case PartType::CircleWheel:
         case PartType::Driver:
@@ -58,11 +64,15 @@ void Part::SetAttachmentBody(std::shared_ptr<I_RigidBody> body) {
     m_attachmentBody = std::move(body);
 }
 
-void Part::SetContainedBody(std::shared_ptr<I_RigidBody> body) {
+void Part::SetContainedBody(
+    std::shared_ptr<I_RigidBody> body,
+    I_PhysicsWorld* physicsWorld
+) {
     if (!body || m_physicsBody) return;
     m_attachmentRotationOffset =
         PartOrientationRadians(m_orientation) - body->GetRotation();
     m_attachmentBody = std::move(body);
+    m_physicsWorld = physicsWorld;
 }
 
 bool Part::CanContain(const Part& part) const {
@@ -90,8 +100,27 @@ void Part::ApplyPropulsionForce(float magnitude) {
     });
 }
 
+void Part::ApplyRadialImpulseForce(float magnitude, float radius) {
+    if (!m_physicsWorld || (!m_physicsBody && !m_attachmentBody)) return;
+    const std::shared_ptr<I_RigidBody>& body =
+        m_physicsBody ? m_physicsBody : m_attachmentBody;
+    const Vector2D position = body->GetPosition();
+    const Vector2D center = m_attachmentBody
+        ? m_attachmentBody->GetPosition()
+        : position;
+    const float explosionMagnitude = m_attachmentBody
+        ? magnitude * ContainedTntExplosionMultiplier
+        : magnitude;
+    m_physicsWorld->ApplyExplosion(
+        center,
+        explosionMagnitude,
+        radius
+    );
+    m_removalRequested = true;
+}
+
 void Part::UpdateActivation(float deltaTime) {
-    if (!m_physicsBody) return;
+    if (!m_physicsBody && !m_attachmentBody) return;
 
     if (m_cooldownRemaining > 0.0f) {
         m_cooldownRemaining = std::max(
@@ -118,6 +147,10 @@ void Part::UpdateActivation(float deltaTime) {
         case PartType::WindSail:
             ApplyPropulsionForce(WindSailForce);
             break;
+        case PartType::TNTBarrel:
+            ApplyRadialImpulseForce(TntExplosionForce, TntExplosionRadius);
+            m_activationActive = false;
+            break;
         default:
             break;
     }
@@ -135,10 +168,48 @@ Part::Part(
     m_id(id),
     m_activeCacheIndex(0) {}
 
+Part::Part(const Part& other):
+    m_gridCoord(other.m_gridCoord),
+    m_type(other.m_type),
+    m_orientation(other.m_orientation),
+    m_id(other.m_id),
+    m_activeCacheIndex(0),
+    m_propulsionActive(false),
+    m_activationActive(false),
+    m_activeTimeRemaining(0.0f),
+    m_cooldownRemaining(0.0f),
+    m_removalRequested(false) {
+    if (other.m_containedPart) {
+        m_containedPart = std::make_unique<Part>(*other.m_containedPart);
+    }
+}
+
+Part& Part::operator=(const Part& other) {
+    if (this == &other) return *this;
+    ResetPhysicsBody();
+    m_gridCoord = other.m_gridCoord;
+    m_type = other.m_type;
+    m_orientation = other.m_orientation;
+    m_id = other.m_id;
+    m_activeCacheIndex = 0;
+    m_propulsionActive = false;
+    m_activationActive = false;
+    m_activeTimeRemaining = 0.0f;
+    m_cooldownRemaining = 0.0f;
+    m_removalRequested = false;
+    m_containedPart = other.m_containedPart
+        ? std::make_unique<Part>(*other.m_containedPart)
+        : nullptr;
+    m_physicsWorld = nullptr;
+    m_grid = nullptr;
+    return *this;
+}
+
 void Part::SetPhysicsBody(
-    const EditorGrid& grid,
+    EditorGrid& grid,
     std::unique_ptr<I_PhysicsWorld>& physics
 ) {
+    m_grid = &grid;
     const Vector2D worldPos = grid.CoordToWorld(m_gridCoord);
     const float cellSize = grid.GetCellSize();
     const PartDefinition& definition = GetPartDefinition(m_type);
@@ -208,6 +279,8 @@ void Part::SetPhysicsBody(
     }
 
     m_physicsBody = body;
+    m_physicsBody->m_part = this;
+    m_physicsWorld = physics.get();
 }
 
 PartRenderState Part::GetRenderState(const EditorGrid& grid) const {

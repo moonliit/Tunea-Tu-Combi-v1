@@ -4,11 +4,32 @@
 #include "math/Terrain.hpp"
 #include <algorithm>
 #include <memory>
+#include <algorithm>
 using namespace std;
 using namespace Math;
 using namespace Physics;
 
 using PhysMat = Physics::Material;
+
+std::vector<std::shared_ptr<BaseRigidBody>>::iterator FindBody(
+    std::vector<std::shared_ptr<BaseRigidBody>>& bodies,
+    const std::shared_ptr<I_RigidBody>& body
+) {
+    return std::find_if(
+        bodies.begin(),
+        bodies.end(),
+        [&body](const std::shared_ptr<BaseRigidBody>& candidate) {
+            return candidate.get() == body.get();
+        }
+    );
+}
+
+void World::RemoveBody(const std::shared_ptr<I_RigidBody>& body) {
+    const auto iterator = FindBody(m_bodies, body);
+    if (iterator != m_bodies.end()) {
+        m_bodies.erase(iterator);
+    }
+}
 
 shared_ptr<I_RigidBody> World::CreateBox(
     Vector2D position,
