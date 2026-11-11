@@ -17,6 +17,11 @@ struct GoalDefinition {
     Math::Vector2D position;
 };
 
+struct PassengerDefinition {
+    Math::Vector2D position;
+    bool hasSkirt = false;
+};
+
 struct GridDefinition {
     Math::GridCoord dims;
     Math::Vector2D worldPos;
@@ -31,6 +36,7 @@ struct LevelDefinition {
     GridDefinition grid;
     std::optional<CameraDefinition> initialCamera;
     GoalDefinition goal;
+    std::vector<PassengerDefinition> passengers;
     std::vector<Math::Vector2D> terrainControlPoints;
     int catmullRomResolution = 8;
 

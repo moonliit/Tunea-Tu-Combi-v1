@@ -87,6 +87,14 @@ nlohmann::json LevelDefinition::ToJson() const {
         {"position", goal.position.ToJson()}
     };
 
+    j["passengers"] = nlohmann::json::array();
+    for (const auto& passenger : passengers) {
+        j["passengers"].push_back({
+            {"position", passenger.position.ToJson()},
+            {"hasSkirt", passenger.hasSkirt}
+        });
+    }
+
     return j;
 }
 
@@ -130,6 +138,15 @@ LevelDefinition LevelDefinition::FromJson(const nlohmann::json& j) {
 
     if (j.contains("goal")) {
         level.goal.position = Math::Vector2D::FromJson(j["goal"].at("position"));
+    }
+
+    if (j.contains("passengers") && j["passengers"].is_array()) {
+        for (const auto& passengerJson : j["passengers"]) {
+            level.passengers.push_back({
+                .position = Math::Vector2D::FromJson(passengerJson.at("position")),
+                .hasSkirt = passengerJson.value("hasSkirt", false)
+            });
+        }
     }
 
     return level;
