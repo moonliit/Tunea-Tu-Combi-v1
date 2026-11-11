@@ -10,6 +10,8 @@
 #include "ui/UiButton.hpp"
 #include <raylib.h>
 #include <algorithm>
+#include <cmath>
+#include <optional>
 #include <utility>
 
 namespace {
@@ -25,6 +27,52 @@ void LocateMusic(const std::string& path, int& categoryIndex, int& trackIndex) {
             }
         }
     }
+}
+
+bool IsInsidePolygon(
+    const Math::Vector2D& point,
+    const std::vector<Math::Vector2D>& polygon
+) {
+    bool inside = false;
+    for (std::size_t i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
+        const auto& a = polygon[i];
+        const auto& b = polygon[j];
+        if ((a.y > point.y) != (b.y > point.y) &&
+            point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+std::optional<float> FindTerrainSurfaceY(
+    const Math::TerrainDefinition& terrain,
+    float x
+) {
+    std::optional<float> surfaceY;
+    for (const auto& boundary : Math::SampleTerrain(terrain)) {
+        for (std::size_t i = 0; i < boundary.size(); ++i) {
+            const auto& first = boundary[i];
+            const auto& second = boundary[(i + 1) % boundary.size()];
+            const float x1 = static_cast<float>(first.x);
+            const float y1 = static_cast<float>(first.y);
+            const float x2 = static_cast<float>(second.x);
+            const float y2 = static_cast<float>(second.y);
+            if (x < std::min(x1, x2) || x > std::max(x1, x2)) continue;
+
+            float intersectionY;
+            if (std::abs(x2 - x1) < 0.0001f) {
+                intersectionY = std::min(y1, y2);
+            } else {
+                const float t = (x - x1) / (x2 - x1);
+                intersectionY = y1 + t * (y2 - y1);
+            }
+            if (!surfaceY.has_value() || intersectionY < surfaceY.value()) {
+                surfaceY = intersectionY;
+            }
+        }
+    }
+    return surfaceY;
 }
 
 }
@@ -52,15 +100,12 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Rectangle gridButton{146.0f, 16.0f, 120.0f, 36.0f};
     const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
     const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
-    const Rectangle editButton{
-        static_cast<float>(m_context->windowWidth - 132), 16.0f, 112.0f, 36.0f
+    const Rectangle eraserButton{504.0f, 16.0f, 120.0f, 36.0f};
+    const Rectangle menuButton{
+        static_cast<float>(m_context->windowWidth - 128), 16.0f, 110.0f, 38.0f
     };
-    const Rectangle menuButton = UiButton::CenteredAtBottom(
-        m_context->windowWidth,
-        m_context->windowHeight,
-        110.0f,
-        38.0f,
-        18.0f
+    const Rectangle editButton = UiButton::PlaySideButton(
+        m_context->windowWidth, m_context->windowHeight
     );
 
     if (!m_musicPickerOpen && UiButton::WasClicked(terrainButton)) {
@@ -81,6 +126,10 @@ void CustomLevelEditorScene::ProcessInput(float) {
         LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
         m_musicListScroll = 0.0f;
         m_musicPickerOpen = true;
+        return;
+    }
+    if (!m_musicPickerOpen && UiButton::WasClicked(eraserButton)) {
+        m_designTool = DesignTool::Eraser;
         return;
     }
     if (m_musicPickerOpen) {
@@ -165,6 +214,31 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Vector2 worldMouse = GetScreenToWorld2D(screenMouse, m_designCamera);
     const Math::Vector2D point{worldMouse.x, worldMouse.y};
 
+    if (m_designTool == DesignTool::Eraser &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        const auto boundaries = Math::SampleTerrain(custom.definition.terrain);
+        for (std::size_t i = 0; i < boundaries.size(); ++i) {
+            if (!IsInsidePolygon(point, boundaries[i])) continue;
+            custom.definition.terrain.polygons.erase(
+                custom.definition.terrain.polygons.begin() + i
+            );
+            custom.hasTerrain = !custom.definition.terrain.polygons.empty();
+            if (custom.hasGoal) {
+                const auto surfaceY = FindTerrainSurfaceY(
+                    custom.definition.terrain,
+                    static_cast<float>(custom.definition.goal.position.x)
+                );
+                if (surfaceY.has_value()) {
+                    custom.definition.goal.position.y = surfaceY.value();
+                } else {
+                    custom.hasGoal = false;
+                }
+            }
+            m_context->customLevels->Save();
+            return;
+        }
+    }
+
     if (m_designTool == DesignTool::Terrain &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         m_terrainWorkPoints.push_back(point);
@@ -182,6 +256,15 @@ void CustomLevelEditorScene::ProcessInput(float) {
         custom.definition.terrain.polygons.push_back(std::move(polygon));
         custom.hasTerrain = true;
         m_terrainWorkPoints.clear();
+        if (custom.hasGoal) {
+            const auto surfaceY = FindTerrainSurfaceY(
+                custom.definition.terrain,
+                static_cast<float>(custom.definition.goal.position.x)
+            );
+            if (surfaceY.has_value()) {
+                custom.definition.goal.position.y = surfaceY.value();
+            }
+        }
         m_context->customLevels->Save();
     } else if (m_designTool == DesignTool::Grid &&
                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -198,9 +281,15 @@ void CustomLevelEditorScene::ProcessInput(float) {
         m_context->customLevels->Save();
     } else if (m_designTool == DesignTool::Goal &&
                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        custom.definition.goal.position = point;
-        custom.hasGoal = true;
-        m_context->customLevels->Save();
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(point.x)
+        );
+        if (surfaceY.has_value()) {
+            custom.definition.goal.position = {point.x, surfaceY.value()};
+            custom.hasGoal = true;
+            m_context->customLevels->Save();
+        }
     }
 }
 
@@ -212,7 +301,6 @@ void CustomLevelEditorScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
     BeginMode2D(m_designCamera);
-    DrawGrid(40, 50.0f);
     const Color terrainFill{116, 78, 48, 255};
     const Color terrainOutline{70, 45, 28, 255};
     for (const auto& boundary : Math::SampleTerrain(custom.definition.terrain)) {
@@ -302,8 +390,9 @@ void CustomLevelEditorScene::Render() const {
     const Rectangle gridButton{146.0f, 16.0f, 120.0f, 36.0f};
     const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
     const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
-    const Rectangle editButton{
-        static_cast<float>(m_context->windowWidth - 132), 16.0f, 112.0f, 36.0f
+    const Rectangle eraserButton{504.0f, 16.0f, 120.0f, 36.0f};
+    const Rectangle menuButton{
+        static_cast<float>(m_context->windowWidth - 128), 16.0f, 110.0f, 38.0f
     };
     UiButton::Draw(
         terrainButton,
@@ -313,22 +402,76 @@ void CustomLevelEditorScene::Render() const {
     UiButton::Draw(
         gridButton,
         "Grid inicial",
-        m_designTool == DesignTool::Grid ? SKYBLUE : LIGHTGRAY
+        custom.hasGrid ? LIGHTGRAY : RED
     );
     UiButton::Draw(
         goalButton,
         "Meta",
-        m_designTool == DesignTool::Goal ? SKYBLUE : LIGHTGRAY
+        custom.hasGoal ? LIGHTGRAY : RED
     );
+    if (!custom.hasGrid) {
+        const char* required = "¡Obligatorio!";
+        DrawText(required,
+            static_cast<int>(gridButton.x + (gridButton.width - MeasureText(required, 12)) / 2),
+            static_cast<int>(gridButton.y + gridButton.height + 2.0f), 12, RED);
+    }
+    if (!custom.hasGoal) {
+        const char* required = "¡Obligatorio!";
+        DrawText(required,
+            static_cast<int>(goalButton.x + (goalButton.width - MeasureText(required, 12)) / 2),
+            static_cast<int>(goalButton.y + goalButton.height + 2.0f), 12, RED);
+    }
     UiButton::Draw(musicButton, "Música", SKYBLUE);
+    UiButton::Draw(
+        eraserButton,
+        "Borrador",
+        m_designTool == DesignTool::Eraser ? SKYBLUE : LIGHTGRAY
+    );
     const bool ready = custom.hasTerrain && custom.hasGrid && custom.hasGoal;
-    UiButton::Draw(editButton, "EDIT", ready ? SKYBLUE : GRAY);
+    UiButton::Draw(menuButton, "MENÚ", LIGHTGRAY);
+    const Rectangle editButton = UiButton::PlaySideButton(
+        m_context->windowWidth, m_context->windowHeight
+    );
+    DrawRectangleRec(editButton, ready ? DARKGREEN : GRAY);
+    DrawRectangleLinesEx(editButton, 1.0f, DARKGRAY);
+    const char* editLabel = "EDITAR";
+    const char* combiLabel = "COMBI";
+    DrawText(
+        editLabel,
+        static_cast<int>(editButton.x + (editButton.width - MeasureText(editLabel, 20)) / 2),
+        static_cast<int>(editButton.y + 22),
+        20,
+        WHITE
+    );
+    DrawText(
+        combiLabel,
+        static_cast<int>(editButton.x + (editButton.width - MeasureText(combiLabel, 16)) / 2),
+        static_cast<int>(editButton.y + 50),
+        16,
+        WHITE
+    );
+    const Rectangle enterBadge{
+        editButton.x + editButton.width - 42.0f,
+        editButton.y + 4.0f,
+        38.0f,
+        16.0f
+    };
+    DrawRectangleRec(enterBadge, Fade(BLACK, 0.65f));
+    DrawText(
+        "ENTER",
+        static_cast<int>(enterBadge.x + 3.0f),
+        static_cast<int>(enterBadge.y + 2.0f),
+        11,
+        WHITE
+    );
 
     const char* instructions = m_designTool == DesignTool::Terrain
         ? "Clic izquierdo: puntos del terreno | clic derecho: cerrar"
         : m_designTool == DesignTool::Grid
         ? "Haz clic donde comenzará la esquina superior izquierda del grid"
-        : "Haz clic para colocar la meta";
+        : m_designTool == DesignTool::Eraser
+        ? "Haz clic dentro de una forma de terreno para borrarla"
+        : "Haz clic sobre el terreno para colocar la meta en su superficie";
     DrawText(instructions, 20, 64, 16, DARKGRAY);
     DrawText(
         TextFormat(
@@ -341,16 +484,6 @@ void CustomLevelEditorScene::Render() const {
         m_context->windowHeight - 28,
         16,
         ready ? DARKGREEN : DARKGRAY
-    );
-    UiButton::Draw(
-        UiButton::CenteredAtBottom(
-            m_context->windowWidth,
-            m_context->windowHeight,
-            110.0f,
-            38.0f,
-            18.0f
-        ),
-        "Lista"
     );
     if (m_musicPickerOpen) {
         const auto& categories = GetCustomMusicCategories();

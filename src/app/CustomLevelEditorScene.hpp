@@ -8,7 +8,7 @@ struct AppContext;
 class CustomLevelEditorScene final : public I_Scene {
     AppContext* m_context;
     Camera2D m_designCamera{};
-    enum class DesignTool { Terrain, Grid, Goal };
+    enum class DesignTool { Terrain, Grid, Goal, Eraser };
     DesignTool m_designTool = DesignTool::Terrain;
     std::vector<Math::Vector2D> m_terrainWorkPoints;
     bool m_musicPickerOpen = false;

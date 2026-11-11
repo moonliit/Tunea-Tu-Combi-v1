@@ -401,14 +401,14 @@ void MainGameScene::Render() const {
                 UiButton::PlaySideButton(
                     m_appContext->windowWidth, m_appContext->windowHeight
                 ),
-                52.0f,
+                100.0f,
                 32.0f,
                 8.0f
             ),
-            "v",
+            "DISEÑO",
             DARKGRAY,
             WHITE,
-            16
+            14
         );
     }
 
