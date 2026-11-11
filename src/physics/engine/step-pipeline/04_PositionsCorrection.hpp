@@ -3,9 +3,10 @@
 
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/Joint.hpp"
+#include <list>
 
 namespace Physics {
-    void CorrectJointPositions(std::vector<std::shared_ptr<BaseJoint>>& manifolds);
+    void CorrectJointPositions(std::list<std::shared_ptr<BaseJoint>>& manifolds);
     void CorrectRevoluteJointPosition(RevoluteJoint& joint);
     void CorrectWeldJointPosition(WeldJoint& joint);
     void CorrectManifoldPositions(std::vector<Manifold>& manifolds);

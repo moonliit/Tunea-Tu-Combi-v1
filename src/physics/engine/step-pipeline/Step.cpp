@@ -1,10 +1,12 @@
 #include "physics/engine/World.hpp"
+#include "physics/engine/common/BodyPairHash.hpp"
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/step-pipeline/01_BroadPhase.hpp"
 #include "physics/engine/step-pipeline/02_NarrowPhase.hpp"
 #include "physics/engine/step-pipeline/03_VelocitiesResolution.hpp"
 #include "physics/engine/step-pipeline/04_PositionsCorrection.hpp"
-#include "physics/engine/step-pipeline/05_EmergencyFallbackCorrection.hpp"
+#include "physics/engine/step-pipeline/05_JointBreakageCleanup.hpp"
+#include "physics/engine/step-pipeline/0x_EmergencyFallbackCorrection.hpp"
 using namespace std;
 using namespace Math;
 using namespace Physics;
@@ -46,18 +48,6 @@ void World::Step(float deltaTime) {
                 continue;
             }
 
-            auto shapeToString = [](RbShape shape) {
-                switch (shape) {
-                    case RbShape::Edge: return "Edge";
-                    case RbShape::TerrainMesh: return "TerrainMesh";
-                    case RbShape::Box: return "Box";
-                    case RbShape::Circle: return "Circle";
-                    case RbShape::Capsule: return "Capsule";
-                    case RbShape::Triangle: return "Triangle";
-                    default: return "Unknown";
-                }
-            };
-
             if (NarrowPhase::DetectCollision(pair.first, pair.second, manifold)) {
                 m_manifolds.push_back(manifold);
             }
@@ -71,14 +61,24 @@ void World::Step(float deltaTime) {
             CorrectJointPositions(m_joints);
             CorrectManifoldPositions(m_manifolds);
         }
-
         // --- EMERGENCY SAFETY & VELOCITY DAMPENING PASS ---
         // NOTE: currently disabled as physics seem stable for now
         // EmergencyFallbackCorrection(m_manifolds, subDt);
+    }
+
+    for (auto& joint: m_joints) {
+        if (!joint) continue;
+        if (joint->GetCurrentStress() > BaseJoint::breakThreshold) {
+            std::println("Broken! On stress: {}", float(joint->GetCurrentStress()));
+        } else if (joint->GetCurrentStress() > RealNum(100)) {
+            std::println("Joint stress: {}", float(joint->GetCurrentStress()));
+        }
     }
 
     // clear accumlated forces after the step
     for (auto& body: m_bodies) {
         body->GetForceMut() = Vector2D::Zero();
     }
+
+    CleanupBrokenJoints(m_joints, m_jointConnectedCache);
 }

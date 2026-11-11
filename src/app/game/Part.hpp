@@ -100,7 +100,8 @@ public:
         m_attachmentRotationOffset = 0.0f;
         m_propulsionActive = false;
         m_activationActive = false;
-        m_activationCooldown = 0.0f;
+        m_activeTimeRemaining = 0.0f;
+        m_cooldownRemaining = 0.0f;
         if (m_containedPart) {
             m_containedPart->ResetPhysicsBody();
         }
@@ -117,6 +118,7 @@ public:
     bool CanContain(const Part& part) const;
     bool ContainPart(std::unique_ptr<Part> part);
     std::unique_ptr<Part> RemoveContainedPart();
+    void ApplyPropulsionForce(float magnitude);
 
 private:
     Math::GridCoord m_gridCoord;
@@ -130,7 +132,8 @@ private:
     Math::RealNum m_attachmentRotationOffset = 0.0f;
     bool m_propulsionActive = false;
     bool m_activationActive = false;
-    float m_activationCooldown = 0.0f;
+    float m_activeTimeRemaining = 0.0f;
+    float m_cooldownRemaining = 0.0f;
     std::unique_ptr<Part> m_containedPart;
 
     friend class EditorGrid;

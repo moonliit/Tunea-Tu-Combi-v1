@@ -7,8 +7,9 @@ using namespace Math;
 namespace {
 
 constexpr float FanForce = 750.0f;
-constexpr float WindSailImpulse = 1500.0f;
-constexpr float WindSailDelay = 0.75f;
+constexpr float WindSailForce = 1750.0f;
+constexpr float WindSailActiveDuration = 0.75f;
+constexpr float WindSailCooldownDuration = 1.25f;
 
 Vector2D RotateLocalOffset(Vector2D offset, PartOrientation orientation) {
     switch (orientation) {
@@ -35,20 +36,12 @@ void Part::Activate() {
             m_propulsionActive = m_activationActive;
             break;
         case PartType::WindSail:
-            if (m_activationCooldown > 0.0f) return;
-            {
-                const Vector2D direction = Vector2D::FromAngle(
-                    m_physicsBody->GetRotation()
-                );
-                m_physicsBody->ApplyLinearImpulse({
-                    direction.x * WindSailImpulse,
-                    direction.y * WindSailImpulse
-                });
-            }
+            if (m_cooldownRemaining > 0.0f) return;
 
             m_activationActive = true;
             m_propulsionActive = true;
-            m_activationCooldown = WindSailDelay;
+            m_activeTimeRemaining = WindSailActiveDuration;
+            m_cooldownRemaining = WindSailCooldownDuration;
             break;
         case PartType::TNTBarrel:
         case PartType::SquareBlock:
@@ -87,30 +80,47 @@ std::unique_ptr<Part> Part::RemoveContainedPart() {
     return std::move(m_containedPart);
 }
 
+void Part::ApplyPropulsionForce(float magnitude) {
+    const Vector2D direction = Vector2D::FromAngle(
+        m_physicsBody->GetRotation()
+    );
+    m_physicsBody->ApplyForce({
+        direction.x * magnitude,
+        direction.y * magnitude
+    });
+}
+
 void Part::UpdateActivation(float deltaTime) {
     if (!m_physicsBody) return;
 
-    if (m_activationCooldown > 0.0f) {
-        m_activationCooldown = std::max(
-            0.0f,
-            m_activationCooldown - deltaTime
+    if (m_cooldownRemaining > 0.0f) {
+        m_cooldownRemaining = std::max(
+            0.0f, m_cooldownRemaining - deltaTime
         );
-        if (m_activationCooldown <= 0.0f &&
-            m_type == PartType::WindSail) {
+    }
+
+    if (m_activeTimeRemaining > 0.0f) {
+        m_activeTimeRemaining = std::max(
+            0.0f, m_activeTimeRemaining - deltaTime
+        );
+        if (m_activeTimeRemaining <= 0.0f) {
             m_activationActive = false;
         }
     }
 
     m_propulsionActive = m_activationActive;
-    if (m_type != PartType::Fan || !m_activationActive) return;
+    if (!m_activationActive) return;
 
-    const Vector2D direction = Vector2D::FromAngle(
-        m_physicsBody->GetRotation()
-    );
-    m_physicsBody->ApplyForce({
-        direction.x * FanForce,
-        direction.y * FanForce
-    });
+    switch (m_type) {
+        case PartType::Fan:
+            ApplyPropulsionForce(FanForce);
+            break;
+        case PartType::WindSail:
+            ApplyPropulsionForce(WindSailForce);
+            break;
+        default:
+            break;
+    }
 }
 
 Part::Part(

@@ -1,3 +1,4 @@
+#include "math/SafeReal.hpp"
 #include "physics/engine/step-pipeline/03_VelocitiesResolution.hpp"
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/Joint.hpp"
@@ -9,35 +10,36 @@ static constexpr float k_beta = 0.2f;
 
 namespace Physics {
 
-void ResolveJointVelocities(vector<shared_ptr<BaseJoint>>& joints, float dt) {
+void ResolveJointVelocities(list<shared_ptr<BaseJoint>>& joints, float dt) {
     for (auto& joint : joints) {
         if (!joint) continue;
+        if (joint->IsBroken()) continue;
 
+        RealNum instantStress = RealNum(0);
         switch (joint->GetJointType()) {
             case JointType::Revolute: {
                 RevoluteJoint& revolute = *static_pointer_cast<RevoluteJoint>(joint);
-                ResolveRevoluteJointVelocity(revolute, dt);
+                instantStress = ResolveRevoluteJointVelocity(revolute, dt);
                 break;
             }
             case JointType::Weld: {
                 WeldJoint& weld = *static_pointer_cast<WeldJoint>(joint);
-                ResolveWeldJointVelocity(weld, dt);
+                instantStress = ResolveWeldJointVelocity(weld, dt);
                 break;
             }
-            default:
-                break;
         }
+        joint->AccumulateAndFilterStress(instantStress);
     }
 }
 
-void ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt) {
+RealNum ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt) {
     auto bodyA = joint.GetBodyA();
     auto bodyB = joint.GetBodyB();
-    if (!bodyA || !bodyB) return;
+    if (!bodyA || !bodyB) return RealNum(0);
 
     bool isStaticA = (bodyA->GetBodyType() == BodyType::Static);
     bool isStaticB = (bodyB->GetBodyType() == BodyType::Static);
-    if (isStaticA && isStaticB) return;
+    if (isStaticA && isStaticB) return RealNum(0);
 
     // 1. Compute world anchor points from current transforms
     const Transform& tA = bodyA->GetTransform();
@@ -80,7 +82,7 @@ void ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt) {
         k_10, k_11
     };
     auto KInverseOpt = K.Inverse();
-    if (!KInverseOpt.has_value()) return; // Singular matrix, skip
+    if (!KInverseOpt.has_value()) return RealNum(0); // Singular matrix, skip
     Matrix2x2 massMatrix = KInverseOpt.value();
 
     // 5. Compute bias for positional error correction (Baumgarte)
@@ -110,28 +112,37 @@ void ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt) {
         vB += appliedImpulse * invMassB;
         wB += rB.Cross(appliedImpulse) * invInertiaB;
     }
+
+    RealNum combinedMass = (
+        (invMassA > 0.0f ? 1.0f / invMassA : 0.0f) +
+        (invMassB > 0.0f ? 1.0f / invMassB : 0.0f)
+    );
+    RealNum effectiveMassScale = pow(float(combinedMass), 0.75f);
+    RealNum normalizedStress =
+        combinedMass.IsZero() ? RealNum(0) : appliedImpulse.Length() / effectiveMassScale;
+    return normalizedStress;
 }
 
-void ResolveWeldJointVelocity(WeldJoint& joint, float dt) {
+RealNum ResolveWeldJointVelocity(WeldJoint& joint, float dt) {
     // Step A: Solve the 2D linear anchor lock (same as Revolute)
-    ResolveRevoluteJointVelocity(joint, dt);
+    RealNum linearStress = ResolveRevoluteJointVelocity(joint, dt);
 
     // Step B: Solve the 1D Angular Constraint (lock relative rotation)
     auto bodyA = joint.GetBodyA();
     auto bodyB = joint.GetBodyB();
-    if (!bodyA || !bodyB) return;
+    if (!bodyA || !bodyB) return RealNum(0);
 
     const Transform& tA = bodyA->GetTransform();
     const Transform& tB = bodyB->GetTransform();
 
     bool isStaticA = (bodyA->GetBodyType() == BodyType::Static);
     bool isStaticB = (bodyB->GetBodyType() == BodyType::Static);
-    if (isStaticA && isStaticB) return;
+    if (isStaticA && isStaticB) return RealNum(0);
 
     RealNum invInertiaA = isStaticA ? RealNum(0) : bodyA->GetMassData().invInertia;
     RealNum invInertiaB = isStaticB ? RealNum(0) : bodyB->GetMassData().invInertia;
     RealNum angularDenom = invInertiaA + invInertiaB;
-    if (angularDenom <= 0.0f) return;
+    if (angularDenom <= 0.0f) return RealNum(0);
 
     // Relative angular velocity error
     RealNum wA = bodyA->GetAngularVelocity();
@@ -162,6 +173,17 @@ void ResolveWeldJointVelocity(WeldJoint& joint, float dt) {
         RealNum& wB = bodyB->GetAngularVelocityMut();
         wB += appliedAngleImpulse * invInertiaB;
     }
+
+    RealNum sumInvInertia = invInertiaA + invInertiaB;
+    RealNum angularStress = 0.0f;
+    if (sumInvInertia > 0.0f) {
+        RealNum combinedInertia = 1.0f / sumInvInertia;
+        RealNum effectiveInertiaScale = pow(float(combinedInertia), 0.75f);
+        angularStress = abs(lambdaNewAngle) / effectiveInertiaScale;
+    }
+
+    RealNum totalWeldStress = linearStress + (angularStress * 0.5f);
+    return totalWeldStress;
 }
 
 void ResolveManifoldVelocities(vector<Manifold>& manifolds, float dt) {

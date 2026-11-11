@@ -7,7 +7,7 @@ using namespace std;
 
 namespace Physics {
 
-void CorrectJointPositions(vector<shared_ptr<BaseJoint>>& joints) {
+void CorrectJointPositions(list<shared_ptr<BaseJoint>>& joints) {
     for (auto& joint : joints) {
         if (!joint) continue;
 
