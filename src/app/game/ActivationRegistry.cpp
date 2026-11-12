@@ -117,6 +117,10 @@ bool IsWindSailAction(ActivationAction action) {
         action <= ActivationAction::WindSailLeft;
 }
 
+bool IsTntAction(ActivationAction action) {
+    return action == ActivationAction::TNT;
+}
+
 ActivationAction GetFanAction(PartOrientation orientation) {
     return static_cast<ActivationAction>(
         static_cast<std::size_t>(

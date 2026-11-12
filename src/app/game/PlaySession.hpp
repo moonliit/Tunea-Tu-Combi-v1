@@ -22,6 +22,9 @@ private:
     PhysicsAssembler m_assembler;
     ActivationRegistry m_activationRegistry;
     Math::Vector2D m_gravity;
+    int m_tntConsumedAmount = 0;
+    bool m_damageConsumed = false;
+    bool m_breakageConsumed = false;
 
     void CreatePhysicsWorld(
         const std::vector<std::vector<Math::Vector2D>>& terrainSections,
@@ -69,10 +72,26 @@ public:
     const EditorGrid& GetRuntimeGrid() const {
         return m_runtimeModel.GetGrid();
     }
+    int& GetTntConsumedAmount() { return m_tntConsumedAmount; }
+    int GetActiveTntAmount() {
+        int count = 0;
+        for (const Part* part : m_runtimeModel.GetGrid().GetActiveParts()) {
+            if (part->GetType() == PartType::TNTBarrel) {
+                count++;
+            }
+            if (part->HasContainedPart() &&
+                part->GetContainedPart()->GetType() == PartType::TNTBarrel) {
+                count++;
+            }
+        }
+        return count;
+    }
+    bool& GetDamageConsumed() { return m_damageConsumed; }
+    bool& GetBreakageConsumed() { return m_breakageConsumed; }
 
 private:
     void BuildActivationSubscriptions();
-    void ProcessTntImpacts();
+    void ProcessImpacts();
     void RemoveConsumedTnt();
 };
 

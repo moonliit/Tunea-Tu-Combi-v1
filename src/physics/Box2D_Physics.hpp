@@ -88,6 +88,7 @@ public:
     ~Box2D_PhysicsWorld() override;
     void Step(float deltaTime) override;
     std::vector<PhysicsImpact> ConsumeImpactEvents() override { return {}; }
+    std::vector<Math::Vector2D> ConsumeBreakagePositions() override { return {}; }
     void RemoveBody(
         const std::shared_ptr<I_RigidBody>& body
     ) override { (void)body; }

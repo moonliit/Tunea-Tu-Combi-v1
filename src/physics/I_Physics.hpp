@@ -44,6 +44,7 @@ public:
     virtual ~I_PhysicsWorld() = default;
     virtual void Step(float deltaTime) = 0;
     virtual std::vector<PhysicsImpact> ConsumeImpactEvents() = 0;
+    virtual std::vector<Math::Vector2D> ConsumeBreakagePositions() = 0;
     virtual void RemoveBody(
         const std::shared_ptr<I_RigidBody>& body
     ) = 0;

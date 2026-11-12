@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <utility>
+#include <print>
 
 namespace {
 
@@ -58,8 +59,8 @@ void StartLevel(AppContext* context, int level) {
 void CreateCustomLevel(AppContext* context, const std::string& name) {
     context->customLevels->Add(name);
     context->activeCustomLevel = static_cast<int>(context->customLevels->GetLevels().size()) - 1;
-    context->audioController->StartCustomMusic(
-        context->customLevels->GetLevels()[context->activeCustomLevel].musicPath
+    context->audioController->StartLevelEditorMusic(
+        context->customLevels->GetLevels()[context->activeCustomLevel].musicPath, true
     );
     context->openCustomMusicPicker = true;
     context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
@@ -84,7 +85,11 @@ void MainMenuScene::ProcessInput(float) {
     }
 
     if (!m_selectingLevel) {
-        if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) m_selectingLevel = true;
+        if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            m_context->audioController->PlayUiClick();
+            m_context->audioController->ReturnToSelector();
+            m_selectingLevel = true;
+        }
         return;
     }
 
@@ -253,8 +258,8 @@ void MainMenuScene::ProcessLevelEditorInput() {
         if (UiButton::WasClicked(editButton)) {
             m_context->audioController->PlayUiClick();
             m_context->activeCustomLevel = static_cast<int>(i);
-            m_context->audioController->StartCustomMusic(
-                m_context->customLevels->GetLevels()[i].musicPath
+            m_context->audioController->StartLevelEditorMusic(
+                m_context->customLevels->GetLevels()[i].musicPath, false
             );
             m_context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
             return;

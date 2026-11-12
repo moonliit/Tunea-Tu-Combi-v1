@@ -263,7 +263,7 @@ void EditorGrid::DrawSelf() const {
                     pos.y - offsetPos,
                     drawnSize, drawnSize
                 },
-                Fade(LIGHTGRAY, 100)
+                Fade(LIGHTGRAY, 0.5f)
             );
         }
     }

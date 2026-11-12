@@ -7,6 +7,7 @@
 #include "app/game/PlaySession.hpp"
 #include "app/I_Scene.hpp"
 #include "input/GameInput.hpp"
+#include "physics/I_Physics.hpp"
 #include "rendering/GameUiRenderer.hpp"
 #include "rendering/WorldRenderer.hpp"
 

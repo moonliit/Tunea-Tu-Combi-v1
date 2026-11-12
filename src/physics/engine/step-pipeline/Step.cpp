@@ -148,11 +148,17 @@ void World::Step(float deltaTime) {
         body->GetForceMut() = Vector2D::Zero();
     }
 
-    CleanupBrokenJoints(m_joints, m_jointConnectedCache);
+    CleanupBrokenJoints(m_joints, m_jointConnectedCache, m_breakagePositions);
 }
 
 std::vector<PhysicsImpact> World::ConsumeImpactEvents() {
     std::vector<PhysicsImpact> events = std::move(m_impactEvents);
     m_impactEvents.clear();
     return events;
+}
+
+std::vector<Math::Vector2D> World::ConsumeBreakagePositions() {
+    std::vector<Math::Vector2D> positions = std::move(m_breakagePositions);
+    m_breakagePositions.clear();
+    return positions;
 }

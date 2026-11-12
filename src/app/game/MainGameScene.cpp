@@ -129,7 +129,7 @@ void MainGameScene::ProcessInput(float dt) {
         if (UiButton::WasClicked(designButton)) {
             m_appContext->audioController->SetFanActive(false);
             m_appContext->audioController->SetWheelActive(false);
-            m_appContext->audioController->SetPlayMode(false);
+            m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel});
             m_appContext->returnToCustomDesign = true;
             m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
             return;
@@ -175,6 +175,10 @@ void MainGameScene::ProcessInput(float dt) {
         if (input.activationAction.has_value()) {
             if (IsWindSailAction(input.activationAction.value())) {
                 m_appContext->audioController->PlaySail();
+            }
+            if (IsTntAction(input.activationAction.value())) {
+                int amount = m_playSession.GetActiveTntAmount();
+                m_appContext->audioController->PlayTntExplosion(amount);
             }
             if (input.activationAction == ActivationAction::DriverHonk) {
                 m_appContext->audioController->PlayDriverHorn();
@@ -362,6 +366,19 @@ void MainGameScene::Update(float dt) {
                 }
             );
             m_appContext->audioController->SetWheelActive(hasWheel);
+            if (m_playSession.GetTntConsumedAmount() > 0) {
+                int amount = m_playSession.GetTntConsumedAmount();
+                m_appContext->audioController->PlayTntExplosion(amount);
+                m_playSession.GetTntConsumedAmount() = 0;
+            }
+            if (m_playSession.GetDamageConsumed()) {
+                m_appContext->audioController->PlayDamageEffect();
+                m_playSession.GetDamageConsumed() = false;
+            }
+            if (m_playSession.GetBreakageConsumed()) {
+                m_appContext->audioController->PlayBreakageEffect();
+                m_playSession.GetBreakageConsumed() = false;
+            }
         }
         if (driverPosition &&
             driverPosition->x > m_level.GetDefinition().goal.position.x) {
@@ -396,7 +413,8 @@ void MainGameScene::TransitionToPlayMode() {
     m_appContext->audioController->SetWheelActive(hasWheel);
     m_stateMachine.EnterPlay();
     m_playSession.Start();
-    m_appContext->audioController->SetPlayMode(true);
+    auto scenario = m_appContext->audioController->GetCurrentScenario();
+    m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel, scenario.levelIndex});
 
     const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
     const auto& runtimeParts = runtimeGrid.GetActiveParts();
@@ -432,7 +450,8 @@ void MainGameScene::ResetToBuildMode() {
     ResetEditorCamera();
 
     m_playSession.Reset(m_level.GetTerrain());
-    m_appContext->audioController->SetPlayMode(false);
+    auto scenario = m_appContext->audioController->GetCurrentScenario();
+    m_appContext->audioController->SetCurrentScenario({Scenario::VehicleBuild, scenario.levelIndex});
     std::fill(m_passengerCollected.begin(), m_passengerCollected.end(), false);
     m_carriedPassengers.clear();
 }

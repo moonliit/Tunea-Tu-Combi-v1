@@ -54,6 +54,7 @@ private:
 
 bool IsFanAction(ActivationAction action);
 bool IsWindSailAction(ActivationAction action);
+bool IsTntAction(ActivationAction action);
 ActivationAction GetFanAction(PartOrientation orientation);
 ActivationAction GetWindSailAction(PartOrientation orientation);
 PartOrientation GetPropulsionFacingOrientation(PartOrientation orientation);

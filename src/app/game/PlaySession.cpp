@@ -1,13 +1,14 @@
 #include "app/game/PlaySession.hpp"
-#include "physics/Box2D_Physics.hpp"
 #include "physics/engine/World.hpp"
 
+#include <unordered_set>
 #include <algorithm>
 #include <cmath>
 
 namespace {
 
-constexpr float TntImpactImpulseThreshold = 8.0f;
+constexpr float DamageImpulseThreshold = 150.0f;
+constexpr float TntImpactImpulseThreshold = 10.0f;
 
 bool AreSamePoint(
     const Math::Vector2D& first,
@@ -146,18 +147,32 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
 void PlaySession::Update(float deltaTime) {
     m_activationRegistry.Update(deltaTime);
     m_physics->Step(deltaTime);
-    ProcessTntImpacts();
+    ProcessImpacts();
     RemoveConsumedTnt();
 }
 
-void PlaySession::ProcessTntImpacts() {
+void PlaySession::ProcessImpacts() {
+    std::unordered_set<Part*> impactedPartsForTnt;
     for (const PhysicsImpact& impact : m_physics->ConsumeImpactEvents()) {
-        if (impact.part == nullptr ||
-            impact.part->GetType() != PartType::TNTBarrel ||
-            impact.impulse < TntImpactImpulseThreshold) {
-            continue;
+        if (
+            impact.part != nullptr &&
+            impact.part->GetType() == PartType::TNTBarrel &&
+            impact.impulse >= TntImpactImpulseThreshold
+        ) {
+            // todo: draw explosion effect
+            impact.part->Activate();
+            if (impactedPartsForTnt.find(impact.part) == impactedPartsForTnt.end()) {
+                m_tntConsumedAmount++;
+                impactedPartsForTnt.insert(impact.part);
+            }
+        } else if (impact.impulse >= DamageImpulseThreshold) {
+            // todo: draw damage effect
+            m_damageConsumed = true;
         }
-        impact.part->Activate();
+    }
+    for (const Math::Vector2D& breakagePos : m_physics->ConsumeBreakagePositions()) {
+        // todo: draw breakage effect
+        m_breakageConsumed = true;
     }
 }
 

@@ -14,6 +14,7 @@
 #include <optional>
 #include <random>
 #include <utility>
+#include <print>
 
 namespace {
 
@@ -134,6 +135,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
         m_musicListScroll = 0.0f;
         m_musicPickerOpen = true;
+        m_context->audioController->StartLevelEditorMusic(custom.musicPath, true);
         return;
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(eraserButton)) {
@@ -167,7 +169,8 @@ void CustomLevelEditorScene::ProcessInput(float) {
             if (y < list.y || y + 46.0f > list.y + list.height) continue;
             if (UiButton::WasClicked(Rectangle{list.x, y, list.width, 46.0f})) {
                 m_musicTrack = static_cast<int>(i);
-                m_context->audioController->StartCustomMusic(tracks[i].path);
+                // m_context->audioController->SetCurrentScenario({Scenario::LevelEditorMusicPreview, 0, tracks[i].path});
+                m_context->audioController->StartLevelEditorMusic(tracks[i].path, true);
                 return;
             }
         }
@@ -179,12 +182,15 @@ void CustomLevelEditorScene::ProcessInput(float) {
             custom.musicTitle = track.title;
             custom.musicArtist = track.artist;
             m_context->customLevels->Save();
-            m_context->audioController->StartCustomMusic(custom.musicPath);
+            // m_context->audioController->SetCurrentScenario({Scenario::LevelEditorBuild, 0, track.path});
+            m_context->audioController->StartLevelEditorMusic(custom.musicPath, false);
             m_musicPickerOpen = false;
             return;
         }
         if (UiButton::WasClicked(cancel)) {
-            m_context->audioController->StartCustomMusic(custom.musicPath);
+            auto scenario = m_context->audioController->GetCurrentScenario();
+            // m_context->audioController->SetCurrentScenario({Scenario::LevelEditorBuild, 0, scenario.customMusicPath});
+            m_context->audioController->StartLevelEditorMusic(custom.musicPath, false);
             m_musicPickerOpen = false;
             return;
         }
@@ -204,7 +210,6 @@ void CustomLevelEditorScene::ProcessInput(float) {
         LevelDefinition definition = custom.definition;
         definition.levelNumber = -1;
         definition.initialCamera.reset();
-        m_context->audioController->StartCustomMusic(custom.musicPath);
         m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
         return;
     }

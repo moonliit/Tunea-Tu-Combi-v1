@@ -6,7 +6,7 @@
 struct LevelMenuEntry {
     const char* path;
     const char* label;
-    const char* musicPath;
+    const char* customMusicPath;
 };
 
 inline constexpr std::array OfficialLevels{

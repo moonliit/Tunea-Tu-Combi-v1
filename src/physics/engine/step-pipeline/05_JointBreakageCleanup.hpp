@@ -10,7 +10,8 @@
 namespace Physics {
     inline void CleanupBrokenJoints(
         std::list<std::shared_ptr<BaseJoint>>& joints,
-        std::unordered_set<RigidBodyPair, BodyPairHash>& jointConnectedCache
+        std::unordered_set<RigidBodyPair, BodyPairHash>& jointConnectedCache,
+        std::vector<Math::Vector2D>& breakagePositions
     ) {
         std::queue<std::list<std::shared_ptr<BaseJoint>>::iterator> brokenJointIters;
 
@@ -26,8 +27,12 @@ namespace Physics {
                     jointConnectedCache.erase(cacheIt);
                 }
                 joint->SetIsBroken(true);
-                // mark ith joint for removal
                 brokenJointIters.push(it);
+                Math::Vector2D midPos = (
+                    joint->GetBodyA()->GetTransform().position +
+                    joint->GetBodyB()->GetTransform().position
+                ) / 2;
+                breakagePositions.push_back(midPos);
             }
             joint->ResetStress();
         }

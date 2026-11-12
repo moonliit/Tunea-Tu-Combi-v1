@@ -1,6 +1,7 @@
 #ifndef PHYSICS_WORLD_HPP
 #define PHYSICS_WORLD_HPP
 
+#include "math/Vector2D.hpp"
 #include "physics/I_Physics.hpp"
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/BaseRigidBody.hpp"
@@ -19,6 +20,7 @@ private:
     std::unordered_set<RigidBodyPair, BodyPairHash> m_jointConnectedCache;
     std::vector<Manifold> m_manifolds;
     std::vector<PhysicsImpact> m_impactEvents;
+    std::vector<Math::Vector2D> m_breakagePositions;
     Math::Vector2D m_gravity;
     Structural::Graph m_structuralGraph;
     int m_subStepCount;
@@ -41,6 +43,7 @@ public:
     ~World() override = default;
     void Step(float deltaTime) override;
     std::vector<PhysicsImpact> ConsumeImpactEvents() override;
+    std::vector<Math::Vector2D> ConsumeBreakagePositions() override;
     void RemoveBody(
         const std::shared_ptr<I_RigidBody>& body
     ) override;
