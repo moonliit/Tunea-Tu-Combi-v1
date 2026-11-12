@@ -327,10 +327,9 @@ void MainGameScene::Update(float dt) {
             m_passengerCollected[passengerIndex] = true;
             m_carriedPassengers.emplace_back(hostPart, passenger.hasSkirt);
         }
+        std::optional<Vector2> driverPosition;
         if (!parts.empty()) {
             Vector2 center{0.0f, 0.0f};
-            std::optional<Vector2> driverPosition;
-            bool entireCarPassedFinish = true;
             for (const Part* part : parts) {
                 const auto position = part->GetRenderState(runtimeGrid).position;
                 center.x += static_cast<float>(position.x);
@@ -341,8 +340,6 @@ void MainGameScene::Update(float dt) {
                         static_cast<float>(position.y)
                     };
                 }
-                entireCarPassedFinish = entireCarPassedFinish &&
-                    position.x > m_level.GetDefinition().goal.position.x;
             }
             // La cámara sigue al chofer; si no se encuentra, usa el centro de las piezas.
             m_camera.target = driverPosition.value_or(Vector2{
@@ -365,22 +362,29 @@ void MainGameScene::Update(float dt) {
                 }
             );
             m_appContext->audioController->SetWheelActive(hasWheel);
-            if (entireCarPassedFinish && !m_levelCompleted) {
-                m_levelCompleted = true;
-                m_appContext->audioController->SetFanActive(false);
-                m_appContext->audioController->SetWheelActive(false);
-                if (!m_isCustomLevel) {
-                    m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
-                }
-                m_appContext->audioController->ReturnToSelector();
-                m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+        }
+        if (driverPosition &&
+            driverPosition->x > m_level.GetDefinition().goal.position.x) {
+            m_driverBeyondGoalSeconds += dt;
+        } else {
+            m_driverBeyondGoalSeconds = 0.0f;
+        }
+        if (m_driverBeyondGoalSeconds >= 3.0f && !m_levelCompleted) {
+            m_levelCompleted = true;
+            m_appContext->audioController->SetFanActive(false);
+            m_appContext->audioController->SetWheelActive(false);
+            if (!m_isCustomLevel) {
+                m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
             }
+            m_appContext->audioController->ReturnToSelector();
+            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
         }
     }
 }
 
 void MainGameScene::TransitionToPlayMode() {
     if (!m_level.GetGrid().ContainsPartType(PartType::Driver)) return;
+    m_driverBeyondGoalSeconds = 0.0f;
     const auto& parts = m_level.GetGrid().GetActiveParts();
     const bool hasWheel = std::any_of(
         parts.begin(),
@@ -419,6 +423,7 @@ void MainGameScene::TransitionToPlayMode() {
 }
 
 void MainGameScene::ResetToBuildMode() {
+    m_driverBeyondGoalSeconds = 0.0f;
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
     if (!m_stateMachine.IsBuildMode()) {
@@ -496,6 +501,38 @@ void MainGameScene::Render() const {
         m_camera,
         m_playSession.GetActivationRegistry()
     );
+    if (m_stateMachine.IsPlayMode() && m_driverBeyondGoalSeconds > 0.0f &&
+        !m_levelCompleted) {
+        const int count = std::clamp(
+            static_cast<int>(std::ceil(3.0f - m_driverBeyondGoalSeconds)),
+            1,
+            3
+        );
+        const float centerX = m_appContext->windowWidth / 2.0f;
+        const float centerY = m_appContext->windowHeight / 2.0f;
+        DrawRectangle(
+            0, 0,
+            m_appContext->windowWidth,
+            m_appContext->windowHeight,
+            Fade(DARKGRAY, 0.5f)
+        );
+        const char* label = "¡Ya llegó el chofer, causa!";
+        DrawText(
+            label,
+            static_cast<int>(centerX - MeasureText(label, 30) / 2),
+            static_cast<int>(centerY - 90.0f),
+            30,
+            WHITE
+        );
+        const char* number = TextFormat("%d", count);
+        DrawText(
+            number,
+            static_cast<int>(centerX - MeasureText(number, 120) / 2),
+            static_cast<int>(centerY - 35.0f),
+            120,
+            WHITE
+        );
+    }
     UiButton::Draw(
         UiButton::AtTopRight(
             m_appContext->windowWidth, 12.0f, 20.0f, 78.0f, 32.0f

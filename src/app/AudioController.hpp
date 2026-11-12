@@ -5,6 +5,7 @@
 #include <array>
 #include <raylib.h>
 #include <string>
+#include <unordered_map>
 
 class AudioController {
     std::array<Music, OfficialLevelCount + 1> m_music{};
@@ -22,6 +23,8 @@ class AudioController {
     bool m_cleanMusicLoaded = false;
     bool m_customMusicLoaded = false;
     bool m_customMusicActive = false;
+    std::string m_customMusicPath;
+    std::unordered_map<std::string, float> m_musicGains;
     bool m_playMode = false;
     float m_variantFade = 1.0f;
     bool m_fanActive = false;
@@ -36,6 +39,8 @@ class AudioController {
     void BeginTransition(int target);
     void LoadCleanMusic(const std::string& editedPath);
     Music& SelectedMusic();
+    float SelectedMusicGain() const;
+    void ApplyMusicVolume();
     void UpdateVariantFade(float deltaTime);
 
 public:

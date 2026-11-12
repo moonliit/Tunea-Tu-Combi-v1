@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 
 namespace {
 
@@ -15,6 +16,16 @@ std::string CleanPathFor(const std::string& editedPath) {
 
 void AudioController::Initialize() {
     InitAudioDevice();
+    std::ifstream levels("assets/audio/music_levels.tsv");
+    std::string line;
+    while (std::getline(levels, line)) {
+        const std::size_t separator = line.find('\t');
+        if (separator == std::string::npos) continue;
+        m_musicGains.emplace(
+            line.substr(0, separator),
+            std::stof(line.substr(separator + 1))
+        );
+    }
     m_music[0] = LoadMusicStream("assets/audio/menu.wav");
     for (std::size_t index = 0; index < OfficialLevels.size(); ++index) {
         m_music[index + 1] = LoadMusicStream(OfficialLevels[index].musicPath);
@@ -35,7 +46,7 @@ void AudioController::Initialize() {
     m_wheelSound = LoadMusicStream("assets/audio/sfx/wheel.wav");
     m_fanSound.looping = true;
     m_wheelSound.looping = true;
-    SetMusicVolume(m_fanSound, 0.8f);
+    SetMusicVolume(m_fanSound, 0.45f);
     SetMusicVolume(m_wheelSound, 0.05f);
     SetSoundVolume(m_sailSound, 0.5f);
     SetSoundVolume(m_uiClick, 0.45f);
@@ -44,7 +55,7 @@ void AudioController::Initialize() {
     for (Sound horn : m_horns) SetSoundVolume(horn, 0.75f);
     m_current = 0;
     m_volume = 1.0f;
-    SetMusicVolume(m_music[m_current], m_volume);
+    ApplyMusicVolume();
     PlayMusicStream(m_music[m_current]);
     m_initialized = true;
 }
@@ -93,11 +104,39 @@ Music& AudioController::SelectedMusic() {
     return m_cleanMusic;
 }
 
+float AudioController::SelectedMusicGain() const {
+    std::string path;
+    if (m_customMusicActive) {
+        path = (!m_playMode && m_cleanMusicLoaded)
+            ? CleanPathFor(m_customMusicPath)
+            : m_customMusicPath;
+    } else if (m_current == 0) {
+        path = "assets/audio/menu.wav";
+    } else {
+        const std::string editedPath = OfficialLevels[m_current - 1].musicPath;
+        path = (!m_playMode && m_cleanMusicLoaded)
+            ? CleanPathFor(editedPath)
+            : editedPath;
+    }
+    const auto gain = m_musicGains.find(path);
+    return gain == m_musicGains.end() ? 1.0f : gain->second;
+}
+
+void AudioController::ApplyMusicVolume() {
+    const bool cleanSelected = !m_playMode && m_cleanMusicLoaded &&
+        (m_customMusicActive || m_current != 0);
+    const float modeVolume = cleanSelected ? 0.85f : 1.0f;
+    const float transitionVolume = m_customMusicActive ? 1.0f : m_volume;
+    SetMusicVolume(
+        SelectedMusic(),
+        SelectedMusicGain() * modeVolume * transitionVolume * m_variantFade
+    );
+}
+
 void AudioController::UpdateVariantFade(float deltaTime) {
     if (m_variantFade >= 1.0f) return;
     m_variantFade = std::min(1.0f, m_variantFade + deltaTime / 0.42f);
-    const float volume = m_customMusicActive ? 0.8f : m_volume;
-    SetMusicVolume(SelectedMusic(), volume * m_variantFade);
+    ApplyMusicVolume();
 }
 
 void AudioController::StartLevel(int levelNumber) {
@@ -124,11 +163,13 @@ void AudioController::StartCustomMusic(const std::string& path) {
     m_customMusicLoaded = IsMusicValid(m_customMusic);
     if (!m_customMusicLoaded) return;
     m_customMusic.looping = true;
+    m_customMusicPath = path;
     LoadCleanMusic(path);
     m_customMusicActive = true;
     m_variantFade = 1.0f;
-    SetMusicVolume(SelectedMusic(), 0.8f);
+    ApplyMusicVolume();
     PlayMusicStream(SelectedMusic());
+    UpdateMusicStream(SelectedMusic());
     m_returningToMenu = false;
     m_transitioning = false;
 }
@@ -140,14 +181,18 @@ void AudioController::SetPlayMode(bool playing) {
     const float position = wasPlaying ? GetMusicTimePlayed(*previous) : 0.0f;
     m_playMode = playing;
     Music* next = &SelectedMusic();
-    if (previous == next || !wasPlaying) return;
+    if (previous == next || !wasPlaying) {
+        ApplyMusicVolume();
+        return;
+    }
 
     StopMusicStream(*previous);
     const float length = GetMusicTimeLength(*next);
-    SeekMusicStream(*next, length > 0.0f ? std::fmod(position, length) : 0.0f);
     m_variantFade = 0.0f;
     SetMusicVolume(*next, 0.0f);
     PlayMusicStream(*next);
+    SeekMusicStream(*next, length > 0.0f ? std::fmod(position, length) : 0.0f);
+    UpdateMusicStream(*next);
     PlaySound(m_radioStatic);
 }
 
@@ -214,7 +259,7 @@ void AudioController::Update(float deltaTime) {
 
     if (m_transitioning) {
         m_volume = std::max(0.0f, m_volume - deltaTime / 1.25f);
-        SetMusicVolume(SelectedMusic(), m_volume * m_variantFade);
+        ApplyMusicVolume();
         if (m_volume == 0.0f) {
             StopMusicStream(SelectedMusic());
             m_current = m_target;
@@ -226,22 +271,24 @@ void AudioController::Update(float deltaTime) {
             } else {
                 LoadCleanMusic("");
             }
-            SeekMusicStream(SelectedMusic(), 0.0f);
             PlayMusicStream(SelectedMusic());
+            SeekMusicStream(SelectedMusic(), 0.0f);
+            UpdateMusicStream(SelectedMusic());
             m_volume = 0.0f;
-            SetMusicVolume(SelectedMusic(), m_volume);
+            ApplyMusicVolume();
             m_transitioning = false;
         }
     } else if (!IsMusicStreamPlaying(SelectedMusic())) {
         if (m_current == 0 || !m_returningToMenu) {
-            SeekMusicStream(SelectedMusic(), 0.0f);
             PlayMusicStream(SelectedMusic());
+            SeekMusicStream(SelectedMusic(), 0.0f);
+            UpdateMusicStream(SelectedMusic());
         } else {
             BeginTransition(0);
         }
     } else if (m_volume < 1.0f) {
         m_volume = std::min(1.0f, m_volume + deltaTime / 1.25f);
-        SetMusicVolume(SelectedMusic(), m_volume * m_variantFade);
+        ApplyMusicVolume();
     }
     UpdateVariantFade(deltaTime);
 }

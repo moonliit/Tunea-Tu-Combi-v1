@@ -31,6 +31,7 @@ private:
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
     bool m_levelCompleted = false;
+    float m_driverBeyondGoalSeconds = 0.0f;
     std::vector<bool> m_passengerCollected;
     std::vector<std::pair<Part*, bool>> m_carriedPassengers;
 
