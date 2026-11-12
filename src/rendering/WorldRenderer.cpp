@@ -175,15 +175,16 @@ void WorldRenderer::Render(
             }
         }
     } else if (state == GameState::Play) {
-        for (const Part* part : grid.GetActiveParts()) {
+        const EditorGrid& runtimeGrid = playSession.GetRuntimeGrid();
+        for (const Part* part : runtimeGrid.GetActiveParts()) {
             if (part->HasContainedPart()) {
                 m_partRenderer.RenderContained(
                     *part->GetContainedPart(),
-                    grid,
+                    runtimeGrid,
                     part->GetGridCoord()
                 );
             }
-            m_partRenderer.Render(part->GetRenderState(grid));
+            m_partRenderer.Render(part->GetRenderState(runtimeGrid));
         }
 
     }

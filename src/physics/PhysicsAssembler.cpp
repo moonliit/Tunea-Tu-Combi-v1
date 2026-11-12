@@ -9,11 +9,14 @@ bool ContainsWheel(const PartType first, const PartType second) {
         second == PartType::CircleWheel;
 }
 
-void AttachContainedPart(Part& part) {
+void AttachContainedPart(
+    Part& part,
+    I_PhysicsWorld* physicsWorld
+) {
     if (!part.HasContainedPart()) return;
     Part* contained = part.GetContainedPart();
     contained->ResetPhysicsBody();
-    contained->SetContainedBody(part.GetPhysicsBody());
+    contained->SetContainedBody(part.GetPhysicsBody(), physicsWorld);
 }
 
 }
@@ -32,7 +35,7 @@ void PhysicsAssembler::Assemble(
     std::unordered_map<PartId, Part*> parts;
     for (Part* part : model.GetGrid().GetActiveParts()) {
         part->SetPhysicsBody(model.GetGrid(), physics);
-        AttachContainedPart(*part);
+        AttachContainedPart(*part, physics.get());
         bodies.emplace(part->GetId(), part->GetPhysicsBody());
         parts.emplace(part->GetId(), part);
     }

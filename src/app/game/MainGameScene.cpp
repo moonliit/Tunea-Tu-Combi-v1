@@ -283,7 +283,8 @@ void MainGameScene::ProcessInput(float dt) {
 void MainGameScene::Update(float dt) {
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
-        const auto& parts = m_level.GetGrid().GetActiveParts();
+        const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+        const auto& parts = runtimeGrid.GetActiveParts();
         const auto& passengerDefs = m_level.GetDefinition().passengers;
         for (std::size_t passengerIndex = 0;
              passengerIndex < passengerDefs.size(); ++passengerIndex) {
@@ -291,10 +292,10 @@ void MainGameScene::Update(float dt) {
             const auto& passenger = passengerDefs[passengerIndex];
             bool nearVehicle = false;
             for (const Part* part : parts) {
-                const auto position = part->GetRenderState(m_level.GetGrid()).position;
+                const auto position = part->GetRenderState(runtimeGrid).position;
                 const float dx = static_cast<float>(position.x - passenger.position.x);
                 const float dy = static_cast<float>(position.y - passenger.position.y);
-                const float pickupRadius = m_level.GetGrid().GetCellSize() * 1.5f;
+                const float pickupRadius = runtimeGrid.GetCellSize() * 1.5f;
                 if (dx * dx + dy * dy <= pickupRadius * pickupRadius) {
                     nearVehicle = true;
                     break;
@@ -330,7 +331,7 @@ void MainGameScene::Update(float dt) {
             std::optional<Vector2> driverPosition;
             bool entireCarPassedFinish = true;
             for (const Part* part : parts) {
-                const auto position = part->GetRenderState(m_level.GetGrid()).position;
+                const auto position = part->GetRenderState(runtimeGrid).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
                 if (!driverPosition && IsOrContainsDriver(part)) {
@@ -388,19 +389,31 @@ void MainGameScene::TransitionToPlayMode() {
         }
     );
     m_appContext->audioController->SetWheelActive(hasWheel);
-    // Centra la cámara en el chofer al empezar.
-    for (const Part* part : parts) {
-        if (IsOrContainsDriver(part)) {
-            const auto position = part->GetRenderState(m_level.GetGrid()).position;
-            m_camera.target = {
-                static_cast<float>(position.x),
-                static_cast<float>(position.y)
-            };
-            break;
-        }
-    }
     m_stateMachine.EnterPlay();
     m_playSession.Start();
+
+    const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+    const auto& runtimeParts = runtimeGrid.GetActiveParts();
+    if (!runtimeParts.empty()) {
+        Vector2 center{0.0f, 0.0f};
+        std::optional<Vector2> driverPosition;
+        for (const Part* part : runtimeParts) {
+            const Math::Vector2D position =
+                part->GetRenderState(runtimeGrid).position;
+            center.x += static_cast<float>(position.x);
+            center.y += static_cast<float>(position.y);
+            if (!driverPosition && IsOrContainsDriver(part)) {
+                driverPosition = Vector2{
+                    static_cast<float>(position.x),
+                    static_cast<float>(position.y)
+                };
+            }
+        }
+        m_camera.target = driverPosition.value_or(Vector2{
+            center.x / runtimeParts.size(),
+            center.y / runtimeParts.size()
+        });
+    }
 }
 
 void MainGameScene::ResetToBuildMode() {
@@ -463,7 +476,7 @@ void MainGameScene::Render() const {
         );
     }
     for (const auto& [part, hasSkirt] : m_carriedPassengers) {
-        const auto position = part->GetRenderState(m_level.GetGrid()).position;
+        const auto position = part->GetRenderState(m_playSession.GetRuntimeGrid()).position;
         DrawPassenger(
             static_cast<float>(position.x),
             static_cast<float>(position.y) + 7.0f,

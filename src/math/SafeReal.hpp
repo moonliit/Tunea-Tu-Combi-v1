@@ -2,6 +2,7 @@
 #define MATH_SAFE_REAL_HPP
 
 #include <concepts>
+#include <limits>
 
 namespace Math {
 
@@ -39,11 +40,18 @@ public:
     inline operator U() const { return m_value; }
     ~SafeReal() = default;
 
+    static constexpr inline SafeReal Infinity() {
+        return SafeReal(
+            std::numeric_limits<U>::infinity()
+        );
+    }
+
     // arithmetic
     arithmetic(T) SafeReal operator+(T value) const;
     arithmetic(T) SafeReal operator-(T value) const;
     arithmetic(T) SafeReal operator*(T value) const;
     arithmetic(T) SafeReal operator/(T value) const;
+    SafeReal operator-() const;
 
     // assigning
     arithmetic(T) SafeReal& operator=(T value);
@@ -64,6 +72,7 @@ public:
     inline SafeReal Abs() const;
     inline bool IsZero() const;
     inline int Sign() const;
+    arithmetic(T) static SafeReal WrapAngle(T angle);
 
 private:
     U m_value;

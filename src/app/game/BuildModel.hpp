@@ -29,6 +29,8 @@ private:
 public:
     BuildModel(Math::GridCoord gridDims, Math::Vector2D initialPos, float cellSize):
         m_grid(gridDims, initialPos, cellSize) {}
+    BuildModel(const BuildModel&) = default;
+    BuildModel& operator=(const BuildModel&) = default;
 
     EditorGrid& GetGrid() { return m_grid; }
     const EditorGrid& GetGrid() const { return m_grid; }

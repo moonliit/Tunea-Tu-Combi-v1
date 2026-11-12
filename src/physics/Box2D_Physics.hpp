@@ -87,6 +87,10 @@ public:
     explicit Box2D_PhysicsWorld(Math::Vector2D gravity, int subStepCount = 4);
     ~Box2D_PhysicsWorld() override;
     void Step(float deltaTime) override;
+    std::vector<PhysicsImpact> ConsumeImpactEvents() override { return {}; }
+    void RemoveBody(
+        const std::shared_ptr<I_RigidBody>& body
+    ) override { (void)body; }
 
     std::shared_ptr<I_RigidBody> CreateBox(
         Math::Vector2D position,
@@ -124,6 +128,7 @@ public:
         const std::vector<Math::Vector2D>& controlPoints,
         bool isLoop = false
     ) override;
+
     bool CreateTerrainPolygon(
         const std::vector<Math::Vector2D>& points
     ) override;

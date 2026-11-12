@@ -20,8 +20,12 @@ private:
     bool IsGridCoordWithinSelfBounds(Math::GridCoord coord) const;
     bool IsWorldPosWithinSelfBounds(Math::Vector2D pos) const;
 
+    friend class Part;
+
 public:
     EditorGrid(Math::GridCoord gridDims, Math::Vector2D initialPos, float cellSize);
+    EditorGrid(const EditorGrid& other);
+    EditorGrid& operator=(const EditorGrid& other);
 
     std::optional<Part>& GetPart(Math::GridCoord coord);
     const std::optional<Part>& GetPart(Math::GridCoord coord) const;
