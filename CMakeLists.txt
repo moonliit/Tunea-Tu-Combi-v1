@@ -61,6 +61,7 @@ if(EMSCRIPTEN)
     endif()
 
 elseif(APPLE)
+    target_link_libraries(ray PRIVATE raylib)
 
 else()
     # --- Native Linux Configuration ---
