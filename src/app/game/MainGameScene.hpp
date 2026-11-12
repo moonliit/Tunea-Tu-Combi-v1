@@ -3,19 +3,31 @@
 
 #include "app/game/GameState.hpp"
 #include "app/game/BuildSession.hpp"
+#include "app/game/GoalWindowTracker.hpp"
 #include "app/game/Level.hpp"
 #include "app/game/PlaySession.hpp"
+#include "app/game/RunCapture.hpp"
 #include "app/I_Scene.hpp"
 #include "identity/IdentitySession.hpp"
 #include "input/GameInput.hpp"
 #include "physics/I_Physics.hpp"
 #include "rendering/GameUiRenderer.hpp"
 #include "rendering/WorldRenderer.hpp"
+#include "scoring/ScoreRules.hpp"
 
 #include <raylib.h>
+#include <cstdint>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 struct AppContext;
+
+struct CarriedPassenger {
+    std::size_t id;
+    PartId hostId;
+    bool hasSkirt;
+};
 
 class MainGameScene final : public I_Scene {
 private:
@@ -34,13 +46,22 @@ private:
     GameUiRenderer m_uiRenderer;
     bool m_levelCompleted = false;
     IdentityScope m_runIdentity;
-    float m_driverBeyondGoalSeconds = 0.0f;
+    double m_elapsedMs = 0.0;
     std::vector<bool> m_passengerCollected;
-    std::vector<std::pair<Part*, bool>> m_carriedPassengers;
+    std::vector<CarriedPassenger> m_carriedPassengers;
+    std::unordered_set<PartId> m_initialPartIds;
+    std::unordered_map<PartId, double> m_previousPartX;
+    GoalWindowTracker m_goalWindow;
+    Scoring::RunStatistics m_statistics;
+    Scoring::ScoreBreakdown m_score;
+    RunCapture m_capture;
 
     void ResetToBuildMode();
     void ResetEditorCamera();
     void TransitionToPlayMode();
+    void UpdateGoalWindow(double frameMs);
+    void CompleteRun();
+    void RenderResults() const;
 
 public:
     MainGameScene(

@@ -68,7 +68,7 @@ public:
         m_localStress = m_peakSolverStress / damping;
     }
 
-    bool IsBroken() const { return m_isBroken; }
+    bool IsBroken() const override { return m_isBroken; }
     void SetIsBroken(bool isBroken) { m_isBroken = isBroken; }
     bool ShouldBreak() const {
         return m_localStress >= breakThreshold * m_breakResistance;

@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
+#include <string>
 
 using namespace Math;
 
@@ -53,6 +54,48 @@ bool IsOrContainsDriver(const Part* part) {
     if (part->GetType() == PartType::Driver) return true;
     const Part* contained = part->GetContainedPart();
     return contained && contained->GetType() == PartType::Driver;
+}
+
+struct TrackedPart {
+    const Part* part;
+    PartRenderState state;
+};
+
+void CollectPart(
+    const Part& part,
+    const EditorGrid& grid,
+    std::vector<TrackedPart>& output
+) {
+    output.push_back({&part, part.GetRenderState(grid)});
+    if (part.HasContainedPart()) {
+        CollectPart(*part.GetContainedPart(), grid, output);
+    }
+}
+
+std::vector<TrackedPart> CollectParts(const EditorGrid& grid) {
+    std::vector<TrackedPart> output;
+    output.reserve(grid.GetPartCount());
+    for (const Part* part : grid.GetActiveParts()) {
+        CollectPart(*part, grid, output);
+    }
+    return output;
+}
+
+const TrackedPart* FindTrackedPart(
+    const std::vector<TrackedPart>& parts,
+    PartId id
+) {
+    const auto iterator = std::find_if(
+        parts.begin(), parts.end(),
+        [id](const TrackedPart& part) { return part.part->GetId() == id; }
+    );
+    return iterator == parts.end() ? nullptr : &*iterator;
+}
+
+double HorizontalRadius(const PartRenderState& state) {
+    return state.type == PartType::Fan
+        ? state.cellSize * 0.75
+        : state.cellSize * 0.5;
 }
 
 void DrawPassenger(float x, float y, bool hasSkirt, float scale = 1.0f) {
@@ -117,6 +160,21 @@ MainGameScene::MainGameScene(
 }
 
 void MainGameScene::ProcessInput(float dt) {
+    if (m_stateMachine.IsResultsMode()) {
+        const Rectangle returnButton = UiButton::CenteredAtBottom(
+            m_appContext->windowWidth,
+            m_appContext->windowHeight,
+            220.0f,
+            42.0f,
+            30.0f
+        );
+        if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(returnButton)) {
+            m_appContext->audioController->PlayUiClick();
+            m_appContext->audioController->ReturnToSelector();
+            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+        }
+        return;
+    }
     if (m_isCustomLevel && m_stateMachine.IsBuildMode()) {
         const Rectangle designButton = UiButton::CenteredAbove(
             UiButton::PlaySideButton(
@@ -288,6 +346,14 @@ void MainGameScene::ProcessInput(float dt) {
 void MainGameScene::Update(float dt) {
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
+        const double frameMs = static_cast<double>(dt) * 1000.0;
+        m_elapsedMs += frameMs;
+        for (const auto [first, second] :
+             m_playSession.ConsumeBrokenConnections()) {
+            m_capture.RecordDetach(
+                std::llround(m_elapsedMs), first, second
+            );
+        }
         const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
         const auto& parts = runtimeGrid.GetActiveParts();
         const auto& passengerDefs = m_level.GetDefinition().passengers;
@@ -312,7 +378,9 @@ void MainGameScene::Update(float dt) {
             for (Part* part : parts) {
                 const bool holdsPassenger = std::any_of(
                     m_carriedPassengers.begin(), m_carriedPassengers.end(),
-                    [part](const auto& carried) { return carried.first == part; }
+                    [part](const CarriedPassenger& carried) {
+                        return carried.hostId == part->GetId();
+                    }
                 );
                 if (part->GetType() == PartType::SquareBlock &&
                     !part->HasContainedPart() && !holdsPassenger &&
@@ -329,7 +397,14 @@ void MainGameScene::Update(float dt) {
             Part* hostPart = availableBoxes[chooseBox(randomEngine)];
             hostPart->GetPhysicsBody()->AddMass(GetPartDefinition(PartType::Fan).mass);
             m_passengerCollected[passengerIndex] = true;
-            m_carriedPassengers.emplace_back(hostPart, passenger.hasSkirt);
+            m_carriedPassengers.push_back({
+                passengerIndex,
+                hostPart->GetId(),
+                passenger.hasSkirt
+            });
+            m_capture.RecordPassengerPickup(
+                std::llround(m_elapsedMs), passengerIndex
+            );
         }
         std::optional<Vector2> driverPosition;
         if (!parts.empty()) {
@@ -345,7 +420,7 @@ void MainGameScene::Update(float dt) {
                     };
                 }
             }
-            // La cámara sigue al chofer; si no se encuentra, usa el centro de las piezas.
+            // Follow the driver or the vehicle center
             m_camera.target = driverPosition.value_or(Vector2{
                 center.x / parts.size(),
                 center.y / parts.size()
@@ -380,28 +455,24 @@ void MainGameScene::Update(float dt) {
                 m_playSession.GetBreakageConsumed() = false;
             }
         }
-        if (driverPosition &&
-            driverPosition->x > m_level.GetDefinition().goal.position.x) {
-            m_driverBeyondGoalSeconds += dt;
-        } else {
-            m_driverBeyondGoalSeconds = 0.0f;
-        }
-        if (m_driverBeyondGoalSeconds >= 3.0f && !m_levelCompleted) {
-            m_levelCompleted = true;
-            m_appContext->audioController->SetFanActive(false);
-            m_appContext->audioController->SetWheelActive(false);
-            if (!m_isCustomLevel) {
-                m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
-            }
-            m_appContext->audioController->ReturnToSelector();
-            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+        UpdateGoalWindow(frameMs);
+        if (m_stateMachine.IsPlayMode()) {
+            m_capture.RecordFrame(
+                std::llround(m_elapsedMs), runtimeGrid
+            );
         }
     }
 }
 
 void MainGameScene::TransitionToPlayMode() {
     if (!m_level.GetGrid().ContainsPartType(PartType::Driver)) return;
-    m_driverBeyondGoalSeconds = 0.0f;
+    m_elapsedMs = 0.0;
+    m_levelCompleted = false;
+    m_initialPartIds.clear();
+    m_previousPartX.clear();
+    m_goalWindow.Reset();
+    m_statistics = {};
+    m_score = {};
     const auto& parts = m_level.GetGrid().GetActiveParts();
     const bool hasWheel = std::any_of(
         parts.begin(),
@@ -413,11 +484,27 @@ void MainGameScene::TransitionToPlayMode() {
     m_appContext->audioController->SetWheelActive(hasWheel);
     m_stateMachine.EnterPlay();
     m_runIdentity = m_appContext->identity.CaptureResultScope();
+    m_capture.Start(
+        m_level.GetBuildModel(),
+        m_level.GetDefinition().passengers.size()
+    );
     m_playSession.Start();
     auto scenario = m_appContext->audioController->GetCurrentScenario();
     m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel, scenario.levelIndex});
 
     const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+    const std::vector<TrackedPart> trackedParts = CollectParts(runtimeGrid);
+    for (const TrackedPart& tracked : trackedParts) {
+        m_initialPartIds.insert(tracked.part->GetId());
+        m_previousPartX.emplace(
+            tracked.part->GetId(),
+            static_cast<double>(tracked.state.position.x)
+        );
+    }
+    m_statistics.initialParts = static_cast<std::int64_t>(
+        m_initialPartIds.size()
+    );
+    m_capture.RecordFrame(0, runtimeGrid, true);
     const auto& runtimeParts = runtimeGrid.GetActiveParts();
     if (!runtimeParts.empty()) {
         Vector2 center{0.0f, 0.0f};
@@ -441,8 +528,94 @@ void MainGameScene::TransitionToPlayMode() {
     }
 }
 
+void MainGameScene::UpdateGoalWindow(double frameMs) {
+    const EditorGrid& grid = m_playSession.GetRuntimeGrid();
+    const std::vector<TrackedPart> parts = CollectParts(grid);
+    std::vector<GoalPartSample> partSamples;
+    partSamples.reserve(parts.size());
+    for (const TrackedPart& tracked : parts) {
+        const PartId id = tracked.part->GetId();
+        const double currentX = static_cast<double>(tracked.state.position.x);
+        const auto previous = m_previousPartX.find(id);
+        partSamples.push_back({
+            .id = id,
+            .previousX = previous == m_previousPartX.end()
+                ? currentX
+                : previous->second,
+            .currentX = currentX,
+            .horizontalRadius = HorizontalRadius(tracked.state),
+            .initial = m_initialPartIds.contains(id),
+            .driver = tracked.part->GetType() == PartType::Driver
+        });
+    }
+    std::vector<GoalPassengerSample> passengerSamples;
+    passengerSamples.reserve(m_carriedPassengers.size());
+    for (const CarriedPassenger& passenger : m_carriedPassengers) {
+        passengerSamples.push_back({passenger.id, passenger.hostId});
+    }
+    const double goalX = static_cast<double>(
+        m_level.GetDefinition().goal.position.x
+    );
+    const GoalWindowUpdate update = m_goalWindow.Update(
+        m_elapsedMs - frameMs,
+        m_elapsedMs,
+        goalX,
+        partSamples,
+        passengerSamples
+    );
+    if (update.completed && !m_levelCompleted) {
+        CompleteRun();
+    }
+
+    m_previousPartX.clear();
+    for (const TrackedPart& tracked : parts) {
+        m_previousPartX.emplace(
+            tracked.part->GetId(),
+            static_cast<double>(tracked.state.position.x)
+        );
+    }
+}
+
+void MainGameScene::CompleteRun() {
+    m_levelCompleted = true;
+    m_statistics.passengersCollected = static_cast<std::int64_t>(
+        std::count(m_passengerCollected.begin(), m_passengerCollected.end(), true)
+    );
+    m_statistics.passengersDelivered = static_cast<std::int64_t>(
+        m_goalWindow.GetDeliveredPassengers().size()
+    );
+    m_statistics.partsDelivered = static_cast<std::int64_t>(
+        m_goalWindow.GetDeliveredParts().size()
+    );
+    m_statistics.driverTimeMs = std::max<std::int64_t>(
+        0,
+        std::llround(m_goalWindow.GetStartMs())
+    );
+    m_score = Scoring::CalculateScore(m_statistics);
+    m_capture.RecordFrame(
+        std::llround(m_elapsedMs),
+        m_playSession.GetRuntimeGrid(),
+        true
+    );
+    m_capture.Finish(
+        std::llround(m_elapsedMs),
+        m_statistics,
+        m_score
+    );
+
+    m_appContext->audioController->SetFanActive(false);
+    m_appContext->audioController->SetWheelActive(false);
+    if (!m_isCustomLevel) {
+        m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
+    }
+    m_stateMachine.EnterResults();
+}
+
 void MainGameScene::ResetToBuildMode() {
-    m_driverBeyondGoalSeconds = 0.0f;
+    m_elapsedMs = 0.0;
+    m_goalWindow.Reset();
+    m_previousPartX.clear();
+    m_capture.Clear();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
     if (!m_stateMachine.IsBuildMode()) {
@@ -465,6 +638,12 @@ void MainGameScene::ResetEditorCamera() {
 void MainGameScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
+
+    if (m_stateMachine.IsResultsMode()) {
+        RenderResults();
+        EndDrawing();
+        return;
+    }
 
     m_worldRenderer.Render(
         m_camera,
@@ -503,12 +682,19 @@ void MainGameScene::Render() const {
             1.5f
         );
     }
-    for (const auto& [part, hasSkirt] : m_carriedPassengers) {
-        const auto position = part->GetRenderState(m_playSession.GetRuntimeGrid()).position;
+    const std::vector<TrackedPart> trackedParts = CollectParts(
+        m_playSession.GetRuntimeGrid()
+    );
+    for (const CarriedPassenger& passenger : m_carriedPassengers) {
+        const TrackedPart* host = FindTrackedPart(
+            trackedParts, passenger.hostId
+        );
+        if (host == nullptr) continue;
+        const auto position = host->state.position;
         DrawPassenger(
             static_cast<float>(position.x),
             static_cast<float>(position.y) + 7.0f,
-            hasSkirt
+            passenger.hasSkirt
         );
     }
     EndMode2D();
@@ -521,10 +707,12 @@ void MainGameScene::Render() const {
         m_camera,
         m_playSession.GetActivationRegistry()
     );
-    if (m_stateMachine.IsPlayMode() && m_driverBeyondGoalSeconds > 0.0f &&
+    if (m_stateMachine.IsPlayMode() && m_goalWindow.GetStartMs() >= 0.0 &&
         !m_levelCompleted) {
+        const double elapsedWindowMs =
+            m_elapsedMs - m_goalWindow.GetStartMs();
         const int count = std::clamp(
-            static_cast<int>(std::ceil(3.0f - m_driverBeyondGoalSeconds)),
+            static_cast<int>(std::ceil((3000.0 - elapsedWindowMs) / 1000.0)),
             1,
             3
         );
@@ -583,6 +771,84 @@ void MainGameScene::Render() const {
     }
 
     EndDrawing();
+}
+
+void MainGameScene::RenderResults() const {
+    const int width = m_appContext->windowWidth;
+    const int height = m_appContext->windowHeight;
+    DrawText("Resultados", 36, 28, 34, BLACK);
+
+    const Rectangle rankingPanel{30.0f, 82.0f, width * 0.44f, height - 165.0f};
+    DrawRectangleRec(rankingPanel, Fade(LIGHTGRAY, 0.55f));
+    DrawRectangleLinesEx(rankingPanel, 2.0f, GRAY);
+    DrawText("Ranking", 52, 106, 26, DARKGRAY);
+    DrawText("Disponible en la próxima actualización", 52, 150, 16, GRAY);
+
+    const int panelX = static_cast<int>(width * 0.52f);
+    const int valueX = width - 55;
+    DrawText("Puntuación", panelX, 86, 28, BLACK);
+    const auto row = [panelX, valueX](
+        const std::string& label,
+        std::int64_t value,
+        int y
+    ) {
+        DrawText(label.c_str(), panelX, y, 18, DARKGRAY);
+        const std::string number = std::to_string(value);
+        DrawText(
+            number.c_str(),
+            valueX - MeasureText(number.c_str(), 18),
+            y,
+            18,
+            BLACK
+        );
+    };
+    row(
+        "Pasajeros recogidos (" +
+            std::to_string(m_statistics.passengersCollected) + ")",
+        m_score.passengerPickup,
+        135
+    );
+    row(
+        "Pasajeros entregados (" +
+            std::to_string(m_statistics.passengersDelivered) + ")",
+        m_score.passengerDelivery,
+        171
+    );
+    row(
+        "Piezas entregadas (" +
+            std::to_string(m_statistics.partsDelivered) + "/" +
+            std::to_string(m_statistics.initialParts) + ")",
+        m_score.partDelivery,
+        207
+    );
+    row(
+        "Construcción (" +
+            std::to_string(m_statistics.initialParts) + " piezas)",
+        m_score.efficiency,
+        243
+    );
+    row(
+        "Rapidez (" + std::to_string(m_statistics.driverTimeMs) + " ms)",
+        m_score.speed,
+        279
+    );
+    DrawLine(panelX, 365, valueX, 365, DARKGRAY);
+    DrawText("TOTAL", panelX, 382, 30, BLACK);
+    const std::string total = std::to_string(m_score.total);
+    DrawText(
+        total.c_str(),
+        valueX - MeasureText(total.c_str(), 42),
+        375,
+        42,
+        MAROON
+    );
+
+    UiButton::Draw(
+        UiButton::CenteredAtBottom(width, height, 220.0f, 42.0f, 30.0f),
+        "Volver a niveles",
+        SKYBLUE
+    );
+    DrawText("ENTER", width / 2 + 72, height - 57, 10, DARKGRAY);
 }
 
 std::optional<std::string> MainGameScene::PersonalRecordOwner() const {

@@ -1,0 +1,100 @@
+{
+  "rulesVersion": "score-v1",
+  "vectors": [
+    {
+      "name": "fast complete delivery",
+      "statistics": {
+        "initialParts": 6,
+        "passengersCollected": 2,
+        "passengersDelivered": 2,
+        "partsDelivered": 6,
+        "driverTimeMs": 15000
+      },
+      "expected": {
+        "valid": true,
+        "passengerPickup": 1000,
+        "passengerDelivery": 2000,
+        "partDelivery": 3000,
+        "efficiency": 1600,
+        "speed": 1500,
+        "total": 9100
+      }
+    },
+    {
+      "name": "partial delivery at cutoff",
+      "statistics": {
+        "initialParts": 8,
+        "passengersCollected": 2,
+        "passengersDelivered": 1,
+        "partsDelivered": 4,
+        "driverTimeMs": 30000
+      },
+      "expected": {
+        "valid": true,
+        "passengerPickup": 1000,
+        "passengerDelivery": 1000,
+        "partDelivery": 1500,
+        "efficiency": 1400,
+        "speed": 0,
+        "total": 4900
+      }
+    },
+    {
+      "name": "explicit half-up rounding",
+      "statistics": {
+        "initialParts": 16,
+        "passengersCollected": 0,
+        "passengersDelivered": 0,
+        "partsDelivered": 1,
+        "driverTimeMs": 29999
+      },
+      "expected": {
+        "valid": true,
+        "passengerPickup": 0,
+        "passengerDelivery": 0,
+        "partDelivery": 188,
+        "efficiency": 600,
+        "speed": 0,
+        "total": 788
+      }
+    },
+    {
+      "name": "empty denominator is invalid",
+      "statistics": {
+        "initialParts": 0,
+        "passengersCollected": 0,
+        "passengersDelivered": 0,
+        "partsDelivered": 0,
+        "driverTimeMs": 0
+      },
+      "expected": {
+        "valid": false,
+        "passengerPickup": 0,
+        "passengerDelivery": 0,
+        "partDelivery": 0,
+        "efficiency": 0,
+        "speed": 0,
+        "total": 0
+      }
+    },
+    {
+      "name": "counts outside the rule range are invalid",
+      "statistics": {
+        "initialParts": 1000001,
+        "passengersCollected": 0,
+        "passengersDelivered": 0,
+        "partsDelivered": 0,
+        "driverTimeMs": 9223372036854775807
+      },
+      "expected": {
+        "valid": false,
+        "passengerPickup": 0,
+        "passengerDelivery": 0,
+        "partDelivery": 0,
+        "efficiency": 0,
+        "speed": 0,
+        "total": 0
+      }
+    }
+  ]
+}

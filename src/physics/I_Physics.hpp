@@ -36,6 +36,7 @@ public:
 class I_Joint {
 public:
     virtual ~I_Joint() = default;
+    virtual bool IsBroken() const { return false; }
 };
 
 // abstract representation of the physics simulation world

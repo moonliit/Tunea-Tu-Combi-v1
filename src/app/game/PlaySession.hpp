@@ -88,6 +88,9 @@ public:
     }
     bool& GetDamageConsumed() { return m_damageConsumed; }
     bool& GetBreakageConsumed() { return m_breakageConsumed; }
+    std::vector<std::pair<PartId, PartId>> ConsumeBrokenConnections() {
+        return m_assembler.ConsumeBrokenConnections();
+    }
 
 private:
     void BuildActivationSubscriptions();

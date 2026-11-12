@@ -1,0 +1,77 @@
+export const RULES_VERSION = 'score-v1';
+
+const PICKUP_POINTS = 500;
+const DELIVERY_POINTS = 1000;
+const PART_DELIVERY_POINTS = 3000;
+const EFFICIENCY_POINTS = 2000;
+const EXTRA_PART_PENALTY = 100;
+const MINIMUM_BUILD_PARTS = 2;
+const SPEED_POINTS = 3000;
+const SPEED_LIMIT_MS = 30000;
+const MAXIMUM_COUNT = 1000000;
+
+const roundHalfUp = (numerator, denominator) =>
+    Math.floor((numerator + Math.floor(denominator / 2)) / denominator);
+const ceilDivide = (numerator, denominator) =>
+    Math.floor((numerator + denominator - 1) / denominator);
+
+export function calculateScore(statistics) {
+    const values = [
+        statistics.initialParts,
+        statistics.passengersCollected,
+        statistics.passengersDelivered,
+        statistics.partsDelivered,
+        statistics.driverTimeMs
+    ];
+    if (
+        !values.every(Number.isSafeInteger) ||
+        statistics.initialParts <= 0 ||
+        statistics.passengersCollected < 0 ||
+        statistics.passengersDelivered < 0 ||
+        statistics.partsDelivered < 0 ||
+        statistics.driverTimeMs < 0 ||
+        statistics.initialParts > MAXIMUM_COUNT ||
+        statistics.passengersCollected > MAXIMUM_COUNT ||
+        statistics.passengersDelivered > MAXIMUM_COUNT ||
+        statistics.partsDelivered > MAXIMUM_COUNT ||
+        statistics.passengersDelivered > statistics.passengersCollected ||
+        statistics.partsDelivered > statistics.initialParts
+    ) {
+        return {
+            valid: false,
+            passengerPickup: 0,
+            passengerDelivery: 0,
+            partDelivery: 0,
+            efficiency: 0,
+            speed: 0,
+            total: 0
+        };
+    }
+
+    const passengerPickup = PICKUP_POINTS * statistics.passengersCollected;
+    const passengerDelivery = DELIVERY_POINTS * statistics.passengersDelivered;
+    const partDelivery = roundHalfUp(
+        PART_DELIVERY_POINTS * statistics.partsDelivered,
+        statistics.initialParts
+    );
+    const efficiency = Math.max(
+        0,
+        EFFICIENCY_POINTS -
+            EXTRA_PART_PENALTY * Math.max(0, statistics.initialParts - MINIMUM_BUILD_PARTS)
+    );
+    const speed = statistics.driverTimeMs >= SPEED_LIMIT_MS
+        ? 0
+        : SPEED_POINTS - ceilDivide(
+            SPEED_POINTS * statistics.driverTimeMs,
+            SPEED_LIMIT_MS
+        );
+    return {
+        valid: true,
+        passengerPickup,
+        passengerDelivery,
+        partDelivery,
+        efficiency,
+        speed,
+        total: passengerPickup + passengerDelivery + partDelivery + efficiency + speed
+    };
+}

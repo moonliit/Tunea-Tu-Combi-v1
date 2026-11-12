@@ -23,6 +23,8 @@ void AttachContainedPart(
 
 void PhysicsAssembler::Clear() {
     m_joints.clear();
+    m_jointParts.clear();
+    m_reportedBroken.clear();
 }
 
 void PhysicsAssembler::Assemble(
@@ -86,6 +88,20 @@ void PhysicsAssembler::Assemble(
 
         if (joint != nullptr) {
             m_joints.push_back(std::move(joint));
+            m_jointParts.emplace_back(connection.first, connection.second);
+            m_reportedBroken.push_back(false);
         }
     }
+}
+
+std::vector<std::pair<PartId, PartId>>
+PhysicsAssembler::ConsumeBrokenConnections() {
+    std::vector<std::pair<PartId, PartId>> broken;
+    for (std::size_t index = 0; index < m_joints.size(); ++index) {
+        if (!m_reportedBroken[index] && m_joints[index]->IsBroken()) {
+            m_reportedBroken[index] = true;
+            broken.push_back(m_jointParts[index]);
+        }
+    }
+    return broken;
 }
