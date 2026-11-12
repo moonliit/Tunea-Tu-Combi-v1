@@ -7,6 +7,8 @@
 
 namespace {
 
+constexpr float TntImpactImpulseThreshold = 8.0f;
+
 bool AreSamePoint(
     const Math::Vector2D& first,
     const Math::Vector2D& second
@@ -24,6 +26,7 @@ PlaySession::PlaySession(
     Math::Vector2D gravity
 ):
     m_model(model),
+    m_runtimeModel(model),
     m_gravity(gravity)
 {
     CreatePhysicsWorld(
@@ -38,6 +41,7 @@ PlaySession::PlaySession(
     Math::Vector2D gravity
 ):
     m_model(model),
+    m_runtimeModel(model),
     m_gravity(gravity)
 {
     Math::TerrainDefinition definition;
@@ -61,6 +65,7 @@ PlaySession::PlaySession(
     Math::Vector2D gravity
 ):
     m_model(model),
+    m_runtimeModel(model),
     m_terrainDefinition(terrain),
     m_gravity(gravity)
 {
@@ -122,14 +127,15 @@ void PlaySession::CreatePhysicsWorld(
 }
 
 void PlaySession::Start() {
-    m_assembler.Assemble(m_model, m_physics);
+    m_runtimeModel = m_model;
+    m_assembler.Assemble(m_runtimeModel, m_physics);
     BuildActivationSubscriptions();
 }
 
 void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_terrainDefinition = terrain;
     m_assembler.Clear();
-    for (Part* part : m_model.GetGrid().GetActiveParts()) {
+    for (Part* part : m_runtimeModel.GetGrid().GetActiveParts()) {
         part->ResetPhysicsBody();
     }
 
@@ -140,6 +146,55 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
 void PlaySession::Update(float deltaTime) {
     m_activationRegistry.Update(deltaTime);
     m_physics->Step(deltaTime);
+    ProcessTntImpacts();
+    RemoveConsumedTnt();
+}
+
+void PlaySession::ProcessTntImpacts() {
+    for (const PhysicsImpact& impact : m_physics->ConsumeImpactEvents()) {
+        if (impact.part == nullptr ||
+            impact.part->GetType() != PartType::TNTBarrel ||
+            impact.impulse < TntImpactImpulseThreshold) {
+            continue;
+        }
+        impact.part->Activate();
+    }
+}
+
+void PlaySession::RemoveConsumedTnt() {
+    std::vector<Math::GridCoord> rootsToRemove;
+    std::vector<Part*> containedToRemove;
+
+    for (Part* root : m_runtimeModel.GetGrid().GetActiveParts()) {
+        if (root->GetType() == PartType::TNTBarrel &&
+            root->IsRemovalRequested()) {
+            rootsToRemove.push_back(root->GetGridCoord());
+            continue;
+        }
+        if (root->HasContainedPart()) {
+            Part* contained = root->GetContainedPart();
+            if (contained->GetType() == PartType::TNTBarrel &&
+                contained->IsRemovalRequested()) {
+                containedToRemove.push_back(root);
+            }
+        }
+    }
+
+    for (Part* root : containedToRemove) {
+        std::unique_ptr<Part> contained = root->RemoveContainedPart();
+        if (contained == nullptr) continue;
+        m_physics->RemoveBody(contained->GetPhysicsBody());
+        contained->ResetPhysicsBody();
+    }
+    for (const Math::GridCoord coord : rootsToRemove) {
+        const auto& part = m_runtimeModel.GetGrid().GetPart(coord);
+        if (!part.has_value()) continue;
+        m_physics->RemoveBody(part->GetPhysicsBody());
+        m_runtimeModel.GetGrid().RemovePart(coord);
+    }
+    if (!rootsToRemove.empty() || !containedToRemove.empty()) {
+        BuildActivationSubscriptions();
+    }
 }
 
 void PlaySession::BuildActivationSubscriptions() {
@@ -177,7 +232,7 @@ void PlaySession::BuildActivationSubscriptions() {
             self(*part.GetContainedPart(), self);
         }
     };
-    for (Part* part : m_model.GetGrid().GetActiveParts()) {
+    for (Part* part : m_runtimeModel.GetGrid().GetActiveParts()) {
         subscribePart(*part, subscribePart);
     }
 }

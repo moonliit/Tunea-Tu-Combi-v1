@@ -3,11 +3,12 @@
 
 #include "physics/engine/common/Common.hpp"
 #include "physics/engine/Joint.hpp"
+#include <list>
 
 namespace Physics {
-    void ResolveJointVelocities(std::vector<std::shared_ptr<BaseJoint>>& joints, float dt);
-    void ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt);
-    void ResolveWeldJointVelocity(WeldJoint& joint, float dt);
+    void ResolveJointVelocities(std::list<std::shared_ptr<BaseJoint>>& joints, float dt);
+    Math::RealNum ResolveRevoluteJointVelocity(RevoluteJoint& joint, float dt);
+    Math::RealNum ResolveWeldJointVelocity(WeldJoint& joint, float dt);
     void ResolveManifoldVelocities(std::vector<Manifold>& manifolds, float dt);
 }
 

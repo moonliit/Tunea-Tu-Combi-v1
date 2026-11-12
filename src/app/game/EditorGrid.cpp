@@ -26,6 +26,34 @@ EditorGrid::EditorGrid(GridCoord gridDims, Vector2D initialPos, float cellSize):
     m_cells.resize(mult);
 }
 
+EditorGrid::EditorGrid(const EditorGrid& other):
+    m_gridDims(other.m_gridDims),
+    m_initialPos(other.m_initialPos),
+    m_cellSize(other.m_cellSize),
+    m_cells(other.m_cells) {
+    m_activeParts.clear();
+    for (std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        cell->m_activeCacheIndex = m_activeParts.size();
+        m_activeParts.push_back(&cell.value());
+    }
+}
+
+EditorGrid& EditorGrid::operator=(const EditorGrid& other) {
+    if (this == &other) return *this;
+    m_gridDims = other.m_gridDims;
+    m_initialPos = other.m_initialPos;
+    m_cellSize = other.m_cellSize;
+    m_cells = other.m_cells;
+    m_activeParts.clear();
+    for (std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        cell->m_activeCacheIndex = m_activeParts.size();
+        m_activeParts.push_back(&cell.value());
+    }
+    return *this;
+}
+
 std::size_t EditorGrid::GetPartCount() const {
     std::size_t count = 0;
     for (const Part* part : m_activeParts) {
