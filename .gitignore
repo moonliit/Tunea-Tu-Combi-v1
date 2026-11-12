@@ -21,3 +21,9 @@ compile_commands.json
 
 # Keep assets folder even if its empty
 !/assets/.gitkeep
+
+# Local credentials
+.env
+.env.*
+
+/api/node_modules/

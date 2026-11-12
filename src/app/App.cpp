@@ -60,6 +60,7 @@ App::App(int width, int height, const std::string& title):
 void App::Run() {
     while (!WindowShouldClose()) {
         float deltaTime = std::min(GetFrameTime(), 0.033f);
+        m_appContext.identity.Poll();
         m_sceneManager.ProcessInput(deltaTime);
         m_sceneManager.Update(deltaTime);
         m_audioController.Update(deltaTime);

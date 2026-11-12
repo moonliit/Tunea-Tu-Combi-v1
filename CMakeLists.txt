@@ -56,6 +56,9 @@ if(EMSCRIPTEN)
         LINK_FLAGS "-s USE_GLFW=3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -s FORCE_FILESYSTEM=1"
     )
 
+    target_link_options(ray PRIVATE "--pre-js" "${CMAKE_CURRENT_SOURCE_DIR}/src/web/api.js")
+    set_property(TARGET ray APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/web/api.js")
+
     # Automatically preload assets folder if it contains files
     file(GLOB ASSET_FILES "assets/*")
     if(ASSET_FILES)

@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include "app/SceneManager.hpp"
+#include "identity/IdentitySession.hpp"
 
 class CustomLevelCatalog;
 
@@ -24,6 +25,7 @@ struct AppContext {
     std::shared_ptr<CustomLevelCatalog> customLevels;
     int activeCustomLevel = -1;
     bool openCustomMusicPicker = false;
+    IdentitySession identity;
 };
 
 #endif

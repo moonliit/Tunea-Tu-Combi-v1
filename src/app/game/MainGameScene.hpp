@@ -6,6 +6,7 @@
 #include "app/game/Level.hpp"
 #include "app/game/PlaySession.hpp"
 #include "app/I_Scene.hpp"
+#include "identity/IdentitySession.hpp"
 #include "input/GameInput.hpp"
 #include "rendering/GameUiRenderer.hpp"
 #include "rendering/WorldRenderer.hpp"
@@ -31,6 +32,7 @@ private:
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
     bool m_levelCompleted = false;
+    IdentityScope m_runIdentity;
     float m_driverBeyondGoalSeconds = 0.0f;
     std::vector<bool> m_passengerCollected;
     std::vector<std::pair<Part*, bool>> m_carriedPassengers;
@@ -45,6 +47,8 @@ public:
         const LevelDefinition& levelDef
     );
 
+    // prevents assigning a run to a new identity
+    std::optional<std::string> PersonalRecordOwner() const;
     void ProcessInput(float deltaTime) override;
     void Update(float deltaTime) override;
     void Render() const override;
