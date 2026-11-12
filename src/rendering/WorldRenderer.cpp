@@ -1,5 +1,6 @@
 #include "rendering/WorldRenderer.hpp"
 #include <cassert>
+#include <cmath>
 
 namespace {
 
@@ -56,6 +57,44 @@ void RenderTerrainMesh(
     }
 }
 
+void RenderBackground(
+    const Texture2D& background,
+    const Camera2D& camera,
+    float originX
+) {
+    const float screenWidth = static_cast<float>(GetScreenWidth());
+    const float screenHeight = static_cast<float>(GetScreenHeight());
+    const float tileWidth = static_cast<float>(background.width) *
+        screenHeight / static_cast<float>(background.height);
+    const float scroll =
+        (camera.target.x - originX) * camera.zoom * BackgroundParallaxFactor;
+
+    const int firstTile = static_cast<int>(std::floor(scroll / tileWidth));
+    const int lastTile =
+        static_cast<int>(std::floor((scroll + screenWidth) / tileWidth));
+    for (int tile = firstTile; tile <= lastTile; ++tile) {
+        // integer edges so neighbouring tiles never leave a gap
+        const float left = std::floor(static_cast<float>(tile) * tileWidth - scroll);
+        const float right =
+            std::floor(static_cast<float>(tile + 1) * tileWidth - scroll);
+        const bool mirrored = (tile % 2) != 0;
+        const float sourceWidth = static_cast<float>(background.width);
+        DrawTexturePro(
+            background,
+            Rectangle{
+                0.0f,
+                0.0f,
+                mirrored ? -sourceWidth : sourceWidth,
+                static_cast<float>(background.height)
+            },
+            Rectangle{left, 0.0f, right - left, screenHeight},
+            Vector2{0.0f, 0.0f},
+            0.0f,
+            WHITE
+        );
+    }
+}
+
 }
 
 void WorldRenderer::Render(
@@ -68,6 +107,11 @@ void WorldRenderer::Render(
     const std::optional<PartType>& repositionedPartType,
     PartOrientation repositionedOrientation
 ) const {
+    RenderBackground(
+        m_textures.GetBackground(m_background),
+        camera,
+        m_backgroundOriginX
+    );
     BeginMode2D(camera);
 
     for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {

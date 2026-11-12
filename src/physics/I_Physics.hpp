@@ -26,6 +26,7 @@ public:
     virtual ~I_RigidBody() = default;
     virtual Math::Vector2D GetPosition() const = 0;
     virtual Math::RealNum GetRotation() const = 0;
+    virtual void AddMass(float mass) = 0;
     virtual void ApplyForce(Math::Vector2D force) = 0;
     virtual void ApplyLinearImpulse(Math::Vector2D impulse) = 0;
     Part* GetPart() const { return m_part; }

@@ -55,6 +55,18 @@ namespace Physics {
 
         Math::Vector2D GetPosition() const override { return m_transform.position; }
         Math::RealNum GetRotation() const override { return m_transform.rotation; }
+        void AddMass(float mass) override {
+            if (m_bodyType == BodyType::Static || mass <= 0.0f) return;
+            const Math::RealNum previousMass = m_massData.mass;
+            m_massData.mass += mass;
+            m_massData.invMass = Math::RealNum(1) / m_massData.mass;
+            if (previousMass > 0.0f) {
+                m_massData.inertia *= m_massData.mass / previousMass;
+                m_massData.invInertia = m_massData.inertia > 0.0f
+                    ? Math::RealNum(1) / m_massData.inertia
+                    : Math::RealNum(0);
+            }
+        }
 
         inline void ApplyForce(Math::Vector2D force) override {
             if (m_bodyType == BodyType::Static) return;

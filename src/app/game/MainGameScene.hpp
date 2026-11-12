@@ -11,6 +11,7 @@
 #include "rendering/WorldRenderer.hpp"
 
 #include <raylib.h>
+#include <vector>
 
 struct AppContext;
 
@@ -30,6 +31,8 @@ private:
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
     bool m_levelCompleted = false;
+    std::vector<bool> m_passengerCollected;
+    std::vector<std::pair<Part*, bool>> m_carriedPassengers;
 
     void ResetToBuildMode();
     void ResetEditorCamera();

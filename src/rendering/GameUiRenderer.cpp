@@ -2,6 +2,7 @@
 
 #include "app/game/PartDefinition.hpp"
 #include "math/Vector2D.hpp"
+#include "ui/UiButton.hpp"
 #include "ui/UiLayout.hpp"
 
 #include <format>
@@ -122,6 +123,24 @@ void GameUiRenderer::Render(
                 WHITE
             );
         }
+    }
+
+    if (state == GameState::Build || state == GameState::Play) {
+        const Rectangle modeButton = UiButton::PlaySideButton(screenWidth, screenHeight);
+        const Rectangle enterBadge{
+            modeButton.x + modeButton.width - 42.0f,
+            modeButton.y + 4.0f,
+            38.0f,
+            16.0f
+        };
+        DrawRectangleRec(enterBadge, Fade(BLACK, 0.65f));
+        DrawText(
+            "ENTER",
+            static_cast<int>(enterBadge.x + 3.0f),
+            static_cast<int>(enterBadge.y + 2.0f),
+            11,
+            WHITE
+        );
     }
 
     if (state == GameState::Build) {

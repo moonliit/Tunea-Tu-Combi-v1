@@ -12,6 +12,7 @@ public:
 
     Math::Vector2D GetPosition() const override;
     Math::RealNum GetRotation() const override;
+    void AddMass(float mass) override;
     void ApplyForce(Math::Vector2D force) override;
     void ApplyLinearImpulse(Math::Vector2D impulse) override;
 };

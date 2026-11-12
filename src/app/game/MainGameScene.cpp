@@ -1,14 +1,18 @@
 #include "app/game/MainGameScene.hpp"
 #include "ui/UiButton.hpp"
 #include "app/game/Level.hpp"
+#include "app/game/PartDefinition.hpp"
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include "ui/UiControl.hpp"
 #include "app/AppContext.hpp"
 #include "app/AudioController.hpp"
+#include "rendering/Background.hpp"
 #include <optional>
 #include <raylib.h>
 #include <algorithm>
+#include <cmath>
+#include <random>
 
 using namespace Math;
 
@@ -44,6 +48,27 @@ Vector2 CalculateGridTarget(const LevelDefinition& specs) {
     };
 }
 
+// El chofer puede ser una pieza propia o ir dentro de otra (GetContainedPart).
+bool IsOrContainsDriver(const Part* part) {
+    if (part->GetType() == PartType::Driver) return true;
+    const Part* contained = part->GetContainedPart();
+    return contained && contained->GetType() == PartType::Driver;
+}
+
+void DrawPassenger(float x, float y, bool hasSkirt, float scale = 1.0f) {
+    DrawCircleV({x, y - 19.0f * scale}, 6.0f * scale, BLACK);
+    DrawLineEx({x, y - 13.0f * scale}, {x, y - 2.0f * scale}, 3.0f * scale, BLACK);
+    DrawLineEx({x, y - 9.0f * scale}, {x - 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
+    DrawLineEx({x, y - 9.0f * scale}, {x + 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
+    if (hasSkirt) {
+        DrawTriangle({x - 5.0f * scale, y - 2.0f * scale},
+            {x + 5.0f * scale, y - 2.0f * scale},
+            {x, y + 4.0f * scale}, PINK);
+    }
+    DrawLineEx({x, y - 2.0f * scale}, {x - 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
+    DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
+}
+
 }
 
 MainGameScene::MainGameScene(
@@ -59,7 +84,8 @@ MainGameScene::MainGameScene(
         m_level.GetBuildModel(),
         m_level.GetTerrain(),
         Vector2D{0.0f, m_gravity}
-    )
+    ),
+    m_worldRenderer(*appContext->textureLibrary, GetLevelBackground(specs.levelNumber))
 {
     m_camera = Camera2D(Vector2{0});
     const Vector2 automaticTarget = CalculateGridTarget(specs);
@@ -85,6 +111,9 @@ MainGameScene::MainGameScene(
     m_camera.zoom = std::max(minimumZoom, cameraDefinition.zoom);
     m_editorCameraTarget = m_camera.target;
     m_editorCameraZoom = m_camera.zoom;
+    // parallax starts from here
+    m_worldRenderer.SetBackgroundOrigin(m_camera.target.x);
+    m_passengerCollected.assign(m_level.GetDefinition().passengers.size(), false);
 }
 
 void MainGameScene::ProcessInput(float dt) {
@@ -256,20 +285,69 @@ void MainGameScene::Update(float dt) {
         m_playSession.Update(dt);
         const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
         const auto& parts = runtimeGrid.GetActiveParts();
+        const auto& passengerDefs = m_level.GetDefinition().passengers;
+        for (std::size_t passengerIndex = 0;
+             passengerIndex < passengerDefs.size(); ++passengerIndex) {
+            if (m_passengerCollected[passengerIndex]) continue;
+            const auto& passenger = passengerDefs[passengerIndex];
+            bool nearVehicle = false;
+            for (const Part* part : parts) {
+                const auto position = part->GetRenderState(runtimeGrid).position;
+                const float dx = static_cast<float>(position.x - passenger.position.x);
+                const float dy = static_cast<float>(position.y - passenger.position.y);
+                const float pickupRadius = runtimeGrid.GetCellSize() * 1.5f;
+                if (dx * dx + dy * dy <= pickupRadius * pickupRadius) {
+                    nearVehicle = true;
+                    break;
+                }
+            }
+            if (!nearVehicle) continue;
+
+            std::vector<Part*> availableBoxes;
+            for (Part* part : parts) {
+                const bool holdsPassenger = std::any_of(
+                    m_carriedPassengers.begin(), m_carriedPassengers.end(),
+                    [part](const auto& carried) { return carried.first == part; }
+                );
+                if (part->GetType() == PartType::SquareBlock &&
+                    !part->HasContainedPart() && !holdsPassenger &&
+                    part->GetPhysicsBody()) {
+                    availableBoxes.push_back(part);
+                }
+            }
+            if (availableBoxes.empty()) continue;
+
+            static std::mt19937 randomEngine{std::random_device{}()};
+            std::uniform_int_distribution<std::size_t> chooseBox(
+                0, availableBoxes.size() - 1
+            );
+            Part* hostPart = availableBoxes[chooseBox(randomEngine)];
+            hostPart->GetPhysicsBody()->AddMass(GetPartDefinition(PartType::Fan).mass);
+            m_passengerCollected[passengerIndex] = true;
+            m_carriedPassengers.emplace_back(hostPart, passenger.hasSkirt);
+        }
         if (!parts.empty()) {
             Vector2 center{0.0f, 0.0f};
+            std::optional<Vector2> driverPosition;
             bool entireCarPassedFinish = true;
             for (const Part* part : parts) {
                 const auto position = part->GetRenderState(runtimeGrid).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
+                if (!driverPosition && IsOrContainsDriver(part)) {
+                    driverPosition = Vector2{
+                        static_cast<float>(position.x),
+                        static_cast<float>(position.y)
+                    };
+                }
                 entireCarPassedFinish = entireCarPassedFinish &&
                     position.x > m_level.GetDefinition().goal.position.x;
             }
-            m_camera.target = {
+            // La cámara sigue al chofer; si no se encuentra, usa el centro de las piezas.
+            m_camera.target = driverPosition.value_or(Vector2{
                 center.x / parts.size(),
                 center.y / parts.size()
-            };
+            });
             bool fanActive = false;
             for (ActivationAction action : m_playSession.GetActivationRegistry().GetVisibleActions()) {
                 fanActive = fanActive || (
@@ -318,16 +396,23 @@ void MainGameScene::TransitionToPlayMode() {
     const auto& runtimeParts = runtimeGrid.GetActiveParts();
     if (!runtimeParts.empty()) {
         Vector2 center{0.0f, 0.0f};
+        std::optional<Vector2> driverPosition;
         for (const Part* part : runtimeParts) {
             const Math::Vector2D position =
                 part->GetRenderState(runtimeGrid).position;
             center.x += static_cast<float>(position.x);
             center.y += static_cast<float>(position.y);
+            if (!driverPosition && IsOrContainsDriver(part)) {
+                driverPosition = Vector2{
+                    static_cast<float>(position.x),
+                    static_cast<float>(position.y)
+                };
+            }
         }
-        m_camera.target = {
+        m_camera.target = driverPosition.value_or(Vector2{
             center.x / runtimeParts.size(),
             center.y / runtimeParts.size()
-        };
+        });
     }
 }
 
@@ -340,6 +425,8 @@ void MainGameScene::ResetToBuildMode() {
     ResetEditorCamera();
 
     m_playSession.Reset(m_level.GetTerrain());
+    std::fill(m_passengerCollected.begin(), m_passengerCollected.end(), false);
+    m_carriedPassengers.clear();
 }
 
 void MainGameScene::ResetEditorCamera() {
@@ -377,6 +464,25 @@ void MainGameScene::Render() const {
         {pole.x + 65.0f, pole.y - 82.0f},
         MAROON
     );
+    const auto& passengerDefinitions = m_level.GetDefinition().passengers;
+    for (std::size_t i = 0; i < passengerDefinitions.size(); ++i) {
+        if (i < m_passengerCollected.size() && m_passengerCollected[i]) continue;
+        const auto& passenger = passengerDefinitions[i];
+        DrawPassenger(
+            static_cast<float>(passenger.position.x),
+            static_cast<float>(passenger.position.y),
+            passenger.hasSkirt,
+            1.5f
+        );
+    }
+    for (const auto& [part, hasSkirt] : m_carriedPassengers) {
+        const auto position = part->GetRenderState(m_playSession.GetRuntimeGrid()).position;
+        DrawPassenger(
+            static_cast<float>(position.x),
+            static_cast<float>(position.y) + 7.0f,
+            hasSkirt
+        );
+    }
     EndMode2D();
     m_uiRenderer.Render(
         m_appContext->windowWidth,
@@ -405,14 +511,14 @@ void MainGameScene::Render() const {
                 UiButton::PlaySideButton(
                     m_appContext->windowWidth, m_appContext->windowHeight
                 ),
-                52.0f,
+                100.0f,
                 32.0f,
                 8.0f
             ),
-            "v",
+            "DISEÑO",
             DARKGRAY,
             WHITE,
-            16
+            14
         );
     }
 
