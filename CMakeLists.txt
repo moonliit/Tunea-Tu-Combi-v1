@@ -16,18 +16,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 if(APPLE)
-    # Raylib y Box2D vienen de Homebrew: lib/native/libbox2d.a es un binario de
-    # Linux y las cabeceras de raylib deben coincidir con la librería.
+    # Raylib viene de Homebrew
+    # Las cabeceras de raylib deben coincidir con la librería.
     find_package(raylib REQUIRED)
-    find_package(box2d CONFIG REQUIRED)
 endif()
 
 # Include directories
 include_directories(
     include
-    include/box2d
-    include/imgui
-    include/rl_imgui
     include/json
     src
 )
@@ -46,7 +42,6 @@ if(EMSCRIPTEN)
 
     # Link WebAssembly static libraries
     target_link_libraries(ray PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/web/libbox2d.web.a
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/web/libraylib.web.a
     )
 
@@ -66,14 +61,12 @@ if(EMSCRIPTEN)
     endif()
 
 elseif(APPLE)
-    target_link_libraries(ray PRIVATE raylib box2d::box2d)
 
 else()
     # --- Native Linux Configuration ---
 
     # Link native static library and system graphics/windowing libraries
     target_link_libraries(ray PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/lib/native/libbox2d.a
         raylib
         GL
         m

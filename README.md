@@ -13,13 +13,13 @@ Proyecto multiplataforma en C++23 configurado para compilar tanto nativamente en
 En Arch Linux por ejemplo puedes instalar los paquetes base con:
 
 ```bash
-sudo pacman -S gcc just raylib
+sudo pacman -S gcc cmake just raylib
 ```
 
 En macOS con Homebrew:
 
 ```bash
-brew install just cmake raylib box2d
+brew install just cmake raylib
 ```
 
 ---
@@ -65,8 +65,7 @@ incremental. CMake genera `compile_commands.json` dentro del build nativo y
 │   ├── raylib/
 │   └── raylib-cpp/
 ├── lib/
-│   ├── native/      # Box2D compilado estáticamente para Linux
-│   └── web/         # Raylib y Box2D compilados estáticamente para WASM
+│   └── web/         # Raylib compilado estáticamente para WASM
 ├── src/             # Código fuente C++ (.cpp)
 ├── Justfile         # Recetas de compilación
 └── README.md

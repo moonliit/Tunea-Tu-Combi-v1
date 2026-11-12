@@ -1,7 +1,6 @@
 #include "app/App.hpp"
 #include "app/game/Level.hpp"
 #include "app/game/MainGameScene.hpp"
-#include "app/editor/EditorScene.hpp"
 #include "app/MainMenuScene.hpp"
 #include "app/CustomLevelCatalog.hpp"
 #include "app/CustomLevelEditorScene.hpp"
@@ -41,10 +40,6 @@ App::App(int width, int height, const std::string& title):
     m_sceneManager.AddScene(
         SceneId::Game,
         std::make_unique<MainGameScene>(&m_appContext, std::move(emptyDef))
-    );
-    m_sceneManager.AddScene(
-        SceneId::Editor,
-        std::make_unique<EditorScene>(&m_appContext)
     );
     m_sceneManager.AddScene(
         SceneId::CustomLevelEditor,

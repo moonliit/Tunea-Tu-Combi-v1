@@ -6,7 +6,6 @@
 #include "physics/engine/step-pipeline/03_VelocitiesResolution.hpp"
 #include "physics/engine/step-pipeline/04_PositionsCorrection.hpp"
 #include "physics/engine/step-pipeline/05_JointBreakageCleanup.hpp"
-#include "physics/engine/step-pipeline/0x_EmergencyFallbackCorrection.hpp"
 #include "app/game/Part.hpp"
 using namespace std;
 using namespace Math;
@@ -128,9 +127,6 @@ void World::Step(float deltaTime) {
                 m_impactEvents.push_back({bodyB->GetPart(), impulse});
             }
         }
-        // --- EMERGENCY SAFETY & VELOCITY DAMPENING PASS ---
-        // NOTE: currently disabled as physics seem stable for now
-        // EmergencyFallbackCorrection(m_manifolds, subDt);
     }
 
     for (auto& joint : m_joints) {
