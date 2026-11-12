@@ -35,9 +35,9 @@ struct TerrainSample {
 
 struct TerrainVisualDefinition {
     float baseY = 700.0f;
-    std::uint8_t fillR = 116;
-    std::uint8_t fillG = 78;
-    std::uint8_t fillB = 48;
+    std::uint8_t fillR = 255;
+    std::uint8_t fillG = 255;
+    std::uint8_t fillB = 255;
     std::uint8_t fillA = 255;
     std::uint8_t outlineR = 70;
     std::uint8_t outlineG = 45;

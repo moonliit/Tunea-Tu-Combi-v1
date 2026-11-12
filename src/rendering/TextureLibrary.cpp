@@ -20,6 +20,7 @@ constexpr std::array PartTextureFiles{
     PartTextureFile{PartType::Driver, "assets/textures/parts/driver.png"}
 };
 constexpr const char* WheelMountPath = "assets/textures/parts/wheel_mount.png";
+constexpr const char* TerrainTexturePath = "assets/textures/terrain/dirt.png";
 
 Texture2D LoadSmoothTexture(const char* path) {
     const Texture2D texture = LoadTexture(path);
@@ -45,6 +46,8 @@ void TextureLibrary::Initialize() {
             GetBackgroundPath(static_cast<BackgroundId>(index))
         );
     }
+    m_terrainTexture = LoadSmoothTexture(TerrainTexturePath);
+    SetTextureWrap(m_terrainTexture, TEXTURE_WRAP_REPEAT);
     m_initialized = true;
 }
 
@@ -58,6 +61,7 @@ void TextureLibrary::Shutdown() {
     for (const Texture2D& background : m_backgrounds) {
         UnloadTexture(background);
     }
+    UnloadTexture(m_terrainTexture);
     m_initialized = false;
 }
 

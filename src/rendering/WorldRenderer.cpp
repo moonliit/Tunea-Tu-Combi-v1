@@ -1,4 +1,5 @@
 #include "rendering/WorldRenderer.hpp"
+#include "rlgl.h"
 #include <cassert>
 #include <cmath>
 
@@ -14,13 +15,17 @@ Color ToRaylibColor(
 }
 
 void RenderTerrainMesh(
+    const TextureLibrary& textures,
     const Math::TerrainMesh& mesh,
     const Math::TerrainVisualDefinition& visual
 ) {
     if (mesh.vertices.size() < 3 || mesh.indices.size() < 3) {
         return;
     }
-    const Color fill = ToRaylibColor(
+    Texture2D terrainTexture = textures.GetTerrainTexture();
+    constexpr float textureScale = 0.005f;
+
+    const Color tint = ToRaylibColor(
         visual.fillR,
         visual.fillG,
         visual.fillB,
@@ -32,26 +37,51 @@ void RenderTerrainMesh(
         visual.outlineB,
         visual.outlineA
     );
+
+    rlBegin(RL_TRIANGLES);
+    rlSetTexture(terrainTexture.id);
+
+    rlColor4ub(tint.r, tint.g, tint.b, tint.a);
     for (size_t index = 0; index + 2 < mesh.indices.size(); index += 3) {
-        // invert winding order
-        DrawTriangle(
-            mesh.vertices[mesh.indices[index]].ToRayVec(),
-            mesh.vertices[mesh.indices[index + 2]].ToRayVec(),
-            mesh.vertices[mesh.indices[index + 1]].ToRayVec(),
-            fill
-        );
+        size_t i0 = mesh.indices[index];
+        size_t i1 = mesh.indices[index + 1];
+        size_t i2 = mesh.indices[index + 2];
+
+        Vector2 v0 = mesh.vertices[i0].ToRayVec();
+        Vector2 v1 = mesh.vertices[i1].ToRayVec();
+        Vector2 v2 = mesh.vertices[i2].ToRayVec();
+
+        Vector2 uv0 = { v0.x * textureScale, v0.y * textureScale };
+        Vector2 uv1 = { v1.x * textureScale, v1.y * textureScale };
+        Vector2 uv2 = { v2.x * textureScale, v2.y * textureScale };
+
+        // inverted winding order
+        rlTexCoord2f(uv0.x, uv0.y);
+        rlVertex2f(v0.x, v0.y);
+
+        rlTexCoord2f(uv2.x, uv2.y);
+        rlVertex2f(v2.x, v2.y);
+
+        rlTexCoord2f(uv1.x, uv1.y);
+        rlVertex2f(v1.x, v1.y);
     }
+    rlEnd();
+    rlSetTexture(0);
+
+    float lineWidth = 4.0f;
     for (size_t index = 0; index + 1 < mesh.top.size(); ++index) {
-        DrawLineV(
+        DrawLineEx(
             mesh.top[index].ToRayVec(),
             mesh.top[index + 1].ToRayVec(),
+            lineWidth,
             outline
         );
     }
     if (mesh.closed && mesh.top.size() >= 3) {
-        DrawLineV(
+        DrawLineEx(
             mesh.top.back().ToRayVec(),
             mesh.top.front().ToRayVec(),
+            lineWidth,
             outline
         );
     }
@@ -115,7 +145,7 @@ void WorldRenderer::Render(
     BeginMode2D(camera);
 
     for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {
-        RenderTerrainMesh(mesh, playSession.GetTerrainVisual());
+        RenderTerrainMesh(m_textures, mesh, playSession.GetTerrainVisual());
     }
 
     if (state == GameState::Build || state == GameState::View) {
