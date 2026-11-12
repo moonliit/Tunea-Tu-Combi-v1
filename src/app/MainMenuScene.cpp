@@ -420,5 +420,9 @@ void MainMenuScene::Render() const {
         }
     }
 
+#ifndef __EMSCRIPTEN__
+    DrawText("Modo local: sin reserva de nombre ni publicacion online", 14, m_context->windowHeight - 18, 12, DARKGRAY);
+#endif
+
     EndDrawing();
 }

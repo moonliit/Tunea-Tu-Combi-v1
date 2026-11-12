@@ -412,6 +412,7 @@ void MainGameScene::TransitionToPlayMode() {
     );
     m_appContext->audioController->SetWheelActive(hasWheel);
     m_stateMachine.EnterPlay();
+    m_runIdentity = m_appContext->identity.CaptureResultScope();
     m_playSession.Start();
     auto scenario = m_appContext->audioController->GetCurrentScenario();
     m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel, scenario.levelIndex});
@@ -582,4 +583,8 @@ void MainGameScene::Render() const {
     }
 
     EndDrawing();
+}
+
+std::optional<std::string> MainGameScene::PersonalRecordOwner() const {
+    return m_appContext->identity.ResultOwner(m_runIdentity);
 }
