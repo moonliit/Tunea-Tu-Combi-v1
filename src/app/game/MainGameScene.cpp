@@ -129,6 +129,7 @@ void MainGameScene::ProcessInput(float dt) {
         if (UiButton::WasClicked(designButton)) {
             m_appContext->audioController->SetFanActive(false);
             m_appContext->audioController->SetWheelActive(false);
+            m_appContext->audioController->SetPlayMode(false);
             m_appContext->returnToCustomDesign = true;
             m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
             return;
@@ -391,6 +392,7 @@ void MainGameScene::TransitionToPlayMode() {
     m_appContext->audioController->SetWheelActive(hasWheel);
     m_stateMachine.EnterPlay();
     m_playSession.Start();
+    m_appContext->audioController->SetPlayMode(true);
 
     const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
     const auto& runtimeParts = runtimeGrid.GetActiveParts();
@@ -425,6 +427,7 @@ void MainGameScene::ResetToBuildMode() {
     ResetEditorCamera();
 
     m_playSession.Reset(m_level.GetTerrain());
+    m_appContext->audioController->SetPlayMode(false);
     std::fill(m_passengerCollected.begin(), m_passengerCollected.end(), false);
     m_carriedPassengers.clear();
 }

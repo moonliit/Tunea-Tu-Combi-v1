@@ -18,8 +18,12 @@ class AudioController {
     Music m_fanSound{};
     Music m_wheelSound{};
     Music m_customMusic{};
+    Music m_cleanMusic{};
+    bool m_cleanMusicLoaded = false;
     bool m_customMusicLoaded = false;
     bool m_customMusicActive = false;
+    bool m_playMode = false;
+    float m_variantFade = 1.0f;
     bool m_fanActive = false;
     bool m_wheelActive = false;
     int m_current = 0;
@@ -30,12 +34,16 @@ class AudioController {
     bool m_initialized = false;
 
     void BeginTransition(int target);
+    void LoadCleanMusic(const std::string& editedPath);
+    Music& SelectedMusic();
+    void UpdateVariantFade(float deltaTime);
 
 public:
     void Initialize();
     void Shutdown();
     void StartLevel(int levelNumber);
     void StartCustomMusic(const std::string& path);
+    void SetPlayMode(bool playing);
     void ReturnToSelector();
     void ResetToMenu();
     void PlayUiClick();

@@ -79,3 +79,7 @@ Están en `assets/textures/` y se cargan una sola vez al iniciar el juego, en `T
 Las de las piezas (`parts/`) son provisionales, hechas con formas simples. Para cambiarlas basta con reemplazar el PNG dejando el mismo nombre. Cada una es un cuadrado que se dibuja centrado en la celda (la rueda usa su diámetro). Sin rotar, el ventilador y la vela empujan hacia la derecha y el chofer mira hacia la derecha. `wheel_mount.png` es el soporte de la rueda y el centro de la imagen es el punto donde se une a la celda. La caja tiene que ser translúcida por dentro porque ahí van el chofer y el TNT.
 
 El fondo (`backgrounds/`) no se mueve con la cámara y es fijo para cada nivel: el 1 usa Miraflores, el 2 Rímac, el 3 Chorrillos y el 4 Barranco. Los niveles personalizados usan Miraflores. La relación nivel-fondo está en `GetLevelBackground`, en `src/rendering/Background.cpp`. Los fondos son PNG de 800x600.
+
+## Música
+
+Las versiones editadas se prepararon en Audacity con la librería Bit Crusher y compresión de sonido.

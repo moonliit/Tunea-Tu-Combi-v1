@@ -1,6 +1,17 @@
 #include "app/AudioController.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <filesystem>
+
+namespace {
+
+std::string CleanPathFor(const std::string& editedPath) {
+    return (std::filesystem::path("assets/audio/clean") /
+        std::filesystem::path(editedPath).filename()).string();
+}
+
+}
 
 void AudioController::Initialize() {
     InitAudioDevice();
@@ -41,6 +52,7 @@ void AudioController::Initialize() {
 void AudioController::Shutdown() {
     if (!m_initialized) return;
     if (m_customMusicLoaded) UnloadMusicStream(m_customMusic);
+    if (m_cleanMusicLoaded) UnloadMusicStream(m_cleanMusic);
     for (Music music : m_music) UnloadMusicStream(music);
     UnloadMusicStream(m_fanSound);
     UnloadMusicStream(m_wheelSound);
@@ -60,43 +72,101 @@ void AudioController::BeginTransition(int target) {
     m_transitioning = true;
 }
 
-void AudioController::StartLevel(int levelNumber) {
-    if (m_customMusicActive) {
-        StopMusicStream(m_customMusic);
-        m_customMusicActive = false;
+void AudioController::LoadCleanMusic(const std::string& editedPath) {
+    if (m_cleanMusicLoaded) {
+        UnloadMusicStream(m_cleanMusic);
+        m_cleanMusicLoaded = false;
     }
+    if (editedPath.empty()) return;
+    const std::string cleanPath = CleanPathFor(editedPath);
+    if (!FileExists(cleanPath.c_str())) return;
+    m_cleanMusic = LoadMusicStream(cleanPath.c_str());
+    m_cleanMusicLoaded = IsMusicValid(m_cleanMusic);
+    if (m_cleanMusicLoaded) m_cleanMusic.looping = true;
+}
+
+Music& AudioController::SelectedMusic() {
+    if (m_playMode || !m_cleanMusicLoaded) {
+        return m_customMusicActive ? m_customMusic : m_music[m_current];
+    }
+    if (!m_customMusicActive && m_current == 0) return m_music[0];
+    return m_cleanMusic;
+}
+
+void AudioController::UpdateVariantFade(float deltaTime) {
+    if (m_variantFade >= 1.0f) return;
+    m_variantFade = std::min(1.0f, m_variantFade + deltaTime / 0.42f);
+    const float volume = m_customMusicActive ? 0.8f : m_volume;
+    SetMusicVolume(SelectedMusic(), volume * m_variantFade);
+}
+
+void AudioController::StartLevel(int levelNumber) {
+    SetPlayMode(false);
+    if (m_customMusicActive) {
+        StopMusicStream(SelectedMusic());
+        m_customMusicActive = false;
+        LoadCleanMusic("");
+    }
+    const int target = std::clamp(levelNumber, 1, OfficialLevelCount);
     m_returningToMenu = false;
-    BeginTransition(std::clamp(levelNumber, 1, OfficialLevelCount));
+    BeginTransition(target);
 }
 
 void AudioController::StartCustomMusic(const std::string& path) {
     if (!m_initialized || path.empty()) return;
+    StopMusicStream(SelectedMusic());
     if (m_customMusicLoaded) {
-        StopMusicStream(m_customMusic);
         UnloadMusicStream(m_customMusic);
     }
-    StopMusicStream(m_music[m_current]);
+    m_playMode = false;
+    m_customMusicActive = false;
     m_customMusic = LoadMusicStream(path.c_str());
+    m_customMusicLoaded = IsMusicValid(m_customMusic);
+    if (!m_customMusicLoaded) return;
     m_customMusic.looping = true;
-    SetMusicVolume(m_customMusic, 0.8f);
-    PlayMusicStream(m_customMusic);
-    m_customMusicLoaded = true;
+    LoadCleanMusic(path);
     m_customMusicActive = true;
+    m_variantFade = 1.0f;
+    SetMusicVolume(SelectedMusic(), 0.8f);
+    PlayMusicStream(SelectedMusic());
     m_returningToMenu = false;
+    m_transitioning = false;
+}
+
+void AudioController::SetPlayMode(bool playing) {
+    if (m_playMode == playing) return;
+    Music* previous = &SelectedMusic();
+    const bool wasPlaying = IsMusicStreamPlaying(*previous);
+    const float position = wasPlaying ? GetMusicTimePlayed(*previous) : 0.0f;
+    m_playMode = playing;
+    Music* next = &SelectedMusic();
+    if (previous == next || !wasPlaying) return;
+
+    StopMusicStream(*previous);
+    const float length = GetMusicTimeLength(*next);
+    SeekMusicStream(*next, length > 0.0f ? std::fmod(position, length) : 0.0f);
+    m_variantFade = 0.0f;
+    SetMusicVolume(*next, 0.0f);
+    PlayMusicStream(*next);
+    PlaySound(m_radioStatic);
 }
 
 void AudioController::ReturnToSelector() {
+    SetPlayMode(true);
     if (m_customMusicActive) {
-        StopMusicStream(m_customMusic);
+        StopMusicStream(SelectedMusic());
         m_customMusicActive = false;
+        LoadCleanMusic("");
     }
     m_returningToMenu = true;
 }
 
 void AudioController::ResetToMenu() {
+    SetPlayMode(true);
     if (m_customMusicActive) {
-        StopMusicStream(m_customMusic);
+        StopMusicStream(SelectedMusic());
         m_customMusicActive = false;
+        LoadCleanMusic("");
     }
     PlaySound(m_radioStatic);
     m_returningToMenu = false;
@@ -134,33 +204,44 @@ void AudioController::SetWheelActive(bool active) {
 
 void AudioController::Update(float deltaTime) {
     if (!m_initialized) return;
-    if (!m_customMusicActive) UpdateMusicStream(m_music[m_current]);
-    if (m_customMusicActive) UpdateMusicStream(m_customMusic);
+    UpdateMusicStream(SelectedMusic());
     if (m_fanActive) UpdateMusicStream(m_fanSound);
     if (m_wheelActive) UpdateMusicStream(m_wheelSound);
-    if (m_customMusicActive) return;
+    if (m_customMusicActive) {
+        UpdateVariantFade(deltaTime);
+        return;
+    }
 
     if (m_transitioning) {
         m_volume = std::max(0.0f, m_volume - deltaTime / 1.25f);
-        SetMusicVolume(m_music[m_current], m_volume);
+        SetMusicVolume(SelectedMusic(), m_volume * m_variantFade);
         if (m_volume == 0.0f) {
-            StopMusicStream(m_music[m_current]);
+            StopMusicStream(SelectedMusic());
             m_current = m_target;
-            SeekMusicStream(m_music[m_current], 0.0f);
-            PlayMusicStream(m_music[m_current]);
+            if (m_current > 0) {
+                LoadCleanMusic(OfficialLevels[m_current - 1].musicPath);
+                if (m_current == 1 && m_cleanMusicLoaded) {
+                    SetMusicPitch(m_cleanMusic, 1.08f);
+                }
+            } else {
+                LoadCleanMusic("");
+            }
+            SeekMusicStream(SelectedMusic(), 0.0f);
+            PlayMusicStream(SelectedMusic());
             m_volume = 0.0f;
-            SetMusicVolume(m_music[m_current], m_volume);
+            SetMusicVolume(SelectedMusic(), m_volume);
             m_transitioning = false;
         }
-    } else if (!IsMusicStreamPlaying(m_music[m_current])) {
+    } else if (!IsMusicStreamPlaying(SelectedMusic())) {
         if (m_current == 0 || !m_returningToMenu) {
-            SeekMusicStream(m_music[m_current], 0.0f);
-            PlayMusicStream(m_music[m_current]);
+            SeekMusicStream(SelectedMusic(), 0.0f);
+            PlayMusicStream(SelectedMusic());
         } else {
             BeginTransition(0);
         }
     } else if (m_volume < 1.0f) {
         m_volume = std::min(1.0f, m_volume + deltaTime / 1.25f);
-        SetMusicVolume(m_music[m_current], m_volume);
+        SetMusicVolume(SelectedMusic(), m_volume * m_variantFade);
     }
+    UpdateVariantFade(deltaTime);
 }
