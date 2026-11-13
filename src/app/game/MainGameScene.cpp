@@ -799,7 +799,7 @@ void MainGameScene::RenderResults() const {
             valueX - MeasureText(number.c_str(), 18),
             y,
             18,
-            BLACK
+            value < 0 ? MAROON : BLACK
         );
     };
     row(
@@ -824,7 +824,7 @@ void MainGameScene::RenderResults() const {
     row(
         "Construcción (" +
             std::to_string(m_statistics.initialParts) + " piezas)",
-        m_score.efficiency,
+        m_score.constructionPenalty,
         243
     );
     row(

@@ -1,10 +1,9 @@
-export const RULES_VERSION = 'score-v1';
+export const RULES_VERSION = 'score-v2';
 
 const PICKUP_POINTS = 500;
 const DELIVERY_POINTS = 1000;
 const PART_DELIVERY_POINTS = 3000;
-const EFFICIENCY_POINTS = 2000;
-const EXTRA_PART_PENALTY = 100;
+const EXTRA_PARTS_TO_HALVE_SCORE = 25;
 const MINIMUM_BUILD_PARTS = 2;
 const SPEED_POINTS = 3000;
 const SPEED_LIMIT_MS = 30000;
@@ -42,7 +41,7 @@ export function calculateScore(statistics) {
             passengerPickup: 0,
             passengerDelivery: 0,
             partDelivery: 0,
-            efficiency: 0,
+            constructionPenalty: 0,
             speed: 0,
             total: 0
         };
@@ -54,24 +53,25 @@ export function calculateScore(statistics) {
         PART_DELIVERY_POINTS * statistics.partsDelivered,
         statistics.initialParts
     );
-    const efficiency = Math.max(
-        0,
-        EFFICIENCY_POINTS -
-            EXTRA_PART_PENALTY * Math.max(0, statistics.initialParts - MINIMUM_BUILD_PARTS)
-    );
     const speed = statistics.driverTimeMs >= SPEED_LIMIT_MS
         ? 0
         : SPEED_POINTS - ceilDivide(
             SPEED_POINTS * statistics.driverTimeMs,
             SPEED_LIMIT_MS
         );
+    const earned = passengerPickup + passengerDelivery + partDelivery + speed;
+    const extraParts = Math.max(0, statistics.initialParts - MINIMUM_BUILD_PARTS);
+    const total = roundHalfUp(
+        earned * EXTRA_PARTS_TO_HALVE_SCORE,
+        EXTRA_PARTS_TO_HALVE_SCORE + extraParts
+    );
     return {
         valid: true,
         passengerPickup,
         passengerDelivery,
         partDelivery,
-        efficiency,
+        constructionPenalty: total - earned,
         speed,
-        total: passengerPickup + passengerDelivery + partDelivery + efficiency + speed
+        total
     };
 }

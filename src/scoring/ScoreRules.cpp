@@ -8,8 +8,7 @@ namespace {
 constexpr std::int64_t PickupPoints = 500;
 constexpr std::int64_t DeliveryPoints = 1000;
 constexpr std::int64_t PartDeliveryPoints = 3000;
-constexpr std::int64_t EfficiencyPoints = 2000;
-constexpr std::int64_t ExtraPartPenalty = 100;
+constexpr std::int64_t ExtraPartsToHalveScore = 25;
 constexpr std::int64_t MinimumBuildParts = 2;
 constexpr std::int64_t SpeedPoints = 3000;
 constexpr std::int64_t SpeedLimitMs = 30000;
@@ -48,19 +47,23 @@ ScoreBreakdown CalculateScore(const RunStatistics& statistics) {
         PartDeliveryPoints * statistics.partsDelivered,
         statistics.initialParts
     );
-    result.efficiency = std::max<std::int64_t>(
-        0,
-        EfficiencyPoints - ExtraPartPenalty *
-            std::max<std::int64_t>(0, statistics.initialParts - MinimumBuildParts)
-    );
     result.speed = statistics.driverTimeMs >= SpeedLimitMs
         ? 0
         : SpeedPoints - CeilDivide(
             SpeedPoints * statistics.driverTimeMs,
             SpeedLimitMs
         );
-    result.total = result.passengerPickup + result.passengerDelivery +
-        result.partDelivery + result.efficiency + result.speed;
+    const std::int64_t earned = result.passengerPickup +
+        result.passengerDelivery + result.partDelivery + result.speed;
+    const std::int64_t extraParts = std::max<std::int64_t>(
+        0,
+        statistics.initialParts - MinimumBuildParts
+    );
+    result.total = RoundHalfUp(
+        earned * ExtraPartsToHalveScore,
+        ExtraPartsToHalveScore + extraParts
+    );
+    result.constructionPenalty = result.total - earned;
     return result;
 }
 

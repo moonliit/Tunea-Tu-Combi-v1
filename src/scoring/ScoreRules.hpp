@@ -6,7 +6,7 @@
 
 namespace Scoring {
 
-inline constexpr std::string_view RulesVersion = "score-v1";
+inline constexpr std::string_view RulesVersion = "score-v2";
 
 struct RunStatistics {
     std::int64_t initialParts = 0;
@@ -21,7 +21,7 @@ struct ScoreBreakdown {
     std::int64_t passengerPickup = 0;
     std::int64_t passengerDelivery = 0;
     std::int64_t partDelivery = 0;
-    std::int64_t efficiency = 0;
+    std::int64_t constructionPenalty = 0;
     std::int64_t speed = 0;
     std::int64_t total = 0;
 };

@@ -50,7 +50,7 @@ nlohmann::json ScoreJson(const Scoring::ScoreBreakdown& score) {
         {"passengerPickup", score.passengerPickup},
         {"passengerDelivery", score.passengerDelivery},
         {"partDelivery", score.partDelivery},
-        {"efficiency", score.efficiency},
+        {"constructionPenalty", score.constructionPenalty},
         {"speed", score.speed},
         {"total", score.total}
     };

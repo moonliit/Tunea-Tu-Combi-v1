@@ -1,5 +1,5 @@
 {
-  "rulesVersion": "score-v1",
+  "rulesVersion": "score-v2",
   "vectors": [
     {
       "name": "fast complete delivery",
@@ -15,9 +15,9 @@
         "passengerPickup": 1000,
         "passengerDelivery": 2000,
         "partDelivery": 3000,
-        "efficiency": 1600,
+        "constructionPenalty": -1034,
         "speed": 1500,
-        "total": 9100
+        "total": 6466
       }
     },
     {
@@ -34,9 +34,9 @@
         "passengerPickup": 1000,
         "passengerDelivery": 1000,
         "partDelivery": 1500,
-        "efficiency": 1400,
+        "constructionPenalty": -677,
         "speed": 0,
-        "total": 4900
+        "total": 2823
       }
     },
     {
@@ -53,9 +53,47 @@
         "passengerPickup": 0,
         "passengerDelivery": 0,
         "partDelivery": 188,
-        "efficiency": 600,
+        "constructionPenalty": -67,
         "speed": 0,
-        "total": 788
+        "total": 121
+      }
+    },
+    {
+      "name": "ten parts all delivered",
+      "statistics": {
+        "initialParts": 10,
+        "passengersCollected": 1,
+        "passengersDelivered": 1,
+        "partsDelivered": 10,
+        "driverTimeMs": 20000
+      },
+      "expected": {
+        "valid": true,
+        "passengerPickup": 500,
+        "passengerDelivery": 1000,
+        "partDelivery": 3000,
+        "constructionPenalty": -1333,
+        "speed": 1000,
+        "total": 4167
+      }
+    },
+    {
+      "name": "worst-case win stays positive",
+      "statistics": {
+        "initialParts": 40,
+        "passengersCollected": 0,
+        "passengersDelivered": 0,
+        "partsDelivered": 1,
+        "driverTimeMs": 45000
+      },
+      "expected": {
+        "valid": true,
+        "passengerPickup": 0,
+        "passengerDelivery": 0,
+        "partDelivery": 75,
+        "constructionPenalty": -45,
+        "speed": 0,
+        "total": 30
       }
     },
     {
@@ -72,7 +110,7 @@
         "passengerPickup": 0,
         "passengerDelivery": 0,
         "partDelivery": 0,
-        "efficiency": 0,
+        "constructionPenalty": 0,
         "speed": 0,
         "total": 0
       }
@@ -91,7 +129,7 @@
         "passengerPickup": 0,
         "passengerDelivery": 0,
         "partDelivery": 0,
-        "efficiency": 0,
+        "constructionPenalty": 0,
         "speed": 0,
         "total": 0
       }
