@@ -63,6 +63,7 @@ bool BuildModel::PlacePart(
     PartOrientation orientation
 ) {
     if (type == PartType::Driver) {
+        if (m_grid.ContainsPartType(PartType::Driver)) return false;
         if (!m_grid.IsWithinBounds(coord)) return false;
         const auto& cell = m_grid.GetPart(coord);
         if (!cell.has_value() ||
