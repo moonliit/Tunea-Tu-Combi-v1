@@ -155,7 +155,8 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
 
     m_pendingWorldClick = cameraMode ||
         (context.state == GameState::Build &&
-         frame.mouseScreenPosition.y <= 520.0f);
+         frame.mouseScreenPosition.y <=
+             context.screenHeight - UIBarHeight);
     m_pressScreenPosition = frame.mouseScreenPosition;
     m_canDrag = false;
     m_repositioningPart = false;

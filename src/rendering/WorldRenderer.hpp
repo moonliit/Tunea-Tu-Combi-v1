@@ -7,6 +7,7 @@
 #include "rendering/Background.hpp"
 #include "rendering/PartRenderer.hpp"
 #include "rendering/TextureLibrary.hpp"
+#include "ui/UiControl.hpp"
 
 #include <raylib.h>
 #include <optional>
@@ -34,7 +35,8 @@ public:
         const std::optional<PartType>& selectedPartType,
         PartOrientation selectedOrientation,
         const std::optional<PartType>& repositionedPartType,
-        PartOrientation repositionedOrientation
+        PartOrientation repositionedOrientation,
+        int screenHeight
     ) const;
 };
 

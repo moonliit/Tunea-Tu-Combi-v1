@@ -2,6 +2,7 @@
 
 #include "app/game/PartDefinition.hpp"
 #include "math/Vector2D.hpp"
+#include "raylib.h"
 #include "ui/UiButton.hpp"
 #include "ui/UiLayout.hpp"
 
@@ -16,8 +17,14 @@ void GameUiRenderer::Render(
     const Camera2D& camera,
     const ActivationRegistry& activationRegistry
 ) const {
-    DrawRectangle(0, 520, screenWidth, 80, LIGHTGRAY);
-    DrawRectangleLines(0, 520, screenWidth, 80, GRAY);
+    DrawRectangle(
+        0, static_cast<int>(screenHeight - UIBarHeight), screenWidth,
+        static_cast<int>(UIBarHeight), LIGHTGRAY
+    );
+    DrawRectangleLines(
+        0, static_cast<int>(screenHeight - UIBarHeight), screenWidth,
+        static_cast<int>(UIBarHeight), GRAY
+    );
 
     const auto controls = UiLayout::BuildControls(
         state,
@@ -153,46 +160,42 @@ void GameUiRenderer::Render(
         }
     }
 
-    const std::string modeText = state == GameState::Build
-        ? "MODE: EDIT (Left Click: Place, Right Click: Delete, ENTER: Play)"
-        : state == GameState::View
-        ? "MODE: VIEW (Drag to move camera, ESC: Edit)"
-        : "MODE: PLAY (Press ENTER to Edit)";
-    const int modeTextX = state == GameState::Play
-        ? screenWidth - MeasureText(modeText.c_str(), 18) - 102
-        : 20;
+    std::string modeText, modeControlsText;
+    Color modeTextColor;
+
+    if (state == GameState::Build) {
+        modeText = "MODE: EDIT";
+        modeControlsText = "(Left Click: Place, Right Click: Delete, ENTER: Play)";
+        modeTextColor = DARKGREEN;
+    } else if (state == GameState::View) {
+        modeText = "MODE: VIEW";
+        modeControlsText = "(Drag to move camera, ESC: Edit)";
+        modeTextColor = DARKPURPLE;
+    } else {
+        modeText = "MODE: PLAY";
+        modeControlsText = "(Press ENTER to Edit)";
+        modeTextColor = MAROON;
+    }
+
+    const int modeTextFontSize = 30;
+    const int modeControlsFontSize = 18;
+    const int modeTextX = 20;
+    const int modeTextY = 20;
+    const int verticalPadding = 4;
+    const int modeControlsTextY = modeTextY + verticalPadding + modeTextFontSize;
+
     DrawText(
         modeText.c_str(),
         modeTextX,
-        20,
-        18,
-        state == GameState::Build ? DARKGREEN : MAROON
+        modeTextY,
+        modeTextFontSize,
+        modeTextColor
     );
-
-    const Vector2 mouseScreen = GetMousePosition();
-    const Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-    const auto coord = grid.WorldToCoord({mouseWorld.x, mouseWorld.y});
-    const std::string coordText = std::format("{}, {}", mouseWorld.x, mouseWorld.y);
-    const std::string worldText = coord.has_value()
-        ? std::format(
-            "{}, {}",
-            static_cast<float>(grid.CoordToWorld(coord.value()).x),
-            static_cast<float>(grid.CoordToWorld(coord.value()).y)
-        )
-        : "none";
-
     DrawText(
-        std::format(
-            "({}, {})\n{}\n{}\nActive parts: {}",
-            mouseWorld.x,
-            mouseWorld.y,
-            coordText,
-            worldText,
-            grid.GetPartCount()
-        ).c_str(),
-        20,
-        45,
-        14,
-        DARKGRAY
+        modeControlsText.c_str(),
+        modeTextX,
+        modeControlsTextY,
+        modeControlsFontSize,
+        modeTextColor
     );
 }

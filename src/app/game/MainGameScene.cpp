@@ -332,7 +332,10 @@ void MainGameScene::ProcessInput(float dt) {
             m_appContext->audioController->PlayPartSelect();
         } else if ((m_buildSession.GetSelectedPartType().has_value() ||
                     m_buildSession.HasRepositionedPart()) &&
-                   input.mouseScreenPosition.y <= 520.0f &&
+                   input.mouseScreenPosition.y <=
+                       static_cast<float>(
+                           m_appContext->windowHeight - UIBarHeight
+                       ) &&
                    (input.placePart || input.removePart)) {
             const Vector2 mouseWorld = GetScreenToWorld2D(
                 input.mouseScreenPosition.ToRayVec(),
@@ -699,7 +702,8 @@ void MainGameScene::Render() const {
         m_buildSession.GetSelectedPartType(),
         m_buildSession.GetSelectedOrientation(),
         m_buildSession.GetRepositionedPartType(),
-        m_buildSession.GetRepositionedOrientation()
+        m_buildSession.GetRepositionedOrientation(),
+        m_appContext->windowHeight
     );
     BeginMode2D(m_camera);
     const auto& finish = m_level.GetDefinition().goal.position;

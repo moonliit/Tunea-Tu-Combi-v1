@@ -8,7 +8,6 @@
 namespace {
 
 constexpr float ControlStartX = 20.0f;
-constexpr float ControlStartY = 535.0f;
 constexpr float ControlWidth = 110.0f;
 constexpr float ControlHeight = 50.0f;
 constexpr float ControlGap = 10.0f;
@@ -23,15 +22,18 @@ UiControl MakeToolbarControl(
     ToolbarPart part,
     std::string_view label,
     Color color,
+    float controlWidth,
+    float controlStartX,
+    float controlStartY,
     bool enabled = true
 ) {
     return UiControl{
         .type = UiControlType::ToolbarPart,
         .bounds = {
-            ControlStartX + static_cast<float>(index) *
-                (ControlWidth + ControlGap),
-            ControlStartY,
-            ControlWidth,
+            controlStartX + static_cast<float>(index) *
+                (controlWidth + ControlGap),
+            controlStartY,
+            controlWidth,
             ControlHeight
         },
         .label = label,
@@ -90,6 +92,7 @@ std::vector<UiControl> UiLayout::BuildControls(
     int screenHeight
 ) {
     std::vector<UiControl> controls;
+    const float controlStartY = screenHeight - UIBarHeight + 15.0f;
     if (state == GameState::Play) {
         const auto actions = activationRegistry.GetVisibleActions();
         const float actionGap = 6.0f;
@@ -107,7 +110,7 @@ std::vector<UiControl> UiLayout::BuildControls(
                 .bounds = {
                     ControlStartX + static_cast<float>(index) *
                         (actionWidth + actionGap),
-                    ControlStartY,
+                    controlStartY,
                     actionWidth,
                     ControlHeight
                 },
@@ -149,6 +152,12 @@ std::vector<UiControl> UiLayout::BuildControls(
             YELLOW
         };
 
+        const float toolbarWidth = std::min(
+            110.0f,
+            (static_cast<float>(screenWidth) - 40.0f -
+             ControlGap * (static_cast<float>(std::size(parts)) - 1.0f)) /
+                static_cast<float>(std::size(parts))
+        );
         for (int index = 0; index < 6; ++index) {
             // disable driver box placement if one is already present
             const bool driverBoxEnabled = !(
@@ -160,26 +169,42 @@ std::vector<UiControl> UiLayout::BuildControls(
                 parts[index],
                 labels[index],
                 colors[index],
+                toolbarWidth,
+                ControlStartX,
+                controlStartY,
                 driverBoxEnabled
             ));
         }
 
+        const float editorTotalWidth =
+            4.0f * (EditorControlWidth + EditorControlGap) - EditorControlGap;
+        const float editorStartX =
+            screenWidth - editorTotalWidth - 120;
         const auto canMoveUp = grid.CanShiftContents({0, -1});
         const auto canMoveRight = grid.CanShiftContents({1, 0});
         const auto canMoveDown = grid.CanShiftContents({0, 1});
         const auto canMoveLeft = grid.CanShiftContents({-1, 0});
-        controls.push_back(MakeEditorControl(
-            0, EditorAction::MoveLeft, "Left", BLUE, canMoveLeft
-        ));
-        controls.push_back(MakeEditorControl(
-            1, EditorAction::MoveDown, "Down", BLUE, canMoveDown
-        ));
-        controls.push_back(MakeEditorControl(
-            2, EditorAction::MoveUp, "Up", BLUE, canMoveUp
-        ));
-        controls.push_back(MakeEditorControl(
-            3, EditorAction::MoveRight, "Right", BLUE, canMoveRight
-        ));
+        for (int index = 0; index < 4; ++index) {
+            const EditorAction actions[] = {
+                EditorAction::MoveLeft,
+                EditorAction::MoveDown,
+                EditorAction::MoveUp,
+                EditorAction::MoveRight
+            };
+            const std::string_view labels[] = {"Left", "Down", "Up", "Right"};
+            const bool enabled[] = {canMoveLeft, canMoveDown, canMoveUp, canMoveRight};
+            Rectangle bounds{
+                editorStartX + static_cast<float>(index) *
+                    (EditorControlWidth + EditorControlGap),
+                EditorControlStartY,
+                EditorControlWidth,
+                EditorControlHeight
+            };
+            controls.push_back(MakeEditorControl(
+                index, actions[index], labels[index], BLUE, enabled[index],
+                bounds
+            ));
+        }
     }
 
     const Rectangle largeSideButton =

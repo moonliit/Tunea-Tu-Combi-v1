@@ -6,6 +6,8 @@
 #include <optional>
 #include <string_view>
 
+constexpr float UIBarHeight = 80.0f;
+
 enum class UiControlType {
     ToolbarPart,
     Activation,

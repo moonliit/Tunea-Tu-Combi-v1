@@ -38,6 +38,7 @@ void RenderTerrainMesh(
         visual.outlineA
     );
 
+    rlDrawRenderBatchActive();
     rlBegin(RL_TRIANGLES);
     rlSetTexture(terrainTexture.id);
 
@@ -135,7 +136,8 @@ void WorldRenderer::Render(
     const std::optional<PartType>& selectedPartType,
     PartOrientation selectedOrientation,
     const std::optional<PartType>& repositionedPartType,
-    PartOrientation repositionedOrientation
+    PartOrientation repositionedOrientation,
+    int screenHeight
 ) const {
     RenderBackground(
         m_textures.GetBackground(m_background),
@@ -173,7 +175,7 @@ void WorldRenderer::Render(
             : selectedOrientation;
         if (state == GameState::Build && ghostPartType.has_value()) {
             const Vector2 mouseScreen = GetMousePosition();
-            if (mouseScreen.y <= 520.0f) {
+            if (mouseScreen.y <= static_cast<float>(screenHeight - UIBarHeight)) {
                 const Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
                 m_partRenderer.RenderGhostAtPosition(
                     ghostPartType.value(),
