@@ -19,6 +19,9 @@ using namespace Math;
 
 namespace {
 
+// how far past the level the camera keeps following the driver
+constexpr float MapCameraMargin = 500.0f;
+
 float CalculateGridFitZoom(
     int screenWidth,
     int screenHeight,
@@ -45,6 +48,21 @@ Vector2 CalculateGridTarget(const LevelDefinition& specs) {
         static_cast<float>(specs.grid.worldPos.x),
         static_cast<float>(
             specs.grid.worldPos.y - gridHeight / 2.0f + specs.grid.cellSize
+        )
+    };
+}
+
+Vector2 ClampToBounds(Vector2 point, const AABB& bounds) {
+    return {
+        std::clamp(
+            point.x,
+            static_cast<float>(bounds.min.x),
+            static_cast<float>(bounds.max.x)
+        ),
+        std::clamp(
+            point.y,
+            static_cast<float>(bounds.min.y),
+            static_cast<float>(bounds.max.y)
         )
     };
 }
@@ -122,6 +140,7 @@ MainGameScene::MainGameScene(
     m_gravity(9.8f * 40.0f),
     m_isCustomLevel(specs.levelNumber < 0),
     m_level(specs),
+    m_mapBounds(m_level.GetContentBounds(MapCameraMargin)),
     m_buildSession(m_level.GetBuildModel()),
     m_playSession(
         m_level.GetBuildModel(),
@@ -420,11 +439,14 @@ void MainGameScene::Update(float dt) {
                     };
                 }
             }
-            // Follow the driver or the vehicle center
-            m_camera.target = driverPosition.value_or(Vector2{
-                center.x / parts.size(),
-                center.y / parts.size()
-            });
+            // Follow the driver or the vehicle center, but not outside the map
+            m_camera.target = ClampToBounds(
+                driverPosition.value_or(Vector2{
+                    center.x / parts.size(),
+                    center.y / parts.size()
+                }),
+                m_mapBounds
+            );
             bool fanActive = false;
             for (ActivationAction action : m_playSession.GetActivationRegistry().GetVisibleActions()) {
                 fanActive = fanActive || (
@@ -521,10 +543,13 @@ void MainGameScene::TransitionToPlayMode() {
                 };
             }
         }
-        m_camera.target = driverPosition.value_or(Vector2{
-            center.x / runtimeParts.size(),
-            center.y / runtimeParts.size()
-        });
+        m_camera.target = ClampToBounds(
+            driverPosition.value_or(Vector2{
+                center.x / runtimeParts.size(),
+                center.y / runtimeParts.size()
+            }),
+            m_mapBounds
+        );
     }
 }
 

@@ -39,6 +39,7 @@ private:
     GameStateMachine m_stateMachine;
     bool m_isCustomLevel = false;
     Level m_level;
+    Math::AABB m_mapBounds;
     BuildSession m_buildSession;
     PlaySession m_playSession;
     GameInput m_input;

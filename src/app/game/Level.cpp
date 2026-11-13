@@ -1,5 +1,6 @@
 #include "app/game/Level.hpp"
 #include "math/Vector2D.hpp"
+#include <algorithm>
 #include <fstream>
 
 Level::Level(const LevelDefinition& specs):
@@ -27,6 +28,49 @@ Level::Level(const LevelDefinition& specs):
     if (!sections.empty()) {
         m_catmullRomPoints = sections.front();
     }
+}
+
+Math::AABB Level::GetContentBounds(float margin) const {
+    const EditorGrid& grid = m_buildModel.GetGrid();
+    const Math::Vector2D firstCell = grid.CoordToWorld({0, 0});
+    const Math::Vector2D lastCell = grid.CoordToWorld({
+        m_definition.grid.dims.x - 1,
+        m_definition.grid.dims.y - 1
+    });
+    const float halfCell = grid.GetCellSize() * 0.5f;
+    float minX = static_cast<float>(firstCell.x) - halfCell;
+    float minY = static_cast<float>(firstCell.y) - halfCell;
+    float maxX = static_cast<float>(lastCell.x) + halfCell;
+    float maxY = static_cast<float>(lastCell.y) + halfCell;
+
+    const auto include = [&](float x, float y) {
+        minX = std::min(minX, x);
+        minY = std::min(minY, y);
+        maxX = std::max(maxX, x);
+        maxY = std::max(maxY, y);
+    };
+
+    for (const auto& section : Math::SampleTerrain(m_definition.terrain)) {
+        for (const Math::Vector2D& point : section) {
+            include(static_cast<float>(point.x), static_cast<float>(point.y));
+        }
+    }
+    const float goalX = static_cast<float>(m_definition.goal.position.x);
+    const float goalY = static_cast<float>(m_definition.goal.position.y);
+    const float halfGoalX = static_cast<float>(GoalSize.x) * 0.5f;
+    const float halfGoalY = static_cast<float>(GoalSize.y) * 0.5f;
+    include(goalX - halfGoalX, goalY - halfGoalY);
+    include(goalX + halfGoalX, goalY + halfGoalY);
+    for (const PassengerDefinition& passenger : m_definition.passengers) {
+        include(
+            static_cast<float>(passenger.position.x),
+            static_cast<float>(passenger.position.y)
+        );
+    }
+    return Math::AABB(
+        Math::Vector2D{minX - margin, minY - margin},
+        Math::Vector2D{maxX + margin, maxY + margin}
+    );
 }
 
 LevelDefinition LevelDefinition::Default() {

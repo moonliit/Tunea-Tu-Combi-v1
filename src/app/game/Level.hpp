@@ -2,6 +2,7 @@
 #define GAME_LEVEL_HPP
 
 #include "app/game/BuildModel.hpp"
+#include "math/AABB.hpp"
 #include "math/Vector2D.hpp"
 #include "math/Terrain.hpp"
 #include "json.hpp"
@@ -60,6 +61,7 @@ public:
     const Math::TerrainDefinition& GetTerrain() const {
         return m_definition.terrain;
     }
+    Math::AABB GetContentBounds(float margin = 0.0f) const;
     BuildModel& GetBuildModel() { return m_buildModel; }
     const BuildModel& GetBuildModel() const { return m_buildModel; }
     EditorGrid& GetGrid() { return m_buildModel.GetGrid(); }
