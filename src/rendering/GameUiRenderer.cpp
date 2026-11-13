@@ -29,14 +29,12 @@ void GameUiRenderer::Render(
     const auto& selectedPartType = buildSession.GetSelectedPartType();
     int activationIndex = 0;
     for (const UiControl& control : controls) {
-        const bool driverToolbar =
-            control.type == UiControlType::ToolbarPart &&
-            control.toolbarPart == ToolbarPart::Driver;
-        const bool containedPartToolbar = driverToolbar ||
-            (control.type == UiControlType::ToolbarPart &&
-             control.toolbarPart == ToolbarPart::TNTBarrel);
+        const bool containedPartToolbar = control.type == UiControlType::ToolbarPart &&
+            control.toolbarPart == ToolbarPart::TNTBarrel;
         Color color = control.color;
-        if (control.type == UiControlType::ToolbarPart &&
+        if (!control.enabled && control.type == UiControlType::ToolbarPart) {
+            color = Color{50, 50, 50, 255};
+        } else if (control.type == UiControlType::ToolbarPart &&
             selectedPartType.has_value() &&
             control.toolbarPart.has_value() &&
             static_cast<PartType>(control.toolbarPart.value()) ==
@@ -52,12 +50,6 @@ void GameUiRenderer::Render(
         } else if (control.type == UiControlType::Editor) {
             color = control.color;
         }
-        if (control.type == UiControlType::ToolbarPart &&
-            control.toolbarPart == ToolbarPart::Driver) {
-            color = grid.ContainsPartType(PartType::Driver)
-                ? DARKGRAY
-                : RED;
-        }
         DrawRectangle(
             static_cast<int>(control.bounds.x),
             static_cast<int>(control.bounds.y),
@@ -72,12 +64,14 @@ void GameUiRenderer::Render(
             control.type == UiControlType::ToolbarPart
                 ? 14
                 : control.labelFontSize,
-            WHITE
+            control.enabled ? WHITE : GRAY
         );
         if (containedPartToolbar) {
+            const std::string containerName =
+                std::string(GetPartDefinition(PartType::SquareBlock).name);
             const std::string containerHint = std::format(
                 "(inside {})",
-                GetPartDefinition(PartType::SquareBlock).name
+                containerName
             );
             int hintFontSize = 7;
             const int maxHintWidth = static_cast<int>(control.bounds.width) - 8;
@@ -92,17 +86,6 @@ void GameUiRenderer::Render(
                 static_cast<int>(control.bounds.y) + 31,
                 hintFontSize,
                 WHITE
-            );
-        }
-        if (driverToolbar && !grid.ContainsPartType(PartType::Driver)) {
-            const char* required = "¡Obligatorio!";
-            DrawText(
-                required,
-                static_cast<int>(control.bounds.x +
-                    (control.bounds.width - MeasureText(required, 12)) / 2),
-                static_cast<int>(control.bounds.y) - 15,
-                12,
-                RED
             );
         }
         if (control.type == UiControlType::Activation) {

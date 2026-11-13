@@ -22,7 +22,8 @@ UiControl MakeToolbarControl(
     int index,
     ToolbarPart part,
     std::string_view label,
-    Color color
+    Color color,
+    bool enabled = true
 ) {
     return UiControl{
         .type = UiControlType::ToolbarPart,
@@ -38,7 +39,7 @@ UiControl MakeToolbarControl(
         .toolbarPart = part,
         .activationAction = std::nullopt,
         .editorAction = std::nullopt,
-        .enabled = true,
+        .enabled = enabled,
         .active = false
     };
 }
@@ -124,7 +125,7 @@ std::vector<UiControl> UiLayout::BuildControls(
         }
     } else if (state == GameState::Build) {
         constexpr ToolbarPart parts[] = {
-            ToolbarPart::Driver,
+            ToolbarPart::DriverBox,
             ToolbarPart::SquareBlock,
             ToolbarPart::CircleWheel,
             ToolbarPart::TNTBarrel,
@@ -132,7 +133,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             ToolbarPart::WindSail
         };
         constexpr std::string_view labels[] = {
-            "Chofer",
+            "Driver Box",
             "Square Box",
             "Wheel",
             "TNT",
@@ -140,7 +141,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             "Sail"
         };
         constexpr Color colors[] = {
-            RED,
+            Color{106, 90, 205, 255},
             BLUE,
             GREEN,
             MAROON,
@@ -149,11 +150,17 @@ std::vector<UiControl> UiLayout::BuildControls(
         };
 
         for (int index = 0; index < 6; ++index) {
+            // disable driver box placement if one is already present
+            const bool driverBoxEnabled = !(
+                parts[index] == ToolbarPart::DriverBox &&
+                grid.ContainsPartType(PartType::DriverBox)
+            );
             controls.push_back(MakeToolbarControl(
                 index,
                 parts[index],
                 labels[index],
-                colors[index]
+                colors[index],
+                driverBoxEnabled
             ));
         }
 
@@ -185,7 +192,7 @@ std::vector<UiControl> UiLayout::BuildControls(
                 : EditorAction::ReturnToBuild,
             state == GameState::Build ? "PLAY" : "EDIT",
             DARKGREEN,
-            state == GameState::Play || grid.ContainsPartType(PartType::Driver),
+            state == GameState::Play || grid.ContainsPartType(PartType::DriverBox),
             largeSideButton,
             24,
             32,

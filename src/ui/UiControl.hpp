@@ -30,7 +30,8 @@ enum class ToolbarPart {
     TNTBarrel,
     Fan,
     WindSail,
-    Driver
+    Driver,
+    DriverBox
 };
 
 struct UiControl {

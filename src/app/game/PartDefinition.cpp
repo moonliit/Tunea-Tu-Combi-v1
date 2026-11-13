@@ -73,6 +73,18 @@ const PartDefinition DRIVER{
     0.0f,
     0
 };
+const PartDefinition DRIVER_BOX{
+    PartType::DriverBox,
+    "Driver box",
+    1.0f,
+    PartShape::Box,
+    PartBehavior::Passive,
+    PartRole::Container,
+    0.5f,
+    0.0f,
+    ConnectorBit(ConnectorDirection::Left) |
+        ConnectorBit(ConnectorDirection::Down)
+};
 
 }
 
@@ -84,6 +96,7 @@ const PartDefinition& GetPartDefinition(PartType type) {
         case PartType::Fan: return FAN;
         case PartType::WindSail: return WIND_SAIL;
         case PartType::Driver: return DRIVER;
+        case PartType::DriverBox: return DRIVER_BOX;
     }
 
     throw std::invalid_argument("Unknown part type");

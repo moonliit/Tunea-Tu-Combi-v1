@@ -53,6 +53,7 @@ void Part::Activate() {
         case PartType::SquareBlock:
         case PartType::CircleWheel:
         case PartType::Driver:
+        case PartType::DriverBox:
             break;
     }
 }
@@ -76,8 +77,17 @@ void Part::SetContainedBody(
 }
 
 bool Part::CanContain(const Part& part) const {
-    return GetPartDefinition(m_type).role == PartRole::Container &&
-        GetPartDefinition(part.m_type).role == PartRole::Containable;
+    if (GetPartDefinition(m_type).role != PartRole::Container) return false;
+    if (GetPartDefinition(part.m_type).role != PartRole::Containable) return false;
+    // The driver box is dedicated to the driver: it can only contain a driver,
+    // and a driver can only live inside a driver box (never a square box).
+    if (m_type == PartType::DriverBox) {
+        return part.m_type == PartType::Driver;
+    }
+    if (m_type == PartType::SquareBlock) {
+        return part.m_type != PartType::Driver;
+    }
+    return true;
 }
 
 bool Part::ContainPart(std::unique_ptr<Part> part) {
@@ -165,15 +175,13 @@ Part::Part(
     m_gridCoord(gridCoord),
     m_type(type),
     m_orientation(orientation),
-    m_id(id),
-    m_activeCacheIndex(0) {}
+    m_id(id) {}
 
 Part::Part(const Part& other):
     m_gridCoord(other.m_gridCoord),
     m_type(other.m_type),
     m_orientation(other.m_orientation),
     m_id(other.m_id),
-    m_activeCacheIndex(0),
     m_propulsionActive(false),
     m_activationActive(false),
     m_activeTimeRemaining(0.0f),
@@ -191,7 +199,6 @@ Part& Part::operator=(const Part& other) {
     m_type = other.m_type;
     m_orientation = other.m_orientation;
     m_id = other.m_id;
-    m_activeCacheIndex = 0;
     m_propulsionActive = false;
     m_activationActive = false;
     m_activeTimeRemaining = 0.0f;
@@ -226,6 +233,19 @@ void Part::SetPhysicsBody(
 
     switch (m_type) {
         case PartType::SquareBlock: {
+            const float containedMass = m_containedPart
+                ? GetPartDefinition(m_containedPart->GetType()).mass
+                : 0.0f;
+            body = physics->CreateBox(
+                physicsPosition,
+                PartOrientationRadians(m_orientation),
+                Vector2D{cellSize, cellSize},
+                definition.mass + containedMass,
+                BodyType::Dynamic
+            );
+            break;
+        }
+        case PartType::DriverBox: {
             const float containedMass = m_containedPart
                 ? GetPartDefinition(m_containedPart->GetType()).mass
                 : 0.0f;

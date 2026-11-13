@@ -17,7 +17,8 @@ constexpr std::array PartTextureFiles{
     PartTextureFile{PartType::TNTBarrel, "assets/textures/parts/tnt_barrel.png"},
     PartTextureFile{PartType::Fan, "assets/textures/parts/fan.png"},
     PartTextureFile{PartType::WindSail, "assets/textures/parts/wind_sail.png"},
-    PartTextureFile{PartType::Driver, "assets/textures/parts/driver.png"}
+    PartTextureFile{PartType::Driver, "assets/textures/parts/driver.png"},
+    PartTextureFile{PartType::DriverBox, "assets/textures/parts/square_block.png"}
 };
 constexpr const char* WheelMountPath = "assets/textures/parts/wheel_mount.png";
 constexpr const char* TerrainTexturePath = "assets/textures/terrain/dirt.png";

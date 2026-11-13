@@ -360,6 +360,13 @@ void MainGameScene::ProcessInput(float dt) {
             }
 
         }
+
+        // there can only be a single driver box per build
+        // if one is already placed, clear any driver box selection
+        if (m_buildSession.GetSelectedPartType() == PartType::DriverBox &&
+            m_level.GetGrid().ContainsPartType(PartType::DriverBox)) {
+            m_buildSession.ClearSelection();
+        }
     }
 }
 
@@ -398,8 +405,8 @@ void MainGameScene::Update(float dt) {
             }
             if (!nearVehicle) continue;
 
-            std::vector<Part*> availableBoxes;
-            for (Part* part : parts) {
+            std::vector<const Part*> availableBoxes;
+            for (const Part* part : parts) {
                 const bool holdsPassenger = std::any_of(
                     m_carriedPassengers.begin(), m_carriedPassengers.end(),
                     [part](const CarriedPassenger& carried) {
@@ -418,7 +425,7 @@ void MainGameScene::Update(float dt) {
             std::uniform_int_distribution<std::size_t> chooseBox(
                 0, availableBoxes.size() - 1
             );
-            Part* hostPart = availableBoxes[chooseBox(randomEngine)];
+            const Part* hostPart = availableBoxes[chooseBox(randomEngine)];
             hostPart->GetPhysicsBody()->AddMass(GetPartDefinition(PartType::Fan).mass);
             m_passengerCollected[passengerIndex] = true;
             m_carriedPassengers.push_back({
@@ -492,7 +499,7 @@ void MainGameScene::Update(float dt) {
 }
 
 void MainGameScene::TransitionToPlayMode() {
-    if (!m_level.GetGrid().ContainsPartType(PartType::Driver)) return;
+    if (!m_level.GetGrid().ContainsPartType(PartType::DriverBox)) return;
     m_elapsedMs = 0.0;
     m_levelCompleted = false;
     m_initialPartIds.clear();

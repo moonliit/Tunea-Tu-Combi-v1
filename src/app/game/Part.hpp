@@ -15,7 +15,8 @@ enum class PartType {
     TNTBarrel,    // Box shape
     Fan,          // Capsule shape
     WindSail,     // Triangle shape
-    Driver
+    Driver,
+    DriverBox     // Box-shaped container; only accepts a Driver
 };
 
 enum class PartShape {
@@ -136,7 +137,6 @@ private:
     PartType m_type;
     PartOrientation m_orientation;
     PartId m_id;
-    size_t m_activeCacheIndex;
     I_PhysicsWorld* m_physicsWorld = nullptr;
     EditorGrid* m_grid;
 

@@ -30,13 +30,8 @@ EditorGrid::EditorGrid(const EditorGrid& other):
     m_gridDims(other.m_gridDims),
     m_initialPos(other.m_initialPos),
     m_cellSize(other.m_cellSize),
-    m_cells(other.m_cells) {
-    m_activeParts.clear();
-    for (std::optional<Part>& cell : m_cells) {
-        if (!cell.has_value()) continue;
-        cell->m_activeCacheIndex = m_activeParts.size();
-        m_activeParts.push_back(&cell.value());
-    }
+    m_cells(other.m_cells)
+{
 }
 
 EditorGrid& EditorGrid::operator=(const EditorGrid& other) {
@@ -45,28 +40,25 @@ EditorGrid& EditorGrid::operator=(const EditorGrid& other) {
     m_initialPos = other.m_initialPos;
     m_cellSize = other.m_cellSize;
     m_cells = other.m_cells;
-    m_activeParts.clear();
-    for (std::optional<Part>& cell : m_cells) {
-        if (!cell.has_value()) continue;
-        cell->m_activeCacheIndex = m_activeParts.size();
-        m_activeParts.push_back(&cell.value());
-    }
     return *this;
 }
 
 std::size_t EditorGrid::GetPartCount() const {
     std::size_t count = 0;
-    for (const Part* part : m_activeParts) {
-        count += CountPartTree(*part);
+    for (const std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        count += CountPartTree(cell.value());
     }
     return count;
 }
 
 bool EditorGrid::ContainsPartType(PartType type) const {
-    for (const Part* part : m_activeParts) {
-        if (part->GetType() == type ||
-            (part->HasContainedPart() &&
-             part->GetContainedPart()->GetType() == type)) {
+    for (const std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        const Part& part = cell.value();
+        if (part.GetType() == type ||
+            (part.HasContainedPart() &&
+             part.GetContainedPart()->GetType() == type)) {
             return true;
         }
     }
@@ -103,6 +95,24 @@ bool EditorGrid::IsWorldPosWithinSelfBounds(Math::Vector2D pos) const {
     );
 }
 
+std::vector<Part*> EditorGrid::CollectActiveParts() {
+    std::vector<Part*> parts;
+    for (std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        parts.push_back(&cell.value());
+    }
+    return parts;
+}
+
+std::vector<const Part*> EditorGrid::CollectActiveParts() const {
+    std::vector<const Part*> parts;
+    for (const std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        parts.push_back(&cell.value());
+    }
+    return parts;
+}
+
 std::optional<Part>& EditorGrid::GetPart(GridCoord coord) {
     return m_cells[GetIndex(coord)];
 }
@@ -123,8 +133,6 @@ bool EditorGrid::PlacePart(
 
     if (!m_cells[idx].has_value()) {
         m_cells[idx] = Part(coord, type, orientation, id);
-        m_activeParts.push_back(&m_cells[idx].value());
-        m_cells[idx].value().m_activeCacheIndex = m_activeParts.size() - 1;
         return true;
     }
 
@@ -136,7 +144,8 @@ bool EditorGrid::PlacePart(
             );
         }
         if (GetPartDefinition(m_cells[idx]->m_type).role ==
-                PartRole::Container) {
+                PartRole::Container &&
+            m_cells[idx]->CanContain(candidate)) {
             m_cells[idx]->RemoveContainedPart();
             return m_cells[idx]->ContainPart(
                 std::make_unique<Part>(std::move(candidate))
@@ -164,8 +173,6 @@ bool EditorGrid::PlacePart(
     RemovePart(coord);
 
     m_cells[idx] = Part(coord, type, orientation, id);
-    m_activeParts.push_back(&m_cells[idx].value());
-    m_cells[idx].value().m_activeCacheIndex = m_activeParts.size() - 1;
     return true;
 }
 
@@ -175,14 +182,6 @@ void EditorGrid::RemovePart(GridCoord coord) {
 
     if (!m_cells[idx].has_value()) return;
 
-    Part& partToRemove = m_cells[idx].value();
-    size_t cacheIdx = partToRemove.m_activeCacheIndex;
-
-    if (cacheIdx < m_activeParts.size() - 1) {
-        m_activeParts[cacheIdx] = m_activeParts.back();
-        m_activeParts[cacheIdx]->m_activeCacheIndex = cacheIdx;
-    }
-    m_activeParts.pop_back();
     m_cells[idx].reset();
 }
 
@@ -203,11 +202,12 @@ void EditorGrid::Clear() {
     for (std::optional<Part>& cell : m_cells) {
         cell.reset();
     }
-    m_activeParts.clear();
 }
 
 bool EditorGrid::CanShiftContents(Math::GridCoord delta) const {
-    for (const Part* part : m_activeParts) {
+    for (const std::optional<Part>& cell : m_cells) {
+        if (!cell.has_value()) continue;
+        const Part* part = &cell.value();
         const GridCoord shifted{
             part->GetGridCoord().x + delta.x,
             part->GetGridCoord().y + delta.y
@@ -239,12 +239,6 @@ bool EditorGrid::ShiftContents(Math::GridCoord delta) {
     }
 
     m_cells = std::move(shiftedCells);
-    m_activeParts.clear();
-    for (std::optional<Part>& cell : m_cells) {
-        if (!cell.has_value()) continue;
-        cell->m_activeCacheIndex = m_activeParts.size();
-        m_activeParts.push_back(&cell.value());
-    }
     return true;
 }
 

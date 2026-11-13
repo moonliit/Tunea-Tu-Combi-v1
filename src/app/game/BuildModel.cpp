@@ -1,5 +1,6 @@
 #include "app/game/BuildModel.hpp"
 
+#include <memory>
 #include <utility>
 
 namespace {
@@ -62,15 +63,29 @@ bool BuildModel::PlacePart(
     PartType type,
     PartOrientation orientation
 ) {
-    if (type == PartType::Driver) {
-        if (m_grid.ContainsPartType(PartType::Driver)) return false;
+    // the driver always comes bundled inside a driver box.
+    // placing a driver directly is not allowed.
+    if (type == PartType::Driver) return false;
+
+    if (type == PartType::DriverBox) {
+        // At most one driver box may exist in a build.
+        if (m_grid.ContainsPartType(PartType::DriverBox)) return false;
         if (!m_grid.IsWithinBounds(coord)) return false;
-        const auto& cell = m_grid.GetPart(coord);
-        if (!cell.has_value() ||
-            cell->GetType() != PartType::SquareBlock) {
+        // place the box, then give it its default inner driver.
+        if (!m_grid.PlacePart(coord, type, orientation, m_nextPartId++)) {
             return false;
         }
+        auto& cell = m_grid.GetPart(coord);
+        if (cell.has_value()) {
+            Part* box = &cell.value();
+            auto driver = std::make_unique<Part>(
+                coord, PartType::Driver, orientation, m_nextPartId++
+            );
+            box->ContainPart(std::move(driver));
+        }
+        return true;
     }
+
     const PartOrientation placementOrientation = GetAttachmentOrientation(
         m_grid,
         coord,

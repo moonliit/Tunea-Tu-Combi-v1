@@ -25,6 +25,15 @@ bool BuildSession::PickUpPart(Math::GridCoord coord) {
     if (!part.has_value()) return false;
 
     Part* partToPickUp = &part.value();
+    // picks up the whole box rather than extracting the driver on its own.
+    // (a driver box always travels together with its inner driver)
+    if (partToPickUp->GetType() == PartType::DriverBox) {
+        m_repositionedPartType = partToPickUp->GetType();
+        m_repositionedOrientation = partToPickUp->GetOrientation();
+        m_buildModel.GetGrid().RemovePart(coord);
+        return true;
+    }
+
     if (partToPickUp->HasContainedPart()) {
         partToPickUp = partToPickUp->GetContainedPart();
         m_repositionedPartType = partToPickUp->GetType();

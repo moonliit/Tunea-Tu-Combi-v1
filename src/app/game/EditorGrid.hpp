@@ -14,7 +14,6 @@ private:
     float m_cellSize;
 
     std::vector<std::optional<Part>> m_cells;
-    std::vector<Part*> m_activeParts;
 
     size_t GetIndex(Math::GridCoord coord) const;
     bool IsGridCoordWithinSelfBounds(Math::GridCoord coord) const;
@@ -41,8 +40,12 @@ public:
     bool CanShiftContents(Math::GridCoord delta) const;
     bool ShiftContents(Math::GridCoord delta);
 
-    std::vector<Part*>& GetActiveParts() { return m_activeParts; }
-    const std::vector<Part*>& GetActiveParts() const { return m_activeParts; }
+    // rebuilds the active-part list from the cells on every call
+    // assuming grid is small enough that this is not a performance concern
+    std::vector<Part*> GetActiveParts() { return CollectActiveParts(); }
+    std::vector<const Part*> GetActiveParts() const {
+        return CollectActiveParts();
+    }
     std::size_t GetPartCount() const;
     bool ContainsPartType(PartType type) const;
     float GetCellSize() const { return m_cellSize; }
@@ -51,6 +54,10 @@ public:
     std::optional<Math::GridCoord> WorldToCoord(Math::Vector2D v) const;
     Math::Vector2D CoordToWorld(Math::GridCoord coord) const;
     bool IsWithinBounds(Math::GridCoord coord) const;
+
+private:
+    std::vector<Part*> CollectActiveParts();
+    std::vector<const Part*> CollectActiveParts() const;
 };
 
 #endif
