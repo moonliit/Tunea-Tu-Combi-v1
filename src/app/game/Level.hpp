@@ -7,6 +7,7 @@
 #include "math/Terrain.hpp"
 #include "json.hpp"
 #include <optional>
+#include <string>
 #include <vector>
 
 struct CameraDefinition {
@@ -33,6 +34,7 @@ inline constexpr Math::Vector2D GoalSize{80.0f, 80.0f};
 
 struct LevelDefinition {
     int levelNumber = 1;
+    std::optional<std::string> publicId;
     Math::TerrainDefinition terrain;
     GridDefinition grid;
     std::optional<CameraDefinition> initialCamera;
@@ -45,6 +47,7 @@ struct LevelDefinition {
     static LevelDefinition FromJson(const nlohmann::json& j);
     static LevelDefinition FromJsonPath(const std::string& path);
     nlohmann::json ToJson() const;
+    std::string GetLeaderboardId() const;
 };
 
 class Level {

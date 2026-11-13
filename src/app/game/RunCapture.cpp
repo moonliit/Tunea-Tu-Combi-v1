@@ -2,9 +2,11 @@
 
 #include "app/game/Part.hpp"
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -18,6 +20,27 @@ EM_JS(void, SaveRunCaptureWeb, (const char* json), {
 namespace {
 
 constexpr std::int64_t FrameIntervalMs = 50;
+
+std::string CreateAttemptId() {
+    std::array<unsigned char, 16> bytes;
+    std::random_device random;
+    for (unsigned char& byte : bytes) {
+        byte = static_cast<unsigned char>(random());
+    }
+    bytes[6] = static_cast<unsigned char>((bytes[6] & 0x0f) | 0x40);
+    bytes[8] = static_cast<unsigned char>((bytes[8] & 0x3f) | 0x80);
+    constexpr char Hex[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(36);
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        if (index == 4 || index == 6 || index == 8 || index == 10) {
+            result.push_back('-');
+        }
+        result.push_back(Hex[bytes[index] >> 4]);
+        result.push_back(Hex[bytes[index] & 0x0f]);
+    }
+    return result;
+}
 
 template<typename Callback>
 void VisitPart(const Part& part, PartId parent, const Callback& callback) {
@@ -58,9 +81,16 @@ nlohmann::json ScoreJson(const Scoring::ScoreBreakdown& score) {
 
 }
 
-void RunCapture::Start(const BuildModel& model, std::size_t passengerCount) {
+void RunCapture::Start(
+    const BuildModel& model,
+    std::size_t passengerCount,
+    const std::string& levelId
+) {
+    m_attemptId = CreateAttemptId();
     m_data = {
+        {"attemptId", m_attemptId},
         {"formatVersion", "run-v1"},
+        {"levelId", levelId},
         {"physicsVersion", "custom-physics-v1"},
         {"rulesVersion", Scoring::RulesVersion},
         {"passengerCount", passengerCount},
@@ -163,6 +193,7 @@ void RunCapture::Finish(
 
 void RunCapture::Clear() {
     m_data = nlohmann::json{};
+    m_attemptId.clear();
     m_visibleParts.clear();
     m_nextFrameMs = 0;
 }

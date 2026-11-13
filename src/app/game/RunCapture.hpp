@@ -6,15 +6,21 @@
 
 #include <cstdint>
 #include <json.hpp>
+#include <string>
 #include <unordered_set>
 
 class RunCapture {
     nlohmann::json m_data;
+    std::string m_attemptId;
     std::int64_t m_nextFrameMs = 0;
     std::unordered_set<PartId> m_visibleParts;
 
 public:
-    void Start(const BuildModel& model, std::size_t passengerCount);
+    void Start(
+        const BuildModel& model,
+        std::size_t passengerCount,
+        const std::string& levelId
+    );
     void RecordFrame(
         std::int64_t timeMs,
         const EditorGrid& grid,
@@ -28,6 +34,7 @@ public:
         const Scoring::ScoreBreakdown& score
     );
     void Clear();
+    const std::string& GetAttemptId() const { return m_attemptId; }
 };
 
 #endif

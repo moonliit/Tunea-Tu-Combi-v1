@@ -94,6 +94,10 @@ LevelDefinition LevelDefinition::Default() {
 nlohmann::json LevelDefinition::ToJson() const {
     nlohmann::json j;
 
+    if (publicId.has_value()) {
+        j["publicId"] = publicId.value();
+    }
+
     // build terrain polygons explicitly
     nlohmann::json polygonsJson = nlohmann::json::array();
     for (const auto& poly : terrain.polygons) {
@@ -144,6 +148,10 @@ nlohmann::json LevelDefinition::ToJson() const {
 
 LevelDefinition LevelDefinition::FromJson(const nlohmann::json& j) {
     LevelDefinition level;
+
+    if (j.contains("publicId") && j["publicId"].is_string()) {
+        level.publicId = j["publicId"].get<std::string>();
+    }
 
     if (j.contains("terrain") && j["terrain"].contains("polygons")) {
         for (const auto& polyJson : j["terrain"]["polygons"]) {
@@ -202,4 +210,14 @@ LevelDefinition LevelDefinition::FromJsonPath(const std::string& path) {
         throw std::runtime_error("Failed to open JSON file: " + path);
     }
     return LevelDefinition::FromJson(nlohmann::json::parse(file));
+}
+
+std::string LevelDefinition::GetLeaderboardId() const {
+    if (publicId.has_value() && !publicId->empty()) {
+        return "public:" + publicId.value();
+    }
+    if (levelNumber > 0) {
+        return "official:" + std::to_string(levelNumber);
+    }
+    return {};
 }

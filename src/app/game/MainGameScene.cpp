@@ -139,6 +139,7 @@ MainGameScene::MainGameScene(
     m_appContext(appContext),
     m_gravity(9.8f * 40.0f),
     m_isCustomLevel(specs.levelNumber < 0),
+    m_levelId(specs.GetLeaderboardId()),
     m_level(specs),
     m_mapBounds(m_level.GetContentBounds(MapCameraMargin)),
     m_buildSession(m_level.GetBuildModel()),
@@ -363,6 +364,10 @@ void MainGameScene::ProcessInput(float dt) {
 }
 
 void MainGameScene::Update(float dt) {
+    if (m_stateMachine.IsResultsMode()) {
+        m_leaderboard.Poll(static_cast<double>(dt) * 1000.0);
+        return;
+    }
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
         const double frameMs = static_cast<double>(dt) * 1000.0;
@@ -508,7 +513,8 @@ void MainGameScene::TransitionToPlayMode() {
     m_runIdentity = m_appContext->identity.CaptureResultScope();
     m_capture.Start(
         m_level.GetBuildModel(),
-        m_level.GetDefinition().passengers.size()
+        m_level.GetDefinition().passengers.size(),
+        m_levelId
     );
     m_playSession.Start();
     auto scenario = m_appContext->audioController->GetCurrentScenario();
@@ -627,6 +633,13 @@ void MainGameScene::CompleteRun() {
         m_statistics,
         m_score
     );
+    m_leaderboard.Submit(
+        m_levelId,
+        m_capture.GetAttemptId(),
+        m_runIdentity,
+        m_statistics,
+        m_score
+    );
 
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
@@ -641,6 +654,7 @@ void MainGameScene::ResetToBuildMode() {
     m_goalWindow.Reset();
     m_previousPartX.clear();
     m_capture.Clear();
+    m_leaderboard.Reset();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
     if (!m_stateMachine.IsBuildMode()) {
@@ -807,7 +821,71 @@ void MainGameScene::RenderResults() const {
     DrawRectangleRec(rankingPanel, Fade(LIGHTGRAY, 0.55f));
     DrawRectangleLinesEx(rankingPanel, 2.0f, GRAY);
     DrawText("Ranking", 52, 106, 26, DARKGRAY);
-    DrawText("Disponible en la próxima actualización", 52, 150, 16, GRAY);
+    const LeaderboardSnapshot& leaderboard = m_leaderboard.GetSnapshot();
+    if (leaderboard.status == LeaderboardStatus::Loading) {
+        DrawText("Esperando confirmación del servidor...", 52, 150, 15, GRAY);
+    } else if (leaderboard.status == LeaderboardStatus::Unavailable) {
+        DrawText("Ranking global no disponible.", 52, 150, 17, MAROON);
+        if (leaderboard.personalBest.available) {
+            const std::string local = "Récord personal local: " +
+                std::to_string(leaderboard.personalBest.total);
+            DrawText(local.c_str(), 52, 183, 16, DARKGRAY);
+        }
+    } else if (leaderboard.status == LeaderboardStatus::Ready) {
+        if (leaderboard.entries.empty()) {
+            DrawText("Aún no hay marcas clasificadas.", 52, 150, 16, GRAY);
+        }
+        int rowY = 142;
+        for (const LeaderboardEntry& entry : leaderboard.entries) {
+            const bool own = !m_leaderboard.GetCombiId().empty() &&
+                entry.combiId == m_leaderboard.GetCombiId();
+            const bool current = own &&
+                entry.attemptId == m_leaderboard.GetAttemptId();
+            const Rectangle rowPanel{
+                42.0f,
+                static_cast<float>(rowY),
+                rankingPanel.width - 24.0f,
+                49.0f
+            };
+            if (own) {
+                DrawRectangleRec(
+                    rowPanel,
+                    Fade(current ? SKYBLUE : GOLD, 0.42f)
+                );
+            }
+            const std::string name = entry.name.empty()
+                ? (own ? "Tu combi" : "Combi sin nombre")
+                : entry.name;
+            const std::string label = "#" + std::to_string(entry.rank) +
+                "  " + name;
+            DrawText(label.c_str(), 50, rowY + 5, 16, own ? BLACK : DARKGRAY);
+            const std::string totalValue = std::to_string(entry.total);
+            DrawText(
+                totalValue.c_str(),
+                static_cast<int>(rankingPanel.x + rankingPanel.width - 14.0f) -
+                    MeasureText(totalValue.c_str(), 18),
+                rowY + 4,
+                18,
+                BLACK
+            );
+            std::string detail = std::to_string(entry.driverTimeMs) +
+                " ms · " + std::to_string(entry.initialParts) + " piezas";
+            if (own) {
+                detail += current ? " · esta partida" : " · tu récord anterior";
+            }
+            DrawText(detail.c_str(), 50, rowY + 28, 12, own ? MAROON : GRAY);
+            rowY += 53;
+        }
+        DrawText(
+            leaderboard.submissionConfirmed
+                ? "Puntos recalculados; física no verificada."
+                : "Resultado local no enviado al ranking.",
+            46,
+            static_cast<int>(rankingPanel.y + rankingPanel.height - 27.0f),
+            11,
+            GRAY
+        );
+    }
 
     const int panelX = static_cast<int>(width * 0.52f);
     const int valueX = width - 55;
@@ -867,6 +945,20 @@ void MainGameScene::RenderResults() const {
         42,
         MAROON
     );
+    if (leaderboard.personalBest.available) {
+        const std::string personal = "Récord personal local: " +
+            std::to_string(leaderboard.personalBest.total);
+        DrawText(personal.c_str(), panelX, 435, 16, DARKGRAY);
+        DrawText(
+            leaderboard.personalBest.currentAttempt
+                ? "Nueva mejor marca local"
+                : "Tu mejor marca local anterior sigue vigente",
+            panelX,
+            460,
+            13,
+            leaderboard.personalBest.currentAttempt ? DARKGREEN : GRAY
+        );
+    }
 
     UiButton::Draw(
         UiButton::CenteredAtBottom(width, height, 220.0f, 42.0f, 30.0f),

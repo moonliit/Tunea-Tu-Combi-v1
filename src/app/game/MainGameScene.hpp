@@ -10,6 +10,7 @@
 #include "app/I_Scene.hpp"
 #include "identity/IdentitySession.hpp"
 #include "input/GameInput.hpp"
+#include "leaderboard/LeaderboardClient.hpp"
 #include "physics/I_Physics.hpp"
 #include "rendering/GameUiRenderer.hpp"
 #include "rendering/WorldRenderer.hpp"
@@ -17,6 +18,7 @@
 
 #include <raylib.h>
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -38,6 +40,7 @@ private:
     float m_gravity;
     GameStateMachine m_stateMachine;
     bool m_isCustomLevel = false;
+    std::string m_levelId;
     Level m_level;
     Math::AABB m_mapBounds;
     BuildSession m_buildSession;
@@ -56,6 +59,7 @@ private:
     Scoring::RunStatistics m_statistics;
     Scoring::ScoreBreakdown m_score;
     RunCapture m_capture;
+    LeaderboardClient m_leaderboard;
 
     void ResetToBuildMode();
     void ResetEditorCamera();

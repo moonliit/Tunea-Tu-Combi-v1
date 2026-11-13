@@ -6,6 +6,18 @@ Module['api'] = (() => {
     let busy = false;
     let notice = '';
     let updateUi = () => {};
+    let transientLocalProfileId = '';
+    let leaderboardGeneration = 0;
+    let leaderboardState = {
+        status: 'idle',
+        entries: [],
+        personalBest: null,
+        submission: null,
+        championRunRef: '',
+        message: ''
+    };
+    const personalRecordsKey = 'tunea-tu-combi:personal-records-v1';
+    const localProfileKey = 'tunea-tu-combi:local-profile-v1';
     const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('combi-session') : null;
     const messages = {
         NAME_TAKEN: 'Ese nombre ya está reservado. Elige otro.',
@@ -72,6 +84,14 @@ Module['api'] = (() => {
             const result = await request('/identity/name', 'PUT', { name, expectedId });
             if (result.identity.id !== expectedId) throw new Error('SESSION_CHANGED');
             accept(result.identity);
+            leaderboardState = {
+                ...leaderboardState,
+                entries: leaderboardState.entries.map((entry) =>
+                    entry.combiId === result.identity.id
+                        ? { ...entry, name: result.identity.name }
+                        : entry
+                )
+            };
             notice = 'Nombre reservado.';
             channel?.postMessage('changed');
             return true;
@@ -91,6 +111,113 @@ Module['api'] = (() => {
         if (!scope?.id || scope.id !== identity?.id || scope.epoch !== epoch) return false;
         await connect(false);
         return status === 'ready' && scope.id === identity?.id && scope.epoch === epoch && !busy;
+    }
+    function localProfileId() {
+        try {
+            let id = localStorage.getItem(localProfileKey);
+            if (!id) {
+                id = crypto.randomUUID();
+                localStorage.setItem(localProfileKey, id);
+            }
+            return id;
+        } catch {
+            if (!transientLocalProfileId) transientLocalProfileId = crypto.randomUUID();
+            return transientLocalProfileId;
+        }
+    }
+    function readPersonalRecords() {
+        try {
+            const value = JSON.parse(localStorage.getItem(personalRecordsKey) ?? '{}');
+            return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+        } catch {
+            return {};
+        }
+    }
+    function compareRecords(first, second) {
+        return second.score.total - first.score.total ||
+            first.statistics.driverTimeMs - second.statistics.driverTimeMs ||
+            first.statistics.initialParts - second.statistics.initialParts ||
+            first.recordedAt - second.recordedAt;
+    }
+    function updatePersonalBest(payload) {
+        const owner = payload.scope.id || `local:${localProfileId()}`;
+        const key = `${owner}|${payload.levelId || 'local'}`;
+        const records = readPersonalRecords();
+        const candidate = {
+            attemptId: payload.attemptId,
+            recordedAt: Date.now(),
+            statistics: payload.statistics,
+            score: payload.localScore
+        };
+        const previous = records[key];
+        const validPrevious = previous?.score && previous?.statistics &&
+            Number.isSafeInteger(previous.score.total) &&
+            Number.isSafeInteger(previous.statistics.driverTimeMs) &&
+            Number.isSafeInteger(previous.statistics.initialParts);
+        if (!validPrevious || compareRecords(candidate, previous) < 0) {
+            records[key] = candidate;
+            try { localStorage.setItem(personalRecordsKey, JSON.stringify(records)); }
+            catch {}
+        }
+        const best = records[key] ?? candidate;
+        return { ...best, currentAttempt: best.attemptId === payload.attemptId };
+    }
+    async function submitRun(payload) {
+        const generation = ++leaderboardGeneration;
+        const personalBest = updatePersonalBest(payload);
+        leaderboardState = {
+            status: 'loading',
+            entries: [],
+            personalBest,
+            submission: null,
+            championRunRef: '',
+            message: ''
+        };
+        if (!payload.levelId) {
+            leaderboardState = {
+                ...leaderboardState,
+                status: 'unavailable',
+                message: 'Este nivel local todavía no tiene ranking global.'
+            };
+            return;
+        }
+        try {
+            const ownsRun = payload.scope.id &&
+                payload.scope.id === identity?.id &&
+                payload.scope.epoch === epoch &&
+                status === 'ready';
+            const result = ownsRun
+                ? await request('/leaderboard/attempts', 'POST', {
+                    attemptId: payload.attemptId,
+                    formatVersion: payload.formatVersion,
+                    levelId: payload.levelId,
+                    physicsVersion: payload.physicsVersion,
+                    rulesVersion: payload.rulesVersion,
+                    statistics: payload.statistics
+                })
+                : await request(`/leaderboard?levelId=${encodeURIComponent(payload.levelId)}`);
+            if (generation !== leaderboardGeneration) return;
+            leaderboardState = {
+                status: 'ready',
+                entries: result.entries,
+                personalBest,
+                submission: result.submission ?? null,
+                championRunRef: result.championRunRef ?? '',
+                message: ownsRun
+                    ? 'Puntaje recalculado por el servidor; la física no fue verificada.'
+                    : 'Resultado local no enviado; la identidad de la partida ya no está disponible.'
+            };
+        } catch {
+            if (generation !== leaderboardGeneration) return;
+            leaderboardState = {
+                ...leaderboardState,
+                status: 'unavailable',
+                message: 'Ranking global no disponible. El récord personal quedó guardado localmente.'
+            };
+        }
+    }
+    function leaderboardSnapshot() {
+        return leaderboardState;
     }
     function mount() {
         const panel = document.createElement('section');
@@ -139,5 +266,14 @@ Module['api'] = (() => {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
         else mount();
     }
-    return { checkHealth: () => request('/health'), connect, rename, snapshot, captureResultScope, canSubmitResult };
+    return {
+        checkHealth: () => request('/health'),
+        connect,
+        rename,
+        snapshot,
+        captureResultScope,
+        canSubmitResult,
+        submitRun,
+        leaderboardSnapshot
+    };
 })();
