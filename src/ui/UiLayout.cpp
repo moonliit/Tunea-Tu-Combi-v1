@@ -233,7 +233,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             true,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
-                static_cast<float>(screenHeight / 2 + 155),
+                static_cast<float>(screenHeight) / 2 + 155,
                 110.0f,
                 40.0f
             },
@@ -252,7 +252,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             true,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
-                static_cast<float>(screenHeight / 2 + 55),
+                static_cast<float>(screenHeight) / 2 + 55,
                 110.0f,
                 40.0f
             },
@@ -268,7 +268,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             true,
             Rectangle{
                 20.0f,
-                static_cast<float>(screenHeight / 2 - 20),
+                static_cast<float>(screenHeight) / 2 - 20,
                 110.0f,
                 40.0f
             },
@@ -284,7 +284,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             true,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
-                static_cast<float>(screenHeight / 2 + 155),
+                static_cast<float>(screenHeight) / 2 + 155,
                 110.0f,
                 40.0f
             }

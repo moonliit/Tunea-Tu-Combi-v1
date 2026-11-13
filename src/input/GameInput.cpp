@@ -40,8 +40,59 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
             }
         }
     }
+    if (context.state == GameState::Build) {
+        constexpr int numberKeys[] = {
+            KEY_ONE, KEY_TWO, KEY_THREE, KEY_FOUR, KEY_FIVE, KEY_SIX
+        };
+        constexpr ToolbarPart numberParts[] = {
+            ToolbarPart::DriverBox,
+            ToolbarPart::SquareBlock,
+            ToolbarPart::CircleWheel,
+            ToolbarPart::TNTBarrel,
+            ToolbarPart::Fan,
+            ToolbarPart::WindSail
+        };
+        for (std::size_t index = 0;
+             index < std::size(numberKeys) && index < std::size(numberParts);
+             ++index) {
+            if (IsKeyPressed(numberKeys[index])) {
+                frame.toolbarPart = numberParts[index];
+                break;
+            }
+        }
+        // Arrow keys shift the grid contents in build mode.
+        if (IsKeyPressed(KEY_LEFT)) {
+            frame.editorAction = EditorAction::MoveLeft;
+            return frame;
+        }
+        if (IsKeyPressed(KEY_RIGHT)) {
+            frame.editorAction = EditorAction::MoveRight;
+            return frame;
+        }
+        if (IsKeyPressed(KEY_UP)) {
+            frame.editorAction = EditorAction::MoveUp;
+            return frame;
+        }
+        if (IsKeyPressed(KEY_DOWN)) {
+            frame.editorAction = EditorAction::MoveDown;
+            return frame;
+        }
+    }
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         frame.removePart = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+        if (frame.removePart) {
+            const Vector2 mouseWorld = GetScreenToWorld2D(
+                frame.mouseScreenPosition.ToRayVec(),
+                context.camera
+            );
+            const auto gridCoord = context.grid.WorldToCoord({
+                mouseWorld.x,
+                mouseWorld.y
+            });
+            if (gridCoord.has_value()) {
+                frame.interactionCoord = gridCoord;
+            }
+        }
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             const Vector2 delta = GetMouseDelta();
             if (cameraMode && m_pendingWorldClick) {

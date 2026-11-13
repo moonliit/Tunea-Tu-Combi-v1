@@ -328,15 +328,38 @@ void MainGameScene::ProcessInput(float dt) {
             const PartType partType = static_cast<PartType>(
                 input.toolbarPart.value()
             );
-            m_buildSession.SelectPartType(partType);
-            m_appContext->audioController->PlayPartSelect();
-        } else if ((m_buildSession.GetSelectedPartType().has_value() ||
+            const bool currentlySelected =
+                m_buildSession.GetSelectedPartType() == partType;
+            const bool driverBoxExists =
+                m_level.GetGrid().ContainsPartType(PartType::DriverBox);
+            // Order of operations:
+            // 1. Unselect current part
+            // 2. If pressed number matches current selection, or driver box
+            //    number is pressed but a driver box is already on grid,
+            //    cancel operation (stay unselected)
+            // 3. Otherwise select the new part
+            if (currentlySelected ||
+                (partType == PartType::DriverBox && driverBoxExists)) {
+                m_buildSession.ClearSelection();
+            } else {
+                m_buildSession.SelectPartType(partType);
+                m_appContext->audioController->PlayPartSelect();
+            }
+        }
+
+        // Right-click removal works independently of any current selection
+        // or ghost: clicking on a placed part always removes it.
+        if (input.removePart && input.interactionCoord.has_value()) {
+            m_buildSession.RemovePart(input.interactionCoord.value());
+        }
+
+        if ((m_buildSession.GetSelectedPartType().has_value() ||
                     m_buildSession.HasRepositionedPart()) &&
                    input.mouseScreenPosition.y <=
                        static_cast<float>(
                            m_appContext->windowHeight - UIBarHeight
                        ) &&
-                   (input.placePart || input.removePart)) {
+                   input.placePart) {
             const Vector2 mouseWorld = GetScreenToWorld2D(
                 input.mouseScreenPosition.ToRayVec(),
                 m_camera
@@ -356,9 +379,6 @@ void MainGameScene::ProcessInput(float dt) {
                             m_appContext->audioController->PlayPartPlace();
                         }
                     }
-                }
-                if (input.removePart) {
-                    m_buildSession.RemovePart(coord);
                 }
             }
 

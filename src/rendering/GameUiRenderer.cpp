@@ -35,6 +35,7 @@ void GameUiRenderer::Render(
     );
     const auto& selectedPartType = buildSession.GetSelectedPartType();
     int activationIndex = 0;
+    int toolbarIndex = 0;
     for (const UiControl& control : controls) {
         const bool containedPartToolbar = control.type == UiControlType::ToolbarPart &&
             control.toolbarPart == ToolbarPart::TNTBarrel;
@@ -112,6 +113,25 @@ void GameUiRenderer::Render(
                 12,
                 WHITE
             );
+        }
+        if (control.type == UiControlType::ToolbarPart) {
+            // Show the number key (1-6) that activates this editor part.
+            const int hotkey = toolbarIndex + 1;
+            DrawRectangle(
+                static_cast<int>(control.bounds.x + control.bounds.width) - 23,
+                static_cast<int>(control.bounds.y) + 5,
+                18,
+                18,
+                BLACK
+            );
+            DrawText(
+                TextFormat("%d", hotkey),
+                static_cast<int>(control.bounds.x + control.bounds.width) - 18,
+                static_cast<int>(control.bounds.y) + 7,
+                12,
+                WHITE
+            );
+            ++toolbarIndex;
         }
     }
 

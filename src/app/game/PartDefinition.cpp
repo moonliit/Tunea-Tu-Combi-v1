@@ -65,11 +65,11 @@ const PartDefinition WIND_SAIL{
 const PartDefinition DRIVER{
     PartType::Driver,
     "Driver",
-    1.0f,
+    0.0f,
     PartShape::Box,
     PartBehavior::Passive,
     PartRole::Containable,
-    0.0f,
+    0.1f,
     0.0f,
     0
 };
