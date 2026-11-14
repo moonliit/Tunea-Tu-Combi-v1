@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <json.hpp>
 
 enum class LeaderboardStatus {
     Idle,
@@ -57,7 +58,8 @@ public:
         const std::string& attemptId,
         const IdentityScope& scope,
         const Scoring::RunStatistics& statistics,
-        const Scoring::ScoreBreakdown& score
+        const Scoring::ScoreBreakdown& score,
+        const nlohmann::json& capture
     );
     void Poll(double frameMs);
     void Reset();

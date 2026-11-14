@@ -5,7 +5,8 @@ import {
     GetCommand,
     PutCommand,
     QueryCommand,
-    TransactWriteCommand
+    TransactWriteCommand,
+    UpdateCommand
 } from '@aws-sdk/lib-dynamodb';
 
 // only sessions use expiresAt (TTL), data belongs to COMBI#<id>
@@ -130,6 +131,9 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
                     revision: next.revision,
                     entries: next.entries,
                     receipts: next.receipts,
+                    ...(next.championRecording ? {
+                        championRecording: next.championRecording
+                    } : {}),
                     updatedAt: next.updatedAt
                 },
                 ConditionExpression: expectedRevision === 0
@@ -156,6 +160,57 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
                 },
                 { Put: putBoard }
             );
+        },
+
+        async attachChampionRecording(
+            levelId,
+            expectedRevision,
+            combiId,
+            attemptId,
+            recording
+        ) {
+            const current = await get(`LEADERBOARD#${levelId}`);
+            if (
+                current?.championRecording?.key === recording.key &&
+                current.entries?.[0]?.combiId === combiId &&
+                current.entries?.[0]?.attemptId === attemptId
+            ) return { idempotent: true, previous: current.championRecording };
+            const previous = current?.championRecording ?? null;
+            const update = {
+                TableName: table,
+                Key: key(`LEADERBOARD#${levelId}`),
+                UpdateExpression: 'SET championRecording = :recording, #revision = #revision + :one, updatedAt = :now',
+                ConditionExpression: '#revision = :expected AND #entries[0].attemptId = :attempt AND #entries[0].combiId = :combi',
+                ExpressionAttributeNames: {
+                    '#revision': 'revision',
+                    '#entries': 'entries'
+                },
+                ExpressionAttributeValues: {
+                    ':recording': recording,
+                    ':one': 1,
+                    ':now': Date.now(),
+                    ':expected': expectedRevision,
+                    ':attempt': attemptId,
+                    ':combi': combiId
+                }
+            };
+            if (levelId.startsWith('public:')) {
+                await transact(
+                    {
+                        ConditionCheck: {
+                            TableName: table,
+                            Key: key(`LEVEL#${levelId.slice('public:'.length)}`),
+                            ConditionExpression: '#visibility = :public',
+                            ExpressionAttributeNames: { '#visibility': 'visibility' },
+                            ExpressionAttributeValues: { ':public': 'public' }
+                        }
+                    },
+                    { Update: update }
+                );
+            } else {
+                await client.send(new UpdateCommand(update));
+            }
+            return { idempotent: false, previous };
         },
 
         async publishLevel({ level, board, payloadFingerprint, publicationRequestId }) {

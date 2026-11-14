@@ -165,9 +165,16 @@ void RunCapture::RecordFrame(
     m_data["frames"].push_back({{"timeMs", timeMs}, {"parts", std::move(states)}});
 }
 
-void RunCapture::RecordPassengerPickup(std::int64_t timeMs, std::size_t passengerId) {
+void RunCapture::RecordPassengerPickup(
+    std::int64_t timeMs,
+    std::size_t passengerId,
+    PartId hostId
+) {
     m_data["events"].push_back({
-        {"timeMs", timeMs}, {"type", "passengerPickup"}, {"id", passengerId}
+        {"timeMs", timeMs},
+        {"type", "passengerPickup"},
+        {"id", passengerId},
+        {"hostId", hostId}
     });
 }
 

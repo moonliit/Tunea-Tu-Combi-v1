@@ -42,8 +42,15 @@ Module['api'] = (() => {
         personalBest: null,
         submission: null,
         championRunRef: '',
+        championRecording: { status: 'unavailable' },
         message: ''
     };
+    let pendingChampionCapture = null;
+    let recordingUploadBusy = false;
+    let recordingRetryCount = 0;
+    let recordingRetryTimer = null;
+    let ghostState = { status: 'idle', message: '', capture: null };
+    let ghostGeneration = 0;
     const personalRecordsKey = 'tunea-tu-combi:personal-records-v1';
     const localProfileKey = 'tunea-tu-combi:local-profile-v1';
     const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('combi-session') : null;
@@ -213,6 +220,7 @@ Module['api'] = (() => {
             personalBest,
             submission: null,
             championRunRef: '',
+            championRecording: { status: 'unavailable' },
             message: ''
         };
         if (!payload.levelId) {
@@ -245,10 +253,21 @@ Module['api'] = (() => {
                 personalBest,
                 submission: result.submission ?? null,
                 championRunRef: result.championRunRef ?? '',
+                championRecording: result.championRecording ?? { status: 'unavailable' },
                 message: ownsRun
                     ? 'Puntaje recalculado por el servidor. La física no fue verificada.'
                     : 'Resultado local no enviado. La identidad de la partida ya no está disponible.'
             };
+            const currentChampion = result.entries?.[0];
+            if (ownsRun && payload.capture && currentChampion?.attemptId === payload.attemptId) {
+                pendingChampionCapture = {
+                    levelId: payload.levelId,
+                    attemptId: payload.attemptId,
+                    capture: payload.capture
+                };
+                recordingRetryCount = 0;
+                await retryChampionRecording();
+            }
         } catch {
             if (generation !== leaderboardGeneration) return;
             leaderboardState = {
@@ -258,6 +277,112 @@ Module['api'] = (() => {
             };
         }
     }
+    async function gzipJson(value) {
+        if (typeof CompressionStream === 'undefined')
+            throw new Error('COMPRESSION_UNAVAILABLE');
+        const stream = new Blob([JSON.stringify(value)], { type: 'application/json' })
+            .stream().pipeThrough(new CompressionStream('gzip'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    async function retryChampionRecording() {
+        if (!pendingChampionCapture) {
+            try {
+                const saved = JSON.parse(localStorage.getItem('tunea-tu-combi:last-run') ?? 'null');
+                if (saved?.attemptId && saved?.levelId && saved?.combiId === identity?.id) {
+                    pendingChampionCapture = {
+                        levelId: saved.levelId,
+                        attemptId: saved.attemptId,
+                        capture: saved
+                    };
+                }
+            } catch {}
+        }
+        const pending = pendingChampionCapture;
+        if (!pending || status !== 'ready' || recordingUploadBusy) return false;
+        recordingUploadBusy = true;
+        try {
+            const bytes = await gzipJson(pending.capture);
+            if (bytes.byteLength > 2 * 1024 * 1024) throw new Error('RECORDING_TOO_LARGE');
+            const response = await fetch(`/api/recordings/${encodeURIComponent(pending.attemptId)}`, {
+                method: 'PUT',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'content-type': 'application/vnd.tunea-tu-combi.run+gzip',
+                    'x-combi-request': '1',
+                    'x-combi-level': pending.levelId
+                },
+                body: bytes
+            });
+            const result = await response.json();
+            if (!response.ok) throw Object.assign(new Error(result.error), { status: response.status });
+            if (pendingChampionCapture !== pending) return true;
+            pendingChampionCapture = null;
+            recordingRetryCount = 0;
+            if (recordingRetryTimer) clearTimeout(recordingRetryTimer);
+            recordingRetryTimer = null;
+            const refreshed = await request(`/leaderboard?levelId=${encodeURIComponent(pending.levelId)}`);
+            leaderboardState = {
+                ...leaderboardState,
+                entries: refreshed.entries,
+                championRunRef: refreshed.championRunRef ?? '',
+                championRecording: refreshed.championRecording ?? { status: 'unavailable' },
+                message: 'Puntaje y grabación campeona confirmados.'
+            };
+            return true;
+        } catch (error) {
+            if (pendingChampionCapture !== pending) return false;
+            if (error.message === 'NOT_CURRENT_CHAMPION') pendingChampionCapture = null;
+            leaderboardState = {
+                ...leaderboardState,
+                championRecording: { status: 'unavailable' },
+                message: error.message === 'NOT_CURRENT_CHAMPION'
+                    ? 'La marca ya fue superada; su carga tardía no reemplazó al campeón.'
+                    : 'La marca quedó guardada, pero su fantasma no. Se puede reintentar la subida.'
+            };
+            if (pendingChampionCapture && recordingRetryCount < 3) {
+                const delays = [2000, 5000, 15000];
+                const delay = delays[recordingRetryCount++];
+                recordingRetryTimer = setTimeout(
+                    () => retryChampionRecording(), delay
+                );
+            }
+            return false;
+        } finally {
+            recordingUploadBusy = false;
+            if (pendingChampionCapture && pendingChampionCapture !== pending) {
+                setTimeout(() => retryChampionRecording(), 0);
+            }
+        }
+    }
+    async function loadChampionRecording(levelId) {
+        const generation = ++ghostGeneration;
+        ghostState = { status: 'loading', message: '', capture: null };
+        try {
+            const response = await fetch(`/api/recordings?levelId=${encodeURIComponent(levelId)}`, {
+                credentials: 'same-origin', cache: 'no-store'
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error ?? 'RECORDING_UNAVAILABLE');
+            }
+            if (typeof DecompressionStream === 'undefined') throw new Error('DECOMPRESSION_UNAVAILABLE');
+            const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+            const capture = JSON.parse(await new Response(stream).text());
+            if (generation !== ghostGeneration) return false;
+            ghostState = { status: 'ready', message: '', capture };
+            return true;
+        } catch (error) {
+            if (generation !== ghostGeneration) return false;
+            ghostState = {
+                status: 'unavailable',
+                message: 'El recorrido campeón no está disponible.',
+                capture: null
+            };
+            return false;
+        }
+    }
+    function ghostSnapshot() { return ghostState; }
     function leaderboardSnapshot() {
         return leaderboardState;
     }
@@ -528,7 +653,7 @@ Module['api'] = (() => {
                     if (active) {
                         actions.push(actionButton('Retirar', () => {
                             const accepted = window.confirm(
-                                'Retirar quita el nivel del catálogo y libera un cupo. No puede reactivarse; sus puntuaciones y grabaciones se conservan. Las partidas en curso podrán terminar localmente, pero sus resultados serán rechazados. ¿Continuar?'
+                                'Retirar quita el nivel del catálogo y libera un cupo. No puede reactivarse; sus puntuaciones se conservan y la grabación se elimina tras 24 horas. Las partidas en curso podrán terminar localmente, pero sus resultados serán rechazados. ¿Continuar?'
                             );
                             if (accepted) retirePublication(level.id);
                         }));
@@ -627,7 +752,10 @@ Module['api'] = (() => {
         captureResultScope,
         canSubmitResult,
         submitRun,
+        retryChampionRecording,
         leaderboardSnapshot,
+        loadChampionRecording,
+        ghostSnapshot,
         publishDraft,
         publicationSnapshot,
         consumePublicationAction

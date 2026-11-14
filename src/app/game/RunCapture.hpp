@@ -29,7 +29,11 @@ public:
         const EditorGrid& grid,
         bool force = false
     );
-    void RecordPassengerPickup(std::int64_t timeMs, std::size_t passengerId);
+    void RecordPassengerPickup(
+        std::int64_t timeMs,
+        std::size_t passengerId,
+        PartId hostId
+    );
     void RecordDetach(std::int64_t timeMs, PartId first, PartId second);
     void Finish(
         std::int64_t timeMs,

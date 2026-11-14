@@ -4,6 +4,7 @@
 #include "app/game/GameState.hpp"
 #include "app/game/BuildSession.hpp"
 #include "app/game/GoalWindowTracker.hpp"
+#include "app/game/GhostPlayback.hpp"
 #include "app/game/Level.hpp"
 #include "app/game/PlaySession.hpp"
 #include "app/game/RunCapture.hpp"
@@ -59,6 +60,7 @@ private:
     Scoring::RunStatistics m_statistics;
     Scoring::ScoreBreakdown m_score;
     RunCapture m_capture;
+    GhostPlayback m_ghostPlayback;
     LeaderboardClient m_leaderboard;
 
     void ResetToBuildMode();

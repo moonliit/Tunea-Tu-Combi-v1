@@ -78,7 +78,8 @@ void LeaderboardClient::Submit(
     const std::string& attemptId,
     const IdentityScope& scope,
     const Scoring::RunStatistics& statistics,
-    const Scoring::ScoreBreakdown& score
+    const Scoring::ScoreBreakdown& score,
+    const nlohmann::json& capture
 ) {
     m_attemptId = attemptId;
     m_combiId = scope.combiId;
@@ -92,7 +93,8 @@ void LeaderboardClient::Submit(
         {"rulesVersion", std::string(Scoring::RulesVersion)},
         {"scope", {{"id", scope.combiId}, {"epoch", scope.epoch}}},
         {"statistics", StatisticsJson(statistics)},
-        {"localScore", ScoreJson(score)}
+        {"localScore", ScoreJson(score)},
+        {"capture", capture}
     };
 
 #ifdef __EMSCRIPTEN__

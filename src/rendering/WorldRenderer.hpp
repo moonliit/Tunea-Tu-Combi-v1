@@ -8,6 +8,7 @@
 #include "rendering/PartRenderer.hpp"
 #include "rendering/TextureLibrary.hpp"
 #include "ui/UiControl.hpp"
+#include "app/game/GhostPlayback.hpp"
 
 #include <raylib.h>
 #include <optional>
@@ -38,6 +39,7 @@ public:
         PartOrientation repositionedOrientation,
         int screenHeight
     ) const;
+    void RenderGhostPlayback(const std::vector<GhostRenderState>& states) const;
 };
 
 #endif

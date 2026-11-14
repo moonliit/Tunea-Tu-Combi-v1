@@ -31,6 +31,13 @@ public:
         float cellSize,
         PartOrientation orientation
     ) const;
+    void RenderPlaybackGhost(
+        PartType type,
+        Math::Vector2D position,
+        double rotation,
+        double attachmentRotation,
+        float cellSize
+    ) const;
 };
 
 #endif

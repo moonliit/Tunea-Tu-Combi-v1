@@ -7,6 +7,11 @@ import {
     validateStatistics
 } from './leaderboard.mjs';
 import { RULES_VERSION } from './scoring.mjs';
+import {
+    ORPHAN_GRACE_MS,
+    SAMPLE_INTERVAL_MS,
+    encodeRecording
+} from './recordings.mjs';
 
 const MAX_ACTIVE_PUBLICATIONS = 5;
 const CATALOG_PAGE_SIZE = 10;
@@ -297,7 +302,12 @@ function validateCapture(value, identityId, draft) {
                 throw new ApiError(400, 'INVALID_CAPTURE');
             }
         } else if (event.type === 'passengerPickup') {
-            if (!exactKeys(event, ['id', 'timeMs', 'type']))
+            if (
+                !exactKeys(event, event.hostId === undefined
+                    ? ['id', 'timeMs', 'type']
+                    : ['hostId', 'id', 'timeMs', 'type']) ||
+                (event.hostId !== undefined && !parts.has(event.hostId))
+            )
                 throw new ApiError(400, 'INVALID_CAPTURE');
             integer(event.id, 0, Math.max(0, value.passengerCount - 1), 'INVALID_CAPTURE');
             if (value.passengerCount === 0) throw new ApiError(400, 'INVALID_CAPTURE');
@@ -311,7 +321,7 @@ function validateCapture(value, identityId, draft) {
     if (pickedPassengers.size !== value.statistics.passengersCollected)
         throw new ApiError(400, 'INVALID_CAPTURE');
 
-    if (!Array.isArray(value.frames) || value.frames.length < 2 || value.frames.length > 12001)
+    if (!Array.isArray(value.frames) || value.frames.length < 2 || value.frames.length > 12002)
         throw new ApiError(400, 'INVALID_CAPTURE');
     const driverId = drivers[0].id;
     const goalXMilli = Math.round(definition.goal.position.x * 1000);
@@ -323,6 +333,8 @@ function validateCapture(value, identityId, draft) {
             throw new ApiError(400, 'INVALID_CAPTURE');
         integer(frame.timeMs, 0, MAX_CAPTURE_MS, 'INVALID_CAPTURE');
         if (frame.timeMs < previousTime) throw new ApiError(400, 'INVALID_CAPTURE');
+        if (previousTime >= 0 && frame.timeMs - previousTime > 250)
+            throw new ApiError(400, 'TRUNCATED_RECORDING');
         previousTime = frame.timeMs;
         let driverState = null;
         const frameIds = new Set();
@@ -505,7 +517,31 @@ export function createPublicationService(store, objects, clock = () => Date.now(
             const publishedAt = clock();
             const levelFingerprint = hashValue(parsed.definition);
             const levelKey = `levels/${id}/${payloadFingerprint}.json`;
-            const runKey = `runs/public:${id}/${identity.id}/${parsed.capture.attemptId}-${payloadFingerprint}.json`;
+            // The author won an unpublished draft (levelId == ""). Once the
+            // transaction assigns its immutable public ID, the replay must carry
+            // that ID or a compatible client will correctly reject it.
+            const publishedCapture = {
+                ...parsed.capture,
+                levelId: `public:${id}`
+            };
+            const encodedRun = encodeRecording(publishedCapture);
+            const runKey = `recordings/public%3A${id}/${parsed.capture.attemptId}-${encodedRun.sha256}.json.gz`;
+            const recording = {
+                key: runKey,
+                attemptId: parsed.capture.attemptId,
+                combiId: identity.id,
+                levelId: `public:${id}`,
+                formatVersion: CAPTURE_FORMAT_VERSION,
+                physicsVersion: PHYSICS_VERSION,
+                rulesVersion: RULES_VERSION,
+                encoding: 'gzip',
+                sampleIntervalMs: SAMPLE_INTERVAL_MS,
+                sha256: encodedRun.sha256,
+                compressedBytes: encodedRun.compressedBytes,
+                uncompressedBytes: encodedRun.uncompressedBytes,
+                durationMs: parsed.capture.finishedAtMs,
+                createdAt: publishedAt
+            };
             const packageValue = {
                 formatVersion: 'level-v1',
                 id,
@@ -534,6 +570,7 @@ export function createPublicationService(store, objects, clock = () => Date.now(
             const board = {
                 revision: 1,
                 entries: [firstEntry],
+                championRecording: recording,
                 receipts: [{
                     attemptId: parsed.capture.attemptId,
                     combiId: identity.id,
@@ -563,13 +600,14 @@ export function createPublicationService(store, objects, clock = () => Date.now(
 
             try {
                 await objects.putJson(levelKey, packageValue);
-                await objects.putJson(runKey, parsed.capture);
+                await objects.putRecording(runKey, encodedRun.body, recording);
                 await store.publishLevel({
                     level,
                     board,
                     payloadFingerprint,
                     publicationRequestId: parsed.publicationRequestId
                 });
+                await objects.markRecordingCurrent(runKey).catch(() => {});
                 return publicationResponse(level);
             } catch (error) {
                 const committed = await store.getPublicationReceipt(
@@ -696,6 +734,13 @@ export function createPublicationService(store, objects, clock = () => Date.now(
                         throw new ApiError(409, 'LEVEL_ALREADY_RETIRED');
                 }
                 throw error;
+            }
+            const board = await store.getLeaderboard(`public:${id}`);
+            if (board?.championRecording?.key) {
+                await objects.markRecordingOrphan(
+                    board.championRecording.key,
+                    retiredAt + ORPHAN_GRACE_MS
+                ).catch(() => {});
             }
             return { id, status: 'retired', retiredAt };
         },

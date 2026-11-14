@@ -117,18 +117,26 @@ double HorizontalRadius(const PartRenderState& state) {
         : state.cellSize * 0.5;
 }
 
-void DrawPassenger(float x, float y, bool hasSkirt, float scale = 1.0f) {
-    DrawCircleV({x, y - 19.0f * scale}, 6.0f * scale, BLACK);
-    DrawLineEx({x, y - 13.0f * scale}, {x, y - 2.0f * scale}, 3.0f * scale, BLACK);
-    DrawLineEx({x, y - 9.0f * scale}, {x - 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
-    DrawLineEx({x, y - 9.0f * scale}, {x + 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
+void DrawPassenger(
+    float x,
+    float y,
+    bool hasSkirt,
+    float scale = 1.0f,
+    Color tint = BLACK
+) {
+    DrawCircleV({x, y - 19.0f * scale}, 6.0f * scale, tint);
+    DrawLineEx({x, y - 13.0f * scale}, {x, y - 2.0f * scale}, 3.0f * scale, tint);
+    DrawLineEx({x, y - 9.0f * scale}, {x - 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, tint);
+    DrawLineEx({x, y - 9.0f * scale}, {x + 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, tint);
     if (hasSkirt) {
+        const bool standardPassenger = tint.r == BLACK.r &&
+            tint.g == BLACK.g && tint.b == BLACK.b;
         DrawTriangle({x - 5.0f * scale, y - 2.0f * scale},
             {x + 5.0f * scale, y - 2.0f * scale},
-            {x, y + 4.0f * scale}, PINK);
+            {x, y + 4.0f * scale}, standardPassenger ? PINK : tint);
     }
-    DrawLineEx({x, y - 2.0f * scale}, {x - 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
-    DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
+    DrawLineEx({x, y - 2.0f * scale}, {x - 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, tint);
+    DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, tint);
 }
 
 }
@@ -403,6 +411,7 @@ void MainGameScene::Update(float dt) {
         m_playSession.Update(dt);
         const double frameMs = static_cast<double>(dt) * 1000.0;
         m_elapsedMs += frameMs;
+        m_ghostPlayback.Update(frameMs);
         for (const auto [first, second] :
              m_playSession.ConsumeBrokenConnections()) {
             m_capture.RecordDetach(
@@ -458,7 +467,7 @@ void MainGameScene::Update(float dt) {
                 passenger.hasSkirt
             });
             m_capture.RecordPassengerPickup(
-                std::llround(m_elapsedMs), passengerIndex
+                std::llround(m_elapsedMs), passengerIndex, hostPart->GetId()
             );
         }
         std::optional<Vector2> driverPosition;
@@ -557,6 +566,7 @@ void MainGameScene::TransitionToPlayMode() {
         draftSnapshot
     );
     m_playSession.Start();
+    m_ghostPlayback.Start(m_levelId, m_level.GetGrid().GetCellSize());
     auto scenario = m_appContext->audioController->GetCurrentScenario();
     m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel, scenario.levelIndex});
 
@@ -684,7 +694,8 @@ void MainGameScene::CompleteRun() {
         m_capture.GetAttemptId(),
         m_runIdentity,
         m_statistics,
-        m_score
+        m_score,
+        m_capture.GetData()
     );
 
     m_appContext->audioController->SetFanActive(false);
@@ -700,6 +711,7 @@ void MainGameScene::ResetToBuildMode() {
     m_goalWindow.Reset();
     m_previousPartX.clear();
     m_capture.Clear();
+    m_ghostPlayback.Reset();
     m_leaderboard.Reset();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
@@ -742,6 +754,19 @@ void MainGameScene::Render() const {
         m_appContext->windowHeight
     );
     BeginMode2D(m_camera);
+    if (m_stateMachine.IsPlayMode()) {
+        m_worldRenderer.RenderGhostPlayback(m_ghostPlayback.GetRenderStates());
+        for (const GhostPassengerState& passenger :
+             m_ghostPlayback.GetPassengerStates()) {
+            DrawPassenger(
+                static_cast<float>(passenger.position.x),
+                static_cast<float>(passenger.position.y),
+                passenger.hasSkirt,
+                1.0f,
+                Color{110, 205, 255, 150}
+            );
+        }
+    }
     const auto& finish = m_level.GetDefinition().goal.position;
     const Vector2 pole{static_cast<float>(finish.x), static_cast<float>(finish.y)};
     DrawLineEx({pole.x, pole.y - 100.0f}, pole, 5.0f, DARKGRAY);
@@ -931,6 +956,15 @@ void MainGameScene::RenderResults() const {
             static_cast<int>(rankingPanel.y + rankingPanel.height - 27.0f),
             11,
             GRAY
+        );
+        DrawText(
+            leaderboard.championRunRef.empty()
+                ? "Fantasma campeón: no disponible."
+                : "Fantasma campeón: grabación lista.",
+            46,
+            static_cast<int>(rankingPanel.y + rankingPanel.height - 46.0f),
+            11,
+            leaderboard.championRunRef.empty() ? GRAY : DARKGREEN
         );
     }
 

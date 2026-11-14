@@ -237,3 +237,21 @@ void PartRenderer::RenderGhostAtPosition(
         Fade(WHITE, GhostAlpha)
     );
 }
+
+void PartRenderer::RenderPlaybackGhost(
+    PartType type,
+    Math::Vector2D position,
+    double rotation,
+    double attachmentRotation,
+    float cellSize
+) const {
+    DrawPart(
+        m_textures,
+        type,
+        position.ToRayVec(),
+        static_cast<float>(rotation),
+        static_cast<float>(attachmentRotation),
+        cellSize,
+        Color{110, 205, 255, 105}
+    );
+}

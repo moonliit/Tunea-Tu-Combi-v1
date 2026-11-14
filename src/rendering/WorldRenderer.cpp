@@ -223,3 +223,17 @@ void WorldRenderer::Render(
 
     EndMode2D();
 }
+
+void WorldRenderer::RenderGhostPlayback(
+    const std::vector<GhostRenderState>& states
+) const {
+    for (const GhostRenderState& state : states) {
+        m_partRenderer.RenderPlaybackGhost(
+            state.type,
+            state.position,
+            state.rotation,
+            state.attachmentRotation,
+            state.cellSize
+        );
+    }
+}

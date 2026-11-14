@@ -102,7 +102,7 @@ export function attemptFingerprint(identityId, body) {
 }
 
 function readBoard(item) {
-    if (!item) return { revision: 0, entries: [], receipts: [] };
+    if (!item) return { revision: 0, entries: [], receipts: [], championRecording: null };
     if (
         !Number.isSafeInteger(item.revision) ||
         item.revision < 1 ||
@@ -116,7 +116,8 @@ function readBoard(item) {
     return {
         revision: item.revision,
         entries: item.entries,
-        receipts: item.receipts
+        receipts: item.receipts,
+        championRecording: item.championRecording ?? null
     };
 }
 
@@ -136,12 +137,16 @@ async function responseFor(store, levelId, board, submission = null) {
     const identities = await store.getIdentities(
         board.entries.map((entry) => entry.combiId)
     );
+    const recording = board.championRecording &&
+        board.entries[0]?.attemptId === board.championRecording.attemptId &&
+        board.entries[0]?.combiId === board.championRecording.combiId
+        ? board.championRecording : null;
     const entries = board.entries.map((entry, index) => ({
         rank: index + 1,
         combiId: entry.combiId,
         name: identities.get(entry.combiId)?.name ?? null,
         attemptId: entry.attemptId,
-        runRef: entry.runRef,
+        runRef: index === 0 && recording ? recording.key : null,
         submittedAt: entry.submittedAt,
         statistics: entry.statistics,
         score: entry.score
@@ -149,8 +154,11 @@ async function responseFor(store, levelId, board, submission = null) {
     return {
         levelId,
         rulesVersion: RULES_VERSION,
-        verification: 'statistics-only',
-        championRunRef: entries[0]?.runRef ?? null,
+        verification: recording ? 'recorded-trace-only' : 'statistics-only',
+        championRunRef: recording?.key ?? null,
+        championRecording: recording
+            ? { status: 'ready', ...recording }
+            : { status: 'unavailable' },
         entries,
         ...(submission ? { submission } : {})
     };
@@ -164,7 +172,8 @@ const retryable = (error) =>
 export function createLeaderboardService(
     store,
     clock = () => Date.now(),
-    pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
+    pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
+    objects = null
 ) {
     async function validateLevel(level) {
         if (level.publicId && !(await store.isPublicLevel(level.publicId)))
@@ -209,7 +218,7 @@ export function createLeaderboardService(
                 const candidate = {
                     combiId: identity.id,
                     attemptId: body.attemptId,
-                    runRef: `runs/${parsed.levelId}/${identity.id}/${body.attemptId}`,
+                    runRef: null,
                     submittedAt,
                     statistics: body.statistics,
                     score: parsed.score
@@ -228,6 +237,12 @@ export function createLeaderboardService(
                 const next = {
                     revision: board.revision + 1,
                     entries,
+                    championRecording:
+                        board.championRecording &&
+                        entries[0]?.attemptId === board.championRecording.attemptId &&
+                        entries[0]?.combiId === board.championRecording.combiId
+                            ? board.championRecording
+                            : null,
                     receipts: board.receipts.concat({
                         attemptId: body.attemptId,
                         combiId: identity.id,
@@ -243,6 +258,12 @@ export function createLeaderboardService(
                         next,
                         parsed.publicId
                     );
+                    if (board.championRecording && !next.championRecording && objects) {
+                        await objects.markRecordingOrphan(
+                            board.championRecording.key,
+                            clock() + 24 * 60 * 60 * 1000
+                        ).catch(() => {});
+                    }
                     return responseFor(
                         store,
                         parsed.levelId,
