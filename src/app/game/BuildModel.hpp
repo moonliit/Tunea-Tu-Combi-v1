@@ -38,7 +38,8 @@ public:
     bool PlacePart(
         Math::GridCoord coord,
         PartType type,
-        PartOrientation orientation = PartOrientation::Up
+        PartOrientation orientation = PartOrientation::Up,
+        bool useDefaultOrientation = true
     );
     void RemovePart(Math::GridCoord coord);
     void Clear();

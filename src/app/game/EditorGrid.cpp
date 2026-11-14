@@ -189,7 +189,14 @@ void EditorGrid::RotatePart(GridCoord coord) {
     if (!IsGridCoordWithinSelfBounds(coord)) return;
     std::optional<Part>& part = m_cells[GetIndex(coord)];
     if (part.has_value()) {
-        if (part->HasContainedPart()) {
+        // rotate the drivers box + the contained driver
+        if (part->GetType() == PartType::DriverBox) {
+            part->m_orientation = RotatePartOrientation(part->m_orientation);
+            if (part->HasContainedPart()) {
+                Part* child = part->GetContainedPart();
+                child->m_orientation = RotatePartOrientation(child->m_orientation);
+            }
+        } else if (part->HasContainedPart()) {
             Part* child = part->GetContainedPart();
             child->m_orientation = RotatePartOrientation(child->m_orientation);
         } else {

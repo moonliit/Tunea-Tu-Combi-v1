@@ -103,10 +103,11 @@ const PartDefinition& GetPartDefinition(PartType type) {
 }
 
 bool ArePartsCompatible(PartType first, PartType second) {
-    if (first == PartType::CircleWheel &&
-        second == PartType::CircleWheel) {
-        return false;
+    if (first == PartType::SquareBlock || second == PartType::SquareBlock) {
+        return true;
     }
-
-    return true;
+    if (first == PartType::DriverBox || second == PartType::DriverBox) {
+        return true;
+    }
+    return false;
 }

@@ -3,11 +3,13 @@
 void BuildSession::SelectPartType(PartType type) {
     if (m_selectedPartType.has_value() && m_selectedPartType.value() == type) {
         m_selectedPartType.reset();
+        m_selectedIsDefaultOrientation = true;
         return;
     }
 
     m_selectedPartType = type;
     m_selectedOrientation = PartOrientation::Up;
+    m_selectedIsDefaultOrientation = true;
 }
 
 bool BuildSession::PlaceSelectedPart(Math::GridCoord coord) {
@@ -15,7 +17,8 @@ bool BuildSession::PlaceSelectedPart(Math::GridCoord coord) {
     const bool placed = m_buildModel.PlacePart(
         coord,
         m_selectedPartType.value(),
-        m_selectedOrientation
+        m_selectedOrientation,
+        m_selectedIsDefaultOrientation
     );
     return placed;
 }
@@ -72,6 +75,7 @@ void BuildSession::RotatePart(Math::GridCoord coord) {
 void BuildSession::RotateSelectedPart() {
     if (m_selectedPartType.has_value()) {
         m_selectedOrientation = RotatePartOrientation(m_selectedOrientation);
+        m_selectedIsDefaultOrientation = false;
     }
 }
 

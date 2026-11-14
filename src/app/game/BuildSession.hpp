@@ -9,6 +9,7 @@ private:
     BuildModel& m_buildModel;
     std::optional<PartType> m_selectedPartType;
     PartOrientation m_selectedOrientation = PartOrientation::Up;
+    bool m_selectedIsDefaultOrientation = true;
     std::optional<PartType> m_repositionedPartType;
     PartOrientation m_repositionedOrientation = PartOrientation::Up;
 
@@ -21,9 +22,13 @@ public:
     const BuildModel& GetBuildModel() const { return m_buildModel; }
 
     void SelectPartType(PartType type);
-    void ClearSelection() { m_selectedPartType.reset(); }
+    void ClearSelection() { 
+        m_selectedPartType.reset(); 
+        m_selectedIsDefaultOrientation = true; 
+    }
     void ClearHand() {
         m_selectedPartType.reset();
+        m_selectedIsDefaultOrientation = true;
         m_repositionedPartType.reset();
     }
     bool HasHandItem() const {
@@ -33,6 +38,9 @@ public:
         return m_selectedPartType;
     }
     PartOrientation GetSelectedOrientation() const { return m_selectedOrientation; }
+    bool GetSelectedIsDefaultOrientation() const {
+        return m_selectedIsDefaultOrientation;
+    }
     bool HasRepositionedPart() const { return m_repositionedPartType.has_value(); }
     const std::optional<PartType>& GetRepositionedPartType() const {
         return m_repositionedPartType;

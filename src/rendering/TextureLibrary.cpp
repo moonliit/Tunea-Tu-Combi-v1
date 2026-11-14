@@ -18,7 +18,7 @@ constexpr std::array PartTextureFiles{
     PartTextureFile{PartType::Fan, "assets/textures/parts/fan.png"},
     PartTextureFile{PartType::WindSail, "assets/textures/parts/wind_sail.png"},
     PartTextureFile{PartType::Driver, "assets/textures/parts/driver.png"},
-    PartTextureFile{PartType::DriverBox, "assets/textures/parts/square_block.png"}
+    PartTextureFile{PartType::DriverBox, "assets/textures/parts/driver_block.png"}
 };
 constexpr const char* WheelMountPath = "assets/textures/parts/wheel_mount.png";
 constexpr const char* TerrainTexturePath = "assets/textures/terrain/dirt.png";
@@ -31,7 +31,7 @@ Texture2D LoadSmoothTexture(const char* path) {
         );
     }
     // point filtering looks jagged when scaled down
-    SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(texture, TEXTURE_FILTER_POINT);
     return texture;
 }
 

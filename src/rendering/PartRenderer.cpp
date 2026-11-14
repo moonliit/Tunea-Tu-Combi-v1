@@ -68,8 +68,11 @@ void DrawPart(
         return;
     }
 
-    const float radiusScale =
-        GetPartDefinition(PartType::CircleWheel).radiusScale;
+    const float radiusScale = GetPartDefinition(PartType::CircleWheel).radiusScale;
+    const Vector2 offset = WheelCenterOffset(size, attachmentRotation);
+    const Vector2 anchor{position.x - offset.x, position.y - offset.y};
+
+    DrawSprite(textures.GetWheelMount(), anchor, size, attachmentRotation, tint);
     DrawSprite(
         textures.GetPartTexture(type),
         position,
@@ -77,9 +80,6 @@ void DrawPart(
         rotation,
         tint
     );
-    const Vector2 offset = WheelCenterOffset(size, attachmentRotation);
-    const Vector2 anchor{position.x - offset.x, position.y - offset.y};
-    DrawSprite(textures.GetWheelMount(), anchor, size, attachmentRotation, tint);
 }
 
 Math::GridCoord ConnectorOffset(ConnectorDirection direction) {

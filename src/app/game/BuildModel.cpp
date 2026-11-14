@@ -27,7 +27,8 @@ std::optional<PartOrientation> GetAttachmentOrientation(
     PartType type,
     PartOrientation fallback
 ) {
-    if (type != PartType::Fan && type != PartType::WindSail) {
+    if (type != PartType::Fan && type != PartType::WindSail &&
+        type != PartType::CircleWheel) {
         return fallback;
     }
 
@@ -35,12 +36,30 @@ std::optional<PartOrientation> GetAttachmentOrientation(
         Math::GridCoord offset;
         PartOrientation orientation;
     };
-    for (const Candidate candidate : {
-             Candidate{{1, 0}, PartOrientation::Up},
-             Candidate{{0, 1}, PartOrientation::Right},
-             Candidate{{-1, 0}, PartOrientation::Down},
-             Candidate{{0, -1}, PartOrientation::Left}
-         }) {
+
+    // fans and wind sails have their connector on the right relative to their orientation
+    // so the chosen orientation makes the connector point toward the neighbor
+    const Candidate fanSailCandidates[] = {
+        Candidate{{1, 0}, PartOrientation::Up},
+        Candidate{{0, 1}, PartOrientation::Right},
+        Candidate{{-1, 0}, PartOrientation::Down},
+        Candidate{{0, -1}, PartOrientation::Left}
+    };
+
+    // wheels have their connector on the up relative to their orientation instead
+    const Candidate wheelCandidates[] = {
+        Candidate{{1, 0}, PartOrientation::Right},
+        Candidate{{0, 1}, PartOrientation::Down},
+        Candidate{{-1, 0}, PartOrientation::Left},
+        Candidate{{0, -1}, PartOrientation::Up}
+    };
+
+    const Candidate* candidates =
+        type == PartType::CircleWheel ? wheelCandidates : fanSailCandidates;
+    constexpr std::size_t candidateCount = 4;
+
+    for (std::size_t i = 0; i < candidateCount; ++i) {
+        const Candidate& candidate = candidates[i];
         const Math::GridCoord neighborCoord{
             coord.x + candidate.offset.x,
             coord.y + candidate.offset.y
@@ -61,7 +80,8 @@ std::optional<PartOrientation> GetAttachmentOrientation(
 bool BuildModel::PlacePart(
     Math::GridCoord coord,
     PartType type,
-    PartOrientation orientation
+    PartOrientation orientation,
+    bool useDefaultOrientation
 ) {
     // the driver always comes bundled inside a driver box.
     // placing a driver directly is not allowed.
@@ -86,12 +106,11 @@ bool BuildModel::PlacePart(
         return true;
     }
 
-    const PartOrientation placementOrientation = GetAttachmentOrientation(
-        m_grid,
-        coord,
-        type,
-        orientation
-    ).value();
+    // only auto-orient parts if on their default orientation
+    // overriden if user manually rotates the part
+    const PartOrientation placementOrientation = useDefaultOrientation
+        ? GetAttachmentOrientation(m_grid, coord, type, orientation).value()
+        : orientation;
     if (!m_grid.PlacePart(
             coord,
             type,
