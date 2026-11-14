@@ -10,6 +10,7 @@
 #include <vector>
 
 struct GhostRenderState {
+    PartId id;
     PartType type;
     Math::Vector2D position;
     double rotation;
@@ -20,6 +21,17 @@ struct GhostRenderState {
 struct GhostPassengerState {
     Math::Vector2D position;
     bool hasSkirt;
+};
+
+enum class GhostLoadStatus {
+    Idle,
+    Loading,
+    Available,
+    LoadingRecording,
+    Ready,
+    Unavailable,
+    Incompatible,
+    Error
 };
 
 class GhostPlayback {
@@ -42,6 +54,10 @@ class GhostPlayback {
     double m_timeMs = 0.0;
     bool m_requested = false;
     bool m_loaded = false;
+    bool m_visible = false;
+    bool m_playing = false;
+    bool m_advanceWhileLoading = false;
+    GhostLoadStatus m_status = GhostLoadStatus::Idle;
     std::unordered_map<PartId, Definition> m_definitions;
     std::vector<Frame> m_frames;
     std::vector<GhostRenderState> m_renderStates;
@@ -54,14 +70,28 @@ class GhostPlayback {
     std::vector<PassengerPickup> m_passengerPickups;
     std::vector<GhostPassengerState> m_passengerStates;
 
-    void Load(const nlohmann::json& capture);
+    bool Load(const nlohmann::json& capture);
+    void PollRemote();
     void Sample();
 
 public:
-    void Start(const std::string& levelId, float cellSize);
+    void Request(const std::string& levelId, float cellSize);
+    void EnsureLoaded();
+    void Play();
+    void Pause();
+    void Restart();
+    void StartCompetition();
+    void StopAndRewind();
     void Update(double frameMs);
     void Reset();
     bool IsLoaded() const { return m_loaded; }
+    bool IsVisible() const { return m_visible && m_loaded; }
+    bool IsPlaying() const { return m_playing; }
+    GhostLoadStatus GetStatus() const { return m_status; }
+    double GetTimeMs() const { return m_timeMs; }
+    double GetDurationMs() const {
+        return m_frames.empty() ? 0.0 : static_cast<double>(m_frames.back().timeMs);
+    }
     const std::vector<GhostRenderState>& GetRenderStates() const {
         return m_renderStates;
     }

@@ -230,17 +230,40 @@ export function createRecordingService(store, objects, clock = () => Date.now())
             }
         },
 
-        async download(levelId) {
+        async download(levelId, pinnedAttemptId = null, pinnedSha256 = null) {
             await requireActiveLevel(levelId);
-            const board = await store.getLeaderboard(levelId);
-            const recording = board?.championRecording;
-            const champion = board?.entries?.[0];
-            if (!recording || !champion || recording.attemptId !== champion.attemptId ||
-                recording.combiId !== champion.combiId) {
-                throw new ApiError(404, 'RECORDING_UNAVAILABLE');
+            let recording;
+            if (pinnedAttemptId !== null || pinnedSha256 !== null) {
+                if (!UUID.test(pinnedAttemptId ?? '') ||
+                    !/^[0-9a-f]{64}$/.test(pinnedSha256 ?? '')) {
+                    throw new ApiError(400, 'INVALID_RECORDING_REFERENCE');
+                }
+                recording = {
+                    key: `recordings/${encodeURIComponent(levelId)}/${pinnedAttemptId}-${pinnedSha256}.json.gz`,
+                    attemptId: pinnedAttemptId,
+                    levelId,
+                    formatVersion: CAPTURE_FORMAT_VERSION,
+                    sha256: pinnedSha256
+                };
+            } else {
+                const board = await store.getLeaderboard(levelId);
+                recording = board?.championRecording;
+                const champion = board?.entries?.[0];
+                if (!recording || !champion || recording.attemptId !== champion.attemptId ||
+                    recording.combiId !== champion.combiId) {
+                    throw new ApiError(404, 'RECORDING_UNAVAILABLE');
+                }
             }
-            const body = await objects.getRecording(recording.key);
-            if (body.length !== recording.compressedBytes ||
+            let body;
+            try { body = await objects.getRecording(recording.key); }
+            catch (error) {
+                if (error?.name === 'NoSuchKey' || error?.$metadata?.httpStatusCode === 404)
+                    throw new ApiError(404, 'RECORDING_UNAVAILABLE');
+                throw error;
+            }
+            if (body.length > MAX_COMPRESSED_BYTES ||
+                (recording.compressedBytes !== undefined &&
+                    body.length !== recording.compressedBytes) ||
                 createHash('sha256').update(body).digest('hex') !== recording.sha256) {
                 throw new ApiError(409, 'TRUNCATED_RECORDING');
             }

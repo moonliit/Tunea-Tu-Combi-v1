@@ -51,6 +51,10 @@ Module['api'] = (() => {
     let recordingRetryTimer = null;
     let ghostState = { status: 'idle', message: '', capture: null };
     let ghostGeneration = 0;
+    const ghostCache = new Map();
+    // One parsed trace avoids duplicate transfers when re-entering a level
+    // without retaining several potentially large (up to 32 MiB) JSON trees.
+    const ghostCacheLimit = 1;
     const personalRecordsKey = 'tunea-tu-combi:personal-records-v1';
     const localProfileKey = 'tunea-tu-combi:local-profile-v1';
     const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('combi-session') : null;
@@ -355,29 +359,138 @@ Module['api'] = (() => {
             }
         }
     }
-    async function loadChampionRecording(levelId) {
+    function cacheGhost(key, capture) {
+        ghostCache.delete(key);
+        ghostCache.set(key, capture);
+        while (ghostCache.size > ghostCacheLimit) {
+            ghostCache.delete(ghostCache.keys().next().value);
+        }
+    }
+    async function prepareChampionGhost(levelId) {
         const generation = ++ghostGeneration;
-        ghostState = { status: 'loading', message: '', capture: null };
+        ghostState = { status: 'loading', message: '', capture: null, reference: null };
         try {
-            const response = await fetch(`/api/recordings?levelId=${encodeURIComponent(levelId)}`, {
-                credentials: 'same-origin', cache: 'no-store'
-            });
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.error ?? 'RECORDING_UNAVAILABLE');
-            }
-            if (typeof DecompressionStream === 'undefined') throw new Error('DECOMPRESSION_UNAVAILABLE');
-            const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
-            const capture = JSON.parse(await new Response(stream).text());
+            if (!levelId) throw new Error('RECORDING_UNAVAILABLE');
+            const board = await request(`/leaderboard?levelId=${encodeURIComponent(levelId)}`);
             if (generation !== ghostGeneration) return false;
-            ghostState = { status: 'ready', message: '', capture };
+            const recording = board.championRecording;
+            if (recording?.status !== 'ready' || !recording.attemptId || !recording.sha256) {
+                ghostState = {
+                    status: 'unavailable',
+                    message: 'El campeón todavía no tiene recorrido disponible.',
+                    capture: null,
+                    reference: null
+                };
+                return false;
+            }
+            const reference = {
+                levelId,
+                attemptId: recording.attemptId,
+                sha256: recording.sha256,
+                formatVersion: recording.formatVersion,
+                physicsVersion: recording.physicsVersion,
+                rulesVersion: recording.rulesVersion
+            };
+            const cacheKey = `${levelId}|${recording.attemptId}|${recording.sha256}`;
+            const cached = ghostCache.get(cacheKey);
+            if (cached) {
+                cacheGhost(cacheKey, cached);
+                ghostState = { status: 'ready', message: '', capture: cached, reference };
+            } else {
+                ghostState = {
+                    status: 'available',
+                    message: 'Recorrido campeón disponible.',
+                    capture: null,
+                    reference
+                };
+            }
             return true;
         } catch (error) {
             if (generation !== ghostGeneration) return false;
             ghostState = {
-                status: 'unavailable',
-                message: 'El recorrido campeón no está disponible.',
-                capture: null
+                status: error.message === 'RECORDING_VERSION_MISMATCH'
+                    ? 'incompatible'
+                    : error.status === 404 || error.message === 'RECORDING_UNAVAILABLE'
+                    ? 'unavailable'
+                    : 'error',
+                message: error.status === 404 || error.message === 'LEVEL_NOT_FOUND'
+                    ? 'El nivel fue retirado o ya no está disponible.'
+                    : error.message === 'RECORDING_UNAVAILABLE'
+                    ? 'El recorrido campeón no está disponible.'
+                    : 'No se pudo consultar el recorrido campeón.',
+                capture: null,
+                reference: null
+            };
+            return false;
+        }
+    }
+    async function loadPreparedChampionGhost() {
+        const generation = ghostGeneration;
+        const reference = ghostState.reference;
+        if (ghostState.status === 'ready') return true;
+        if (ghostState.status === 'loading-recording') return false;
+        if (!reference || ghostState.status !== 'available') return false;
+        ghostState = {
+            ...ghostState,
+            status: 'loading-recording',
+            message: 'Descargando recorrido campeón...'
+        };
+        try {
+            const query = new URLSearchParams({
+                levelId: reference.levelId,
+                attemptId: reference.attemptId,
+                sha256: reference.sha256
+            });
+            const response = await fetch(`/api/recordings?${query}`, {
+                credentials: 'same-origin', cache: 'no-store'
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw Object.assign(
+                    new Error(error.error ?? 'RECORDING_UNAVAILABLE'),
+                    { status: response.status }
+                );
+            }
+            if (typeof DecompressionStream === 'undefined')
+                throw new Error('DECOMPRESSION_UNAVAILABLE');
+            const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+            const capture = JSON.parse(await new Response(stream).text());
+            if (generation !== ghostGeneration) return false;
+            if (
+                capture?.levelId !== reference.levelId ||
+                capture?.attemptId !== reference.attemptId ||
+                capture?.formatVersion !== 'run-v2' ||
+                capture?.physicsVersion !== 'custom-physics-v1' ||
+                capture?.rulesVersion !== 'score-v2'
+            ) {
+                ghostState = {
+                    status: 'incompatible',
+                    message: 'La versión del recorrido campeón no es compatible.',
+                    capture: null,
+                    reference
+                };
+                return false;
+            }
+            const cacheKey = `${reference.levelId}|${reference.attemptId}|${reference.sha256}`;
+            cacheGhost(cacheKey, capture);
+            ghostState = { status: 'ready', message: '', capture, reference };
+            return true;
+        } catch (error) {
+            if (generation !== ghostGeneration) return false;
+            ghostState = {
+                status: error.message === 'RECORDING_VERSION_MISMATCH' ||
+                    error.message === 'DECOMPRESSION_UNAVAILABLE'
+                    ? 'incompatible'
+                    : error.status === 404 || error.message === 'RECORDING_UNAVAILABLE'
+                    ? 'unavailable'
+                    : 'error',
+                message: error.status === 404 || error.message === 'RECORDING_UNAVAILABLE'
+                    ? 'El recorrido fijado ya no está disponible.'
+                    : error.message === 'DECOMPRESSION_UNAVAILABLE'
+                    ? 'Este navegador no puede descomprimir la grabación.'
+                    : 'No se pudo descargar el recorrido campeón.',
+                capture: null,
+                reference
             };
             return false;
         }
@@ -754,7 +867,8 @@ Module['api'] = (() => {
         submitRun,
         retryChampionRecording,
         leaderboardSnapshot,
-        loadChampionRecording,
+        prepareChampionGhost,
+        loadPreparedChampionGhost,
         ghostSnapshot,
         publishDraft,
         publicationSnapshot,

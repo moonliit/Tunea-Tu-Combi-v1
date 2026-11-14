@@ -6,8 +6,11 @@
 #ifdef __EMSCRIPTEN__
 #include <cstdlib>
 #include <emscripten.h>
-EM_JS(void, LoadChampionGhostWeb, (const char* level), {
-    Module['api'].loadChampionRecording(UTF8ToString(level));
+EM_JS(void, PrepareChampionGhostWeb, (const char* level), {
+    Module['api'].prepareChampionGhost(UTF8ToString(level));
+});
+EM_JS(void, LoadPreparedChampionGhostWeb, (), {
+    Module['api'].loadPreparedChampionGhost();
 });
 EM_JS(char*, ReadChampionGhostWeb, (), {
     return stringToNewUTF8(JSON.stringify(Module['api'].ghostSnapshot()));
@@ -24,24 +27,31 @@ double InterpolateAngle(double first, double second, double amount) {
 }
 }
 
-void GhostPlayback::Start(const std::string& levelId, float cellSize) {
+void GhostPlayback::Request(const std::string& levelId, float cellSize) {
     Reset();
     m_levelId = levelId;
     m_cellSize = cellSize;
-    if (levelId.empty()) return;
+    if (levelId.empty()) {
+        m_status = GhostLoadStatus::Unavailable;
+        return;
+    }
     m_requested = true;
+    m_status = GhostLoadStatus::Loading;
 #ifdef __EMSCRIPTEN__
-    LoadChampionGhostWeb(levelId.c_str());
+    PrepareChampionGhostWeb(levelId.c_str());
+#else
+    m_requested = false;
+    m_status = GhostLoadStatus::Unavailable;
 #endif
 }
 
-void GhostPlayback::Load(const nlohmann::json& capture) {
+bool GhostPlayback::Load(const nlohmann::json& capture) {
     if (
         !capture.is_object() || capture.value("levelId", "") != m_levelId ||
         capture.value("formatVersion", "") != "run-v2" ||
         capture.value("physicsVersion", "") != "custom-physics-v1" ||
         capture.value("rulesVersion", "") != "score-v2"
-    ) return;
+    ) return false;
     try {
         for (const auto& part : capture.at("construction")) {
             m_definitions.emplace(part.at("id").get<PartId>(), Definition{
@@ -74,39 +84,131 @@ void GhostPlayback::Load(const nlohmann::json& capture) {
             m_frames.push_back(std::move(frame));
         }
     } catch (const nlohmann::json::exception&) {
-        Reset();
-        return;
+        m_definitions.clear();
+        m_frames.clear();
+        m_passengerSkirts.clear();
+        m_passengerPickups.clear();
+        return false;
     }
     if (m_frames.size() < 2 || m_frames.front().timeMs != 0) {
-        Reset();
-        return;
+        m_definitions.clear();
+        m_frames.clear();
+        m_passengerSkirts.clear();
+        m_passengerPickups.clear();
+        return false;
     }
     m_loaded = true;
+    m_status = GhostLoadStatus::Ready;
+    m_renderStates.reserve(m_definitions.size());
+    m_passengerStates.reserve(m_passengerPickups.size());
     Sample();
+    return true;
+}
+
+void GhostPlayback::PollRemote() {
+#ifdef __EMSCRIPTEN__
+    if (!m_requested || m_loaded) return;
+    char* raw = ReadChampionGhostWeb();
+    const nlohmann::json state = nlohmann::json::parse(raw, nullptr, false);
+    std::free(raw);
+    if (!state.is_object()) return;
+    const std::string status = state.value("status", "idle");
+    if (status == "ready") {
+        if (!Load(state.value("capture", nlohmann::json::object()))) {
+            m_status = GhostLoadStatus::Incompatible;
+            m_requested = false;
+            m_visible = false;
+            m_playing = false;
+        }
+    } else if (status == "available") {
+        m_status = GhostLoadStatus::Available;
+    } else if (status == "loading-recording") {
+        m_status = GhostLoadStatus::LoadingRecording;
+    } else if (status == "unavailable") {
+        m_status = GhostLoadStatus::Unavailable;
+        m_requested = false;
+        m_visible = false;
+        m_playing = false;
+    } else if (status == "incompatible") {
+        m_status = GhostLoadStatus::Incompatible;
+        m_requested = false;
+        m_visible = false;
+        m_playing = false;
+    } else if (status == "error") {
+        m_status = GhostLoadStatus::Error;
+        m_requested = false;
+        m_visible = false;
+        m_playing = false;
+    } else {
+        m_status = GhostLoadStatus::Loading;
+    }
+#endif
+}
+
+void GhostPlayback::EnsureLoaded() {
+#ifdef __EMSCRIPTEN__
+    if (m_status == GhostLoadStatus::Available) {
+        m_status = GhostLoadStatus::LoadingRecording;
+        LoadPreparedChampionGhostWeb();
+    }
+#endif
+}
+
+void GhostPlayback::Play() {
+    m_visible = true;
+    m_advanceWhileLoading = false;
+    if (GetDurationMs() > 0.0 && m_timeMs >= GetDurationMs()) m_timeMs = 0.0;
+    m_playing = true;
+    EnsureLoaded();
+    if (m_loaded) Sample();
+}
+
+void GhostPlayback::Pause() {
+    m_playing = false;
+}
+
+void GhostPlayback::Restart() {
+    m_timeMs = 0.0;
+    m_visible = true;
+    m_playing = true;
+    m_advanceWhileLoading = false;
+    EnsureLoaded();
+    if (m_loaded) Sample();
+}
+
+void GhostPlayback::StartCompetition() {
+    m_timeMs = 0.0;
+    m_visible = true;
+    m_playing = true;
+    m_advanceWhileLoading = true;
+    EnsureLoaded();
+    if (m_loaded) Sample();
+}
+
+void GhostPlayback::StopAndRewind() {
+    m_timeMs = 0.0;
+    m_visible = false;
+    m_playing = false;
+    m_advanceWhileLoading = false;
+    m_renderStates.clear();
+    m_passengerStates.clear();
 }
 
 void GhostPlayback::Update(double frameMs) {
-    if (!m_requested) return;
-    // Keep the ghost on the run timeline even while its file is downloading!
-    m_timeMs += frameMs;
-#ifdef __EMSCRIPTEN__
-    if (!m_loaded) {
-        char* raw = ReadChampionGhostWeb();
-        const nlohmann::json state = nlohmann::json::parse(raw, nullptr, false);
-        std::free(raw);
-        if (state.is_object() && state.value("status", "") == "ready") {
-            Load(state.value("capture", nlohmann::json::object()));
-        } else if (state.is_object() && state.value("status", "") == "unavailable") {
-            m_requested = false;
-        }
+    PollRemote();
+    if (m_visible && !m_loaded && m_status == GhostLoadStatus::Available) {
+        EnsureLoaded();
     }
-#endif
+    if (m_playing && (m_loaded || m_advanceWhileLoading)) m_timeMs += frameMs;
     if (!m_loaded) return;
     m_timeMs = std::min(
         m_timeMs,
         static_cast<double>(m_frames.back().timeMs)
     );
     Sample();
+    if (m_timeMs >= static_cast<double>(m_frames.back().timeMs)) {
+        m_playing = false;
+    }
 }
 
 void GhostPlayback::Sample() {
@@ -123,7 +225,6 @@ void GhostPlayback::Sample() {
         : 0.0;
     m_renderStates.clear();
     m_passengerStates.clear();
-    std::unordered_map<PartId, Transform> sampled;
     for (const auto& [id, firstState] : first.parts) {
         const auto definition = m_definitions.find(id);
         if (definition == m_definitions.end()) continue;
@@ -134,8 +235,8 @@ void GhostPlayback::Sample() {
             .y = firstState.y + (next->second.y - firstState.y) * amount,
             .rotation = InterpolateAngle(firstState.rotation, next->second.rotation, amount)
         };
-        sampled.emplace(id, state);
         m_renderStates.push_back({
+            .id = id,
             .type = definition->second.type,
             .position = {state.x, state.y},
             .rotation = state.rotation,
@@ -145,10 +246,16 @@ void GhostPlayback::Sample() {
     }
     for (const PassengerPickup& pickup : m_passengerPickups) {
         if (m_timeMs < pickup.timeMs || pickup.id >= m_passengerSkirts.size()) continue;
-        const auto host = sampled.find(pickup.hostId);
-        if (host == sampled.end()) continue;
+        const auto host = std::find_if(
+            m_renderStates.begin(),
+            m_renderStates.end(),
+            [&pickup](const GhostRenderState& state) {
+                return state.id == pickup.hostId;
+            }
+        );
+        if (host == m_renderStates.end()) continue;
         m_passengerStates.push_back({
-            .position = {host->second.x, host->second.y + 7.0},
+            .position = {host->position.x, host->position.y + 7.0},
             .hasSkirt = m_passengerSkirts[pickup.id]
         });
     }
@@ -159,6 +266,10 @@ void GhostPlayback::Reset() {
     m_timeMs = 0.0;
     m_requested = false;
     m_loaded = false;
+    m_visible = false;
+    m_playing = false;
+    m_advanceWhileLoading = false;
+    m_status = GhostLoadStatus::Idle;
     m_definitions.clear();
     m_frames.clear();
     m_renderStates.clear();

@@ -61,6 +61,7 @@ private:
     Scoring::ScoreBreakdown m_score;
     RunCapture m_capture;
     GhostPlayback m_ghostPlayback;
+    bool m_competeAgainstGhost = false;
     LeaderboardClient m_leaderboard;
 
     void ResetToBuildMode();
@@ -69,6 +70,8 @@ private:
     void UpdateGoalWindow(double frameMs);
     void CompleteRun();
     void RenderResults() const;
+    void RenderGhostControls() const;
+    bool ProcessGhostControls();
 
 public:
     MainGameScene(

@@ -139,6 +139,33 @@ void DrawPassenger(
     DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, tint);
 }
 
+Rectangle GhostPreviewButton() {
+    return {20.0f, 104.0f, 230.0f, 32.0f};
+}
+
+Rectangle GhostPanel() {
+    return {14.0f, 76.0f, 350.0f, 126.0f};
+}
+
+Rectangle GhostPauseButton() {
+    return {258.0f, 104.0f, 100.0f, 32.0f};
+}
+
+Rectangle GhostRestartButton() {
+    return {20.0f, 142.0f, 110.0f, 30.0f};
+}
+
+Rectangle GhostCompeteButton() {
+    return {138.0f, 142.0f, 220.0f, 30.0f};
+}
+
+bool GhostCanBeRequested(GhostLoadStatus status) {
+    return status == GhostLoadStatus::Loading ||
+        status == GhostLoadStatus::Available ||
+        status == GhostLoadStatus::LoadingRecording ||
+        status == GhostLoadStatus::Ready;
+}
+
 }
 
 MainGameScene::MainGameScene(
@@ -186,6 +213,7 @@ MainGameScene::MainGameScene(
     // parallax starts from here
     m_worldRenderer.SetBackgroundOrigin(m_camera.target.x);
     m_passengerCollected.assign(m_level.GetDefinition().passengers.size(), false);
+    m_ghostPlayback.Request(m_levelId, m_level.GetGrid().GetCellSize());
 }
 
 void MainGameScene::ProcessInput(float dt) {
@@ -204,6 +232,7 @@ void MainGameScene::ProcessInput(float dt) {
         }
         return;
     }
+    if (m_stateMachine.IsBuildMode() && ProcessGhostControls()) return;
     if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
         const Rectangle designButton = UiButton::CenteredAbove(
             UiButton::PlaySideButton(
@@ -403,15 +432,18 @@ void MainGameScene::ProcessInput(float dt) {
 }
 
 void MainGameScene::Update(float dt) {
+    const double frameMs = static_cast<double>(dt) * 1000.0;
     if (m_stateMachine.IsResultsMode()) {
-        m_leaderboard.Poll(static_cast<double>(dt) * 1000.0);
+        m_leaderboard.Poll(frameMs);
         return;
+    }
+    m_ghostPlayback.Update(frameMs);
+    if (!GhostCanBeRequested(m_ghostPlayback.GetStatus())) {
+        m_competeAgainstGhost = false;
     }
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
-        const double frameMs = static_cast<double>(dt) * 1000.0;
         m_elapsedMs += frameMs;
-        m_ghostPlayback.Update(frameMs);
         for (const auto [first, second] :
              m_playSession.ConsumeBrokenConnections()) {
             m_capture.RecordDetach(
@@ -566,7 +598,8 @@ void MainGameScene::TransitionToPlayMode() {
         draftSnapshot
     );
     m_playSession.Start();
-    m_ghostPlayback.Start(m_levelId, m_level.GetGrid().GetCellSize());
+    if (m_competeAgainstGhost) m_ghostPlayback.StartCompetition();
+    else m_ghostPlayback.StopAndRewind();
     auto scenario = m_appContext->audioController->GetCurrentScenario();
     m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel, scenario.levelIndex});
 
@@ -711,7 +744,7 @@ void MainGameScene::ResetToBuildMode() {
     m_goalWindow.Reset();
     m_previousPartX.clear();
     m_capture.Clear();
-    m_ghostPlayback.Reset();
+    m_ghostPlayback.StopAndRewind();
     m_leaderboard.Reset();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
@@ -730,6 +763,125 @@ void MainGameScene::ResetToBuildMode() {
 void MainGameScene::ResetEditorCamera() {
     m_camera.target = m_editorCameraTarget;
     m_camera.zoom = m_editorCameraZoom;
+}
+
+bool MainGameScene::ProcessGhostControls() {
+    if (m_levelId.empty()) return false;
+    const GhostLoadStatus status = m_ghostPlayback.GetStatus();
+    const bool canUse = GhostCanBeRequested(status);
+    if (UiButton::WasClicked(GhostPreviewButton())) {
+        if (canUse) {
+            m_appContext->audioController->PlayUiClick();
+            m_ghostPlayback.Play();
+        }
+        return true;
+    }
+    if (UiButton::WasClicked(GhostPauseButton())) {
+        m_appContext->audioController->PlayUiClick();
+        m_ghostPlayback.Pause();
+        return true;
+    }
+    if (UiButton::WasClicked(GhostRestartButton())) {
+        if (canUse) {
+            m_appContext->audioController->PlayUiClick();
+            m_ghostPlayback.Restart();
+        }
+        return true;
+    }
+    if (UiButton::WasClicked(GhostCompeteButton())) {
+        if (canUse) {
+            m_appContext->audioController->PlayUiClick();
+            m_competeAgainstGhost = !m_competeAgainstGhost;
+            if (m_competeAgainstGhost) m_ghostPlayback.EnsureLoaded();
+        }
+        return true;
+    }
+    if (CheckCollisionPointRec(GetMousePosition(), GhostPanel()) &&
+        (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
+         IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))) {
+        return true;
+    }
+    return false;
+}
+
+void MainGameScene::RenderGhostControls() const {
+    const GhostLoadStatus status = m_ghostPlayback.GetStatus();
+    const bool canUse = GhostCanBeRequested(status);
+    DrawRectangleRec(GhostPanel(), Fade(DARKBLUE, 0.84f));
+    DrawRectangleLinesEx(GhostPanel(), 2.0f, SKYBLUE);
+    DrawText("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
+    UiButton::Draw(
+        GhostPreviewButton(),
+        m_ghostPlayback.IsPlaying()
+            ? "REPRODUCIENDO RECORRIDO"
+            : "VER RECORRIDO DEL CAMPEÓN",
+        canUse ? DARKGREEN : DARKGRAY,
+        canUse ? WHITE : GRAY,
+        11
+    );
+    UiButton::Draw(
+        GhostPauseButton(),
+        "PARAR",
+        m_ghostPlayback.IsPlaying() ? MAROON : DARKGRAY,
+        WHITE,
+        12
+    );
+    UiButton::Draw(
+        GhostRestartButton(),
+        "REINICIAR",
+        canUse ? ORANGE : DARKGRAY,
+        canUse ? WHITE : GRAY,
+        12
+    );
+    UiButton::Draw(
+        GhostCompeteButton(),
+        m_competeAgainstGhost
+            ? "COMPETIR CON FANTASMA: SÍ"
+            : "COMPETIR CON FANTASMA: NO",
+        m_competeAgainstGhost ? DARKGREEN : DARKGRAY,
+        canUse ? WHITE : GRAY,
+        10
+    );
+
+    std::string message;
+    Color messageColor = LIGHTGRAY;
+    switch (status) {
+        case GhostLoadStatus::Loading:
+            message = "Buscando al campeón global...";
+            break;
+        case GhostLoadStatus::Available:
+            message = "Campeón fijado · recorrido listo para descargar";
+            messageColor = SKYBLUE;
+            break;
+        case GhostLoadStatus::LoadingRecording:
+            message = "Descargando recorrido... puedes seguir editando";
+            break;
+        case GhostLoadStatus::Ready: {
+            const int elapsedTenths = static_cast<int>(m_ghostPlayback.GetTimeMs() / 100.0);
+            const int durationTenths = static_cast<int>(m_ghostPlayback.GetDurationMs() / 100.0);
+            message = "Tiempo " + std::to_string(elapsedTenths / 10) + "." +
+                std::to_string(elapsedTenths % 10) + " / " +
+                std::to_string(durationTenths / 10) + "." +
+                std::to_string(durationTenths % 10) + " s";
+            messageColor = SKYBLUE;
+            break;
+        }
+        case GhostLoadStatus::Unavailable:
+            message = "El campeón no tiene fantasma disponible";
+            break;
+        case GhostLoadStatus::Incompatible:
+            message = "Grabación incompatible con esta versión";
+            messageColor = ORANGE;
+            break;
+        case GhostLoadStatus::Error:
+            message = "Sin conexión: edición y juego siguen disponibles";
+            messageColor = ORANGE;
+            break;
+        case GhostLoadStatus::Idle:
+            message = "Fantasma no disponible";
+            break;
+    }
+    DrawText(message.c_str(), 22, 180, 11, messageColor);
 }
 
 void MainGameScene::Render() const {
@@ -754,7 +906,7 @@ void MainGameScene::Render() const {
         m_appContext->windowHeight
     );
     BeginMode2D(m_camera);
-    if (m_stateMachine.IsPlayMode()) {
+    if (m_ghostPlayback.IsVisible()) {
         m_worldRenderer.RenderGhostPlayback(m_ghostPlayback.GetRenderStates());
         for (const GhostPassengerState& passenger :
              m_ghostPlayback.GetPassengerStates()) {
@@ -818,6 +970,9 @@ void MainGameScene::Render() const {
         m_camera,
         m_playSession.GetActivationRegistry()
     );
+    if (m_stateMachine.IsBuildMode() && !m_levelId.empty()) {
+        RenderGhostControls();
+    }
     if (m_stateMachine.IsPlayMode() && m_goalWindow.GetStartMs() >= 0.0 &&
         !m_levelCompleted) {
         const double elapsedWindowMs =

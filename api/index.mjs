@@ -87,7 +87,9 @@ export function createHandler(
             if (recordingRead) {
                 if (!recordings) throw new Error('Recordings unavailable');
                 const result = await recordings.download(
-                    event.queryStringParameters?.levelId
+                    event.queryStringParameters?.levelId,
+                    event.queryStringParameters?.attemptId ?? null,
+                    event.queryStringParameters?.sha256 ?? null
                 );
                 return {
                     statusCode: 200,
