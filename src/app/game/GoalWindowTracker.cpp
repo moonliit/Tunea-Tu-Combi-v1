@@ -4,13 +4,27 @@
 
 namespace {
 
-bool ReachedGoal(const GoalPartSample& part, double goalX) {
-    if (part.currentX + part.horizontalRadius >= goalX) return true;
-    const double sweptLeft =
+Math::AABB PartBounds(double centerX, double centerY, double radius) {
+    return Math::AABB(
+        Math::Vector2D(centerX - radius, centerY - radius),
+        Math::Vector2D(centerX + radius, centerY + radius)
+    );
+}
+
+bool TouchesGoal(const GoalPartSample& part, const Math::AABB& goalArea) {
+    if (PartBounds(part.currentX, part.currentY, part.horizontalRadius).Overlaps(goalArea)) {
+        return true;
+    }
+    const double minX =
         std::min(part.previousX, part.currentX) - part.horizontalRadius;
-    const double sweptRight =
+    const double maxX =
         std::max(part.previousX, part.currentX) + part.horizontalRadius;
-    return sweptLeft <= goalX && sweptRight >= goalX;
+    const double minY =
+        std::min(part.previousY, part.currentY) - part.horizontalRadius;
+    const double maxY =
+        std::max(part.previousY, part.currentY) + part.horizontalRadius;
+    return Math::AABB(Math::Vector2D(minX, minY), Math::Vector2D(maxX, maxY))
+        .Overlaps(goalArea);
 }
 
 }
@@ -18,7 +32,7 @@ bool ReachedGoal(const GoalPartSample& part, double goalX) {
 GoalWindowUpdate GoalWindowTracker::Update(
     double previousTimeMs,
     double currentTimeMs,
-    double goalX,
+    const Math::AABB& goalArea,
     const std::vector<GoalPartSample>& parts,
     const std::vector<GoalPassengerSample>& passengers
 ) {
@@ -26,29 +40,49 @@ GoalWindowUpdate GoalWindowTracker::Update(
         parts.begin(), parts.end(),
         [](const GoalPartSample& part) { return part.driver; }
     );
-    if (driver == parts.end() || driver->currentX <= goalX) {
-        DiscardWindow();
-        return {};
-    }
-
-    if (m_startMs < 0.0) {
+    if (driver == parts.end()) {
+        if (m_startMs < 0.0) return {};
+        // goal already reached: keep the win/countdown even if driver disappears
+    } else if (m_startMs < 0.0) {
+        if (!TouchesGoal(*driver, goalArea)) {
+            DiscardWindow();
+            return {};
+        }
         m_deliveredParts.clear();
         m_deliveredPassengers.clear();
         m_startMs = previousTimeMs;
-        if (driver->previousX <= goalX &&
-            driver->currentX > driver->previousX) {
-            const double fraction = std::clamp(
-                (goalX - driver->previousX) /
-                    (driver->currentX - driver->previousX),
-                0.0,
-                1.0
-            );
-            m_startMs += (currentTimeMs - previousTimeMs) * fraction;
+        if (!PartBounds(driver->previousX, driver->previousY, driver->horizontalRadius)
+                 .Overlaps(goalArea)) {
+            const double dx = driver->currentX - driver->previousX;
+            const double dy = driver->currentY - driver->previousY;
+            double enterFraction = 1.0;
+            bool found = false;
+            const auto consider = [&](double boundary, double previous, double delta) {
+                if (std::abs(delta) < 1e-9) return;
+                const double fraction = (boundary - previous) / delta;
+                if (fraction < 0.0 || fraction > 1.0) return;
+                const double x = driver->previousX + dx * fraction;
+                const double y = driver->previousY + dy * fraction;
+                if (!PartBounds(x, y, driver->horizontalRadius).Overlaps(goalArea)) return;
+                if (!found || fraction < enterFraction) {
+                    enterFraction = fraction;
+                    found = true;
+                }
+            };
+            consider(goalArea.min.x + driver->horizontalRadius, driver->previousX, dx);
+            consider(goalArea.max.x - driver->horizontalRadius, driver->previousX, dx);
+            consider(goalArea.min.y + driver->horizontalRadius, driver->previousY, dy);
+            consider(goalArea.max.y - driver->horizontalRadius, driver->previousY, dy);
+            if (found) {
+                m_startMs += (currentTimeMs - previousTimeMs) *
+                    std::clamp(enterFraction, 0.0, 1.0);
+            }
         }
     }
+    // once started, do not cancel if the driver leaves the goal area
 
     for (const GoalPartSample& part : parts) {
-        if (part.initial && ReachedGoal(part, goalX)) {
+        if (part.initial && TouchesGoal(part, goalArea)) {
             m_deliveredParts.insert(part.id);
         }
     }

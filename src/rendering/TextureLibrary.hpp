@@ -14,7 +14,8 @@ private:
     std::map<PartType, Texture2D> m_partTextures;
     Texture2D m_wheelMount{};
     std::array<Texture2D, BackgroundCount> m_backgrounds{};
-    Texture2D m_terrainTexture;
+    Texture2D m_terrainTexture{};
+    Texture2D m_levelGoalTexture{};
     bool m_initialized = false;
 
 public:
@@ -29,6 +30,7 @@ public:
         return m_backgrounds[static_cast<std::size_t>(id)];
     }
     const Texture2D& GetTerrainTexture() const { return m_terrainTexture; }
+    const Texture2D& GetLevelGoalTexture() const { return m_levelGoalTexture; }
 };
 
 #endif

@@ -22,6 +22,7 @@ constexpr std::array PartTextureFiles{
 };
 constexpr const char* WheelMountPath = "assets/textures/parts/wheel_mount.png";
 constexpr const char* TerrainTexturePath = "assets/textures/terrain/dirt.png";
+constexpr const char* LevelGoalTexturePath = "assets/textures/level/goal.png";
 
 Texture2D LoadSmoothTexture(const char* path) {
     const Texture2D texture = LoadTexture(path);
@@ -30,7 +31,6 @@ Texture2D LoadSmoothTexture(const char* path) {
             std::string("Could not load texture: ") + path
         );
     }
-    // point filtering looks jagged when scaled down
     SetTextureFilter(texture, TEXTURE_FILTER_POINT);
     return texture;
 }
@@ -49,6 +49,7 @@ void TextureLibrary::Initialize() {
     }
     m_terrainTexture = LoadSmoothTexture(TerrainTexturePath);
     SetTextureWrap(m_terrainTexture, TEXTURE_WRAP_REPEAT);
+    m_levelGoalTexture = LoadSmoothTexture(LevelGoalTexturePath);
     m_initialized = true;
 }
 
@@ -63,6 +64,7 @@ void TextureLibrary::Shutdown() {
         UnloadTexture(background);
     }
     UnloadTexture(m_terrainTexture);
+    UnloadTexture(m_levelGoalTexture);
     m_initialized = false;
 }
 

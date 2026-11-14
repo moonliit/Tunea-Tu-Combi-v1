@@ -15,8 +15,15 @@ struct CameraDefinition {
     float zoom = 1.0f;
 };
 
+inline constexpr Math::Vector2D GoalSize{70.0f, 200.0f};
+
 struct GoalDefinition {
     Math::Vector2D position;
+
+    Math::AABB GetAABB() const {
+        const Math::Vector2D half = GoalSize * 0.5;
+        return Math::AABB(position - half, position + half);
+    }
 };
 
 struct PassengerDefinition {
@@ -29,8 +36,6 @@ struct GridDefinition {
     Math::Vector2D worldPos;
     float cellSize;
 };
-
-inline constexpr Math::Vector2D GoalSize{80.0f, 80.0f};
 
 struct LevelDefinition {
     int levelNumber = 1;

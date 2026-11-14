@@ -151,7 +151,8 @@ export function validateLevelDefinition(value) {
     };
     if (!exactKeys(value.goal, ['position'])) throw new ApiError(400, 'INVALID_LEVEL');
     const goal = { position: point(value.goal.position) };
-    if (goal.position.x <= grid.worldPos.x)
+    const goalMinX = goal.position.x - 80 / 2;
+    if (goalMinX <= grid.worldPos.x)
         throw new ApiError(400, 'GOAL_MUST_BE_RIGHT_OF_GRID');
 
     if (!Array.isArray(value.passengers) || value.passengers.length > 64)
@@ -324,7 +325,15 @@ function validateCapture(value, identityId, draft) {
     if (!Array.isArray(value.frames) || value.frames.length < 2 || value.frames.length > 12002)
         throw new ApiError(400, 'INVALID_CAPTURE');
     const driverId = drivers[0].id;
-    const goalXMilli = Math.round(definition.goal.position.x * 1000);
+    const goalSize = { x: 80, y: 80 };
+    const goalMargin = Math.max(0, definition.grid.cellSize / 2);
+    const goalMinX = (definition.goal.position.x - goalSize.x / 2 - goalMargin) * 1000;
+    const goalMaxX = (definition.goal.position.x + goalSize.x / 2 + goalMargin) * 1000;
+    const goalMinY = (definition.goal.position.y - goalSize.y / 2 - goalMargin) * 1000;
+    const goalMaxY = (definition.goal.position.y + goalSize.y / 2 + goalMargin) * 1000;
+    const touchesGoalArea = (state) =>
+        state.xMilli >= goalMinX && state.xMilli <= goalMaxX &&
+        state.yMilli >= goalMinY && state.yMilli <= goalMaxY;
     let previousTime = -1;
     let firstWindowSample = null;
     let lastWindowSample = null;
@@ -350,7 +359,7 @@ function validateCapture(value, identityId, draft) {
             if (state.id === driverId) driverState = state;
         }
         if (frame.timeMs > value.statistics.driverTimeMs) {
-            if (!driverState || driverState.xMilli < goalXMilli)
+            if (!driverState || !touchesGoalArea(driverState))
                 throw new ApiError(400, 'INVALID_GOAL_WINDOW');
             if (lastWindowSample !== null && frame.timeMs - lastWindowSample > 250)
                 throw new ApiError(400, 'INVALID_GOAL_WINDOW');

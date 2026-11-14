@@ -561,6 +561,7 @@ void MainGameScene::Update(float dt) {
             );
         }
     }
+    UpdateGoalParticles(dt);
 }
 
 void MainGameScene::TransitionToPlayMode() {
@@ -568,7 +569,7 @@ void MainGameScene::TransitionToPlayMode() {
     m_elapsedMs = 0.0;
     m_levelCompleted = false;
     m_initialPartIds.clear();
-    m_previousPartX.clear();
+    m_previousPartPositions.clear();
     m_goalWindow.Reset();
     m_statistics = {};
     m_score = {};
@@ -605,11 +606,12 @@ void MainGameScene::TransitionToPlayMode() {
 
     const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
     const std::vector<TrackedPart> trackedParts = CollectParts(runtimeGrid);
+    m_previousPartPositions.clear();
     for (const TrackedPart& tracked : trackedParts) {
         m_initialPartIds.insert(tracked.part->GetId());
-        m_previousPartX.emplace(
+        m_previousPartPositions.emplace(
             tracked.part->GetId(),
-            static_cast<double>(tracked.state.position.x)
+            tracked.state.position
         );
     }
     m_statistics.initialParts = static_cast<std::int64_t>(
@@ -650,13 +652,20 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
     for (const TrackedPart& tracked : parts) {
         const PartId id = tracked.part->GetId();
         const double currentX = static_cast<double>(tracked.state.position.x);
-        const auto previous = m_previousPartX.find(id);
+        const double currentY = static_cast<double>(tracked.state.position.y);
+        const auto previous = m_previousPartPositions.find(id);
+        const double previousX = previous == m_previousPartPositions.end()
+            ? currentX
+            : static_cast<double>(previous->second.x);
+        const double previousY = previous == m_previousPartPositions.end()
+            ? currentY
+            : static_cast<double>(previous->second.y);
         partSamples.push_back({
             .id = id,
-            .previousX = previous == m_previousPartX.end()
-                ? currentX
-                : previous->second,
+            .previousX = previousX,
+            .previousY = previousY,
             .currentX = currentX,
+            .currentY = currentY,
             .horizontalRadius = HorizontalRadius(tracked.state),
             .initial = m_initialPartIds.contains(id),
             .driver = tracked.part->GetType() == PartType::Driver
@@ -667,13 +676,10 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
     for (const CarriedPassenger& passenger : m_carriedPassengers) {
         passengerSamples.push_back({passenger.id, passenger.hostId});
     }
-    const double goalX = static_cast<double>(
-        m_level.GetDefinition().goal.position.x
-    );
     const GoalWindowUpdate update = m_goalWindow.Update(
         m_elapsedMs - frameMs,
         m_elapsedMs,
-        goalX,
+        m_level.GetDefinition().goal.GetAABB(),
         partSamples,
         passengerSamples
     );
@@ -681,11 +687,11 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
         CompleteRun();
     }
 
-    m_previousPartX.clear();
+    m_previousPartPositions.clear();
     for (const TrackedPart& tracked : parts) {
-        m_previousPartX.emplace(
+        m_previousPartPositions.emplace(
             tracked.part->GetId(),
-            static_cast<double>(tracked.state.position.x)
+            tracked.state.position
         );
     }
 }
@@ -739,10 +745,74 @@ void MainGameScene::CompleteRun() {
     m_stateMachine.EnterResults();
 }
 
+void MainGameScene::UpdateGoalParticles(float dt) {
+    const Math::AABB goalArea = m_level.GetDefinition().goal.GetAABB();
+    const float width = static_cast<float>(goalArea.max.x - goalArea.min.x);
+    const float height = static_cast<float>(goalArea.max.y - goalArea.min.y);
+    if (width <= 0.0f || height <= 0.0f) return;
+
+    if (m_goalParticles.empty()) {
+        m_goalParticles.resize(36);
+        for (GoalParticle& particle : m_goalParticles) {
+            particle.life = -1.0f;
+        }
+    }
+
+    const auto random01 = []() {
+        return static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f;
+    };
+
+    const float leewayX = 15.0f;
+    const float leewayY = 30.0f;
+
+    for (GoalParticle& particle : m_goalParticles) {
+        particle.life -= dt;
+        if (particle.life <= 0.0f) {
+            particle.maxLife = 2.0f + random01() * 5.0f;
+            particle.life = particle.maxLife;
+            particle.position = {
+                goalArea.min.x - leewayX + (width + 2 * leewayX) * random01(),
+                goalArea.max.y - (height + leewayY) * random01() * 0.2f
+            };
+            particle.velocity = {
+                (random01() - 0.5f) * 18.0f,
+                -(20.0f + random01() * 35.0f)
+            };
+            particle.size = 1.5f + random01() * 3.0f;
+            continue;
+        }
+        particle.position.x += particle.velocity.x * dt;
+        particle.position.y += particle.velocity.y * dt;
+
+        if (particle.position.x < goalArea.min.x - leewayX) particle.position.x = goalArea.max.x;
+        if (particle.position.x > goalArea.max.x + leewayX) particle.position.x = goalArea.min.x;
+        if (particle.position.y < goalArea.min.y - leewayY) {
+            particle.life = 0.0f;
+        }
+    }
+}
+
+void MainGameScene::RenderGoalParticles() const {
+    for (const GoalParticle& particle : m_goalParticles) {
+        if (particle.life <= 0.0f || particle.maxLife <= 0.0f) continue;
+        const float t = particle.life / particle.maxLife;
+        const unsigned char alpha = static_cast<unsigned char>(40 + 180 * t);
+        const Color color = Color{255, 255, 255, alpha};
+        DrawCircleV(
+            Vector2{
+                static_cast<float>(particle.position.x),
+                static_cast<float>(particle.position.y)
+            },
+            particle.size * (0.6f + 0.6f * t),
+            color
+        );
+    }
+}
+
 void MainGameScene::ResetToBuildMode() {
     m_elapsedMs = 0.0;
     m_goalWindow.Reset();
-    m_previousPartX.clear();
+    m_previousPartPositions.clear();
     m_capture.Clear();
     m_ghostPlayback.StopAndRewind();
     m_leaderboard.Reset();
@@ -919,21 +989,27 @@ void MainGameScene::Render() const {
             );
         }
     }
-    const auto& finish = m_level.GetDefinition().goal.position;
-    const Vector2 pole{static_cast<float>(finish.x), static_cast<float>(finish.y)};
-    DrawLineEx({pole.x, pole.y - 100.0f}, pole, 5.0f, DARKGRAY);
-    DrawTriangle(
-        {pole.x, pole.y - 100.0f},
-        {pole.x, pole.y - 64.0f},
-        {pole.x + 65.0f, pole.y - 82.0f},
-        RED
+
+    Texture2D goalTexture = m_appContext->textureLibrary->GetLevelGoalTexture();
+    const GoalDefinition& goal = m_level.GetDefinition().goal;
+    const Math::AABB goalArea = goal.GetAABB();
+    const Rectangle goalRect{
+        static_cast<float>(goalArea.min.x),
+        static_cast<float>(goalArea.min.y),
+        static_cast<float>(goalArea.max.x - goalArea.min.x),
+        static_cast<float>(goalArea.max.y - goalArea.min.y)
+    };
+
+    RenderGoalParticles();
+    DrawTexturePro(
+        goalTexture,
+        Rectangle{0.0f, 0.0f, static_cast<float>(goalTexture.width), static_cast<float>(goalTexture.height)},
+        goalRect,
+        Vector2{0.0f, 0.0f},
+        0.0f,
+        WHITE
     );
-    DrawTriangleLines(
-        {pole.x, pole.y - 100.0f},
-        {pole.x, pole.y - 64.0f},
-        {pole.x + 65.0f, pole.y - 82.0f},
-        MAROON
-    );
+
     const auto& passengerDefinitions = m_level.GetDefinition().passengers;
     for (std::size_t i = 0; i < passengerDefinitions.size(); ++i) {
         if (i < m_passengerCollected.size() && m_passengerCollected[i]) continue;

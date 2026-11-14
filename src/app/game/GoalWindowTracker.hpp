@@ -2,6 +2,7 @@
 #define GAME_GOAL_WINDOW_TRACKER_HPP
 
 #include "app/game/Part.hpp"
+#include "math/AABB.hpp"
 
 #include <cstddef>
 #include <unordered_set>
@@ -10,7 +11,9 @@
 struct GoalPartSample {
     PartId id;
     double previousX;
+    double previousY;
     double currentX;
+    double currentY;
     double horizontalRadius;
     bool initial;
     bool driver;
@@ -39,7 +42,7 @@ public:
     GoalWindowUpdate Update(
         double previousTimeMs,
         double currentTimeMs,
-        double goalX,
+        const Math::AABB& goalArea,
         const std::vector<GoalPartSample>& parts,
         const std::vector<GoalPassengerSample>& passengers
     );

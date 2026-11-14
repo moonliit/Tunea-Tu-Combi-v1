@@ -6,7 +6,7 @@
 #include "app/AudioController.hpp"
 #include "app/CustomMusicCatalog.hpp"
 #include "app/game/Level.hpp"
-#include "app/SceneManager.hpp"
+#include "rendering/TextureLibrary.hpp"
 #include "ui/UiButton.hpp"
 #include <raylib.h>
 #include <algorithm>
@@ -478,18 +478,29 @@ void CustomLevelEditorScene::Render() const {
     }
 
     if (custom.hasGoal || m_designTool == DesignTool::Goal) {
-        Math::Vector2D goal = custom.definition.goal.position;
+        GoalDefinition goalDef = custom.definition.goal;
         if (m_designTool == DesignTool::Goal && !custom.hasGoal) {
             const Vector2 mouse = GetScreenToWorld2D(GetMousePosition(), m_designCamera);
-            goal = {mouse.x, mouse.y};
+            goalDef.position = {mouse.x, mouse.y};
         }
-        const Vector2 pole{static_cast<float>(goal.x), static_cast<float>(goal.y)};
-        DrawLineEx({pole.x, pole.y - 80.0f}, pole, 4.0f, DARKGRAY);
-        DrawTriangle(
-            {pole.x, pole.y - 80.0f},
-            {pole.x, pole.y - 50.0f},
-            {pole.x + 55.0f, pole.y - 65.0f},
-            RED
+        const Math::AABB goalArea = goalDef.GetAABB();
+        const Rectangle goalRect{
+            static_cast<float>(goalArea.min.x),
+            static_cast<float>(goalArea.min.y),
+            static_cast<float>(goalArea.max.x - goalArea.min.x),
+            static_cast<float>(goalArea.max.y - goalArea.min.y)
+        };
+        DrawRectangleRec(goalRect, Fade(GREEN, 0.12f));
+        DrawRectangleLinesEx(goalRect, 2.0f, Fade(GOLD, 0.85f));
+
+        Texture2D goalTexture = m_context->textureLibrary->GetLevelGoalTexture();
+        DrawTexturePro(
+            goalTexture,
+            Rectangle{0.0f, 0.0f, static_cast<float>(goalTexture.width), static_cast<float>(goalTexture.height)},
+            goalRect,
+            Vector2{0.0f, 0.0f},
+            0.0f,
+            WHITE
         );
     }
     EndMode2D();

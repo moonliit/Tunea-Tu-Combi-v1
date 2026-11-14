@@ -55,12 +55,9 @@ Math::AABB Level::GetContentBounds(float margin) const {
             include(static_cast<float>(point.x), static_cast<float>(point.y));
         }
     }
-    const float goalX = static_cast<float>(m_definition.goal.position.x);
-    const float goalY = static_cast<float>(m_definition.goal.position.y);
-    const float halfGoalX = static_cast<float>(GoalSize.x) * 0.5f;
-    const float halfGoalY = static_cast<float>(GoalSize.y) * 0.5f;
-    include(goalX - halfGoalX, goalY - halfGoalY);
-    include(goalX + halfGoalX, goalY + halfGoalY);
+    const Math::AABB goalBounds = m_definition.goal.GetAABB();
+    include(static_cast<float>(goalBounds.min.x), static_cast<float>(goalBounds.min.y));
+    include(static_cast<float>(goalBounds.max.x), static_cast<float>(goalBounds.max.y));
     for (const PassengerDefinition& passenger : m_definition.passengers) {
         include(
             static_cast<float>(passenger.position.x),
@@ -189,7 +186,9 @@ LevelDefinition LevelDefinition::FromJson(const nlohmann::json& j) {
     }
 
     if (j.contains("goal")) {
-        level.goal.position = Math::Vector2D::FromJson(j["goal"].at("position"));
+        const auto& goalJson = j["goal"];
+        level.goal.position = Math::Vector2D::FromJson(goalJson.at("position"));
+        // size and texture are intrinsic to goals and intentionally ignored if present
     }
 
     if (j.contains("passengers") && j["passengers"].is_array()) {

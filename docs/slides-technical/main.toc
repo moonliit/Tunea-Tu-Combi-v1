@@ -1,0 +1,7 @@
+\beamer@sectionintoc {1}{Juego y arquitectura}{3}{0}{1}
+\beamer@sectionintoc {2}{De la construcción a la física}{8}{0}{2}
+\beamer@sectionintoc {3}{Pipeline de simulación}{11}{0}{3}
+\beamer@sectionintoc {4}{Fuerzas, impulsos y activación}{18}{0}{4}
+\beamer@sectionintoc {5}{Juntas y estabilización}{23}{0}{5}
+\beamer@sectionintoc {6}{Jugabilidad, puntuación y aplicación}{27}{0}{6}
+\beamer@sectionintoc {7}{Validación y defensa}{31}{0}{7}

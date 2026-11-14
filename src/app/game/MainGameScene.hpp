@@ -55,7 +55,19 @@ private:
     std::vector<bool> m_passengerCollected;
     std::vector<CarriedPassenger> m_carriedPassengers;
     std::unordered_set<PartId> m_initialPartIds;
-    std::unordered_map<PartId, double> m_previousPartX;
+    std::unordered_map<PartId, Math::Vector2D> m_previousPartPositions;
+
+    struct GoalParticle {
+        Math::Vector2D position{};
+        Math::Vector2D velocity{};
+        float life = 0.0f;
+        float maxLife = 1.0f;
+        float size = 2.0f;
+    };
+
+    std::vector<GoalParticle> m_goalParticles;
+    void UpdateGoalParticles(float dt);
+    void RenderGoalParticles() const;
     GoalWindowTracker m_goalWindow;
     Scoring::RunStatistics m_statistics;
     Scoring::ScoreBreakdown m_score;
