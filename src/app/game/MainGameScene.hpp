@@ -39,7 +39,7 @@ private:
     float m_editorCameraZoom = 1.0f;
     float m_gravity;
     GameStateMachine m_stateMachine;
-    bool m_isCustomLevel = false;
+    bool m_isEditableDraft = false;
     std::string m_levelId;
     Level m_level;
     Math::AABB m_mapBounds;

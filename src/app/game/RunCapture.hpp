@@ -19,7 +19,10 @@ public:
     void Start(
         const BuildModel& model,
         std::size_t passengerCount,
-        const std::string& levelId
+        const std::string& levelId,
+        const std::string& combiId,
+        const nlohmann::json& levelDefinition,
+        const nlohmann::json& draftSnapshot
     );
     void RecordFrame(
         std::int64_t timeMs,
@@ -35,6 +38,7 @@ public:
     );
     void Clear();
     const std::string& GetAttemptId() const { return m_attemptId; }
+    const nlohmann::json& GetData() const { return m_data; }
 };
 
 #endif

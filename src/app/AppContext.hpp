@@ -5,6 +5,7 @@
 #include <memory>
 #include "app/SceneManager.hpp"
 #include "identity/IdentitySession.hpp"
+#include "publication/PublicationClient.hpp"
 
 class CustomLevelCatalog;
 
@@ -26,6 +27,7 @@ struct AppContext {
     int activeCustomLevel = -1;
     bool openCustomMusicPicker = false;
     IdentitySession identity;
+    PublicationClient publications;
 };
 
 #endif

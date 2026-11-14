@@ -8,6 +8,34 @@ Module['api'] = (() => {
     let updateUi = () => {};
     let transientLocalProfileId = '';
     let leaderboardGeneration = 0;
+    let renderPublications = () => {};
+    let publicationRevision = 0;
+    let publicationState = {
+        status: 'idle',
+        message: '',
+        revision: 0,
+        play: null,
+        copy: null
+    };
+    const catalogState = {
+        items: [],
+        query: '',
+        currentCursor: null,
+        nextCursor: null,
+        previous: [],
+        loading: false,
+        error: ''
+    };
+    const ownPublicationState = {
+        items: [],
+        activeCount: 0,
+        limit: 5,
+        currentCursor: null,
+        nextCursor: null,
+        previous: [],
+        loading: false,
+        error: ''
+    };
     let leaderboardState = {
         status: 'idle',
         entries: [],
@@ -27,13 +55,21 @@ Module['api'] = (() => {
         NO_SESSION: 'No hay sesión. Reconecta para crear una identidad.'
     };
     function accept(next) {
-        if (identity?.id !== next?.id) epoch++;
+        if (identity?.id !== next?.id) {
+            epoch++;
+            ownPublicationState.currentCursor = null;
+            ownPublicationState.nextCursor = null;
+            ownPublicationState.previous = [];
+        }
         identity = next;
         status = next ? 'ready' : 'local';
     }
     async function request(path, method = 'GET', body) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 8000);
+        const timer = setTimeout(
+            () => controller.abort(),
+            path === '/publications' ? 20000 : 8000
+        );
         try {
             const response = await fetch('/api' + path, {
                 method, credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
@@ -46,7 +82,10 @@ Module['api'] = (() => {
     }
     function fail(error) {
         accept(null);
-        notice = messages[error.message] ?? 'Sin conexión confirmada. Puedes jugar localmente; no puedes reservar ni publicar.';
+        notice = messages[error.message] ?? 'Sin conexión confirmada. Puedes jugar localmente, pero no puedes reservar ni publicar.';
+        ownPublicationState.items = [];
+        ownPublicationState.error = 'Sin conexión: la gestión de publicaciones no está disponible.';
+        renderPublications();
     }
     const lock = fn => typeof navigator !== 'undefined' && navigator.locks
         ? navigator.locks.request('combi-session', fn) : fn();
@@ -69,6 +108,7 @@ Module['api'] = (() => {
                 }
                 accept(result.identity);
                 notice = '';
+                loadOwnPublications();
             });
         } catch (error) { fail(error); }
         finally { busy = false; updateUi(); }
@@ -93,6 +133,8 @@ Module['api'] = (() => {
                 )
             };
             notice = 'Nombre reservado.';
+            loadCatalog(catalogState.currentCursor);
+            loadOwnPublications();
             channel?.postMessage('changed');
             return true;
         } catch (error) {
@@ -204,8 +246,8 @@ Module['api'] = (() => {
                 submission: result.submission ?? null,
                 championRunRef: result.championRunRef ?? '',
                 message: ownsRun
-                    ? 'Puntaje recalculado por el servidor; la física no fue verificada.'
-                    : 'Resultado local no enviado; la identidad de la partida ya no está disponible.'
+                    ? 'Puntaje recalculado por el servidor. La física no fue verificada.'
+                    : 'Resultado local no enviado. La identidad de la partida ya no está disponible.'
             };
         } catch {
             if (generation !== leaderboardGeneration) return;
@@ -218,6 +260,316 @@ Module['api'] = (() => {
     }
     function leaderboardSnapshot() {
         return leaderboardState;
+    }
+    const publicationMessages = {
+        ATTEMPT_ALREADY_PUBLISHED: 'Esta victoria ya fue usada para publicar.',
+        DRAFT_CHANGED_AFTER_WIN: 'El borrador cambió después de la victoria. Complétalo otra vez.',
+        DRAFT_ALREADY_PUBLISHED: 'Este borrador ya originó una publicación. Crea una copia desde “Mis publicaciones” para editar y volver a publicar.',
+        INVALID_CAPTURE: 'La grabación no cumple los límites de publicación.',
+        INVALID_GOAL_WINDOW: 'La grabación no confirma los tres segundos del chofer.',
+        INVALID_LEVEL: 'El nivel supera los límites permitidos o tiene datos inválidos.',
+        INVALID_LEVEL_NAME: 'Usa un nombre de nivel de 3 a 40 caracteres.',
+        PUBLICATION_LIMIT: 'Ya tienes cinco publicaciones activas. Retira una antes de publicar.',
+        RETRY_PUBLICATION: 'Hubo otra publicación simultánea. Vuelve a intentarlo.'
+    };
+    async function loadCatalog(cursor = null, pushPrevious = false) {
+        catalogState.loading = true;
+        catalogState.error = '';
+        renderPublications();
+        try {
+            const query = encodeURIComponent(catalogState.query);
+            const cursorValue = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+            const result = await request(`/catalog?query=${query}${cursorValue}`);
+            if (pushPrevious) catalogState.previous.push(catalogState.currentCursor);
+            catalogState.currentCursor = cursor;
+            catalogState.nextCursor = result.cursor ?? null;
+            catalogState.items = result.items ?? [];
+        } catch {
+            catalogState.error = 'No se pudo cargar el catálogo público.';
+        } finally {
+            catalogState.loading = false;
+            renderPublications();
+        }
+    }
+    async function loadOwnPublications(cursor = null, pushPrevious = false) {
+        if (status !== 'ready') {
+            ownPublicationState.items = [];
+            ownPublicationState.error = 'Conecta una identidad para gestionar tus publicaciones.';
+            renderPublications();
+            return;
+        }
+        ownPublicationState.loading = true;
+        ownPublicationState.error = '';
+        renderPublications();
+        try {
+            const cursorValue = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+            const result = await request(`/publications/mine${cursorValue}`);
+            if (pushPrevious) ownPublicationState.previous.push(ownPublicationState.currentCursor);
+            ownPublicationState.currentCursor = cursor;
+            ownPublicationState.nextCursor = result.cursor ?? null;
+            ownPublicationState.items = result.items ?? [];
+            ownPublicationState.activeCount = result.activeCount ?? 0;
+            ownPublicationState.limit = result.limit ?? 5;
+        } catch {
+            ownPublicationState.error = 'No se pudieron cargar tus publicaciones.';
+        } finally {
+            ownPublicationState.loading = false;
+            renderPublications();
+        }
+    }
+    async function publishDraft(payload) {
+        publicationState = {
+            ...publicationState,
+            status: 'publishing',
+            message: 'Subiendo nivel y grabación...'
+        };
+        renderPublications();
+        try {
+            if (status !== 'ready' || !identity?.id || payload.capture?.combiId !== identity.id)
+                throw new Error('IDENTITY_CHANGED');
+            const result = await request('/publications', 'POST', payload);
+            if (result.status === 'retired') throw new Error('LEVEL_ALREADY_RETIRED');
+            publicationState = {
+                ...publicationState,
+                status: 'published',
+                message: `“${result.name}” ya está en el catálogo.`
+            };
+            await Promise.all([loadCatalog(null), loadOwnPublications()]);
+            return true;
+        } catch (error) {
+            publicationState = {
+                ...publicationState,
+                status: 'error',
+                message: error.message === 'IDENTITY_CHANGED'
+                    ? 'La victoria pertenece a otra sesión. Completa el nivel con la identidad actual.'
+                    : error.message === 'LEVEL_ALREADY_RETIRED'
+                    ? 'Esta publicación fue retirada y no puede reactivarse. Crea una copia y complétala otra vez.'
+                    : publicationMessages[error.message] ?? 'No se pudo publicar. Comprueba la conexión e inténtalo otra vez.'
+            };
+            renderPublications();
+            return false;
+        }
+    }
+    async function playPublicLevel(id) {
+        try {
+            const level = await request(`/levels/${encodeURIComponent(id)}`);
+            publicationRevision++;
+            publicationState = {
+                ...publicationState,
+                revision: publicationRevision,
+                play: level,
+                message: ''
+            };
+        } catch {
+            publicationState = {
+                ...publicationState,
+                status: 'error',
+                message: 'El nivel ya no está disponible o falló la conexión.'
+            };
+        }
+        renderPublications();
+    }
+    async function copyPublication(id) {
+        try {
+            const copy = await request(`/publications/${encodeURIComponent(id)}/copy`, 'POST', {});
+            publicationRevision++;
+            publicationState = {
+                ...publicationState,
+                revision: publicationRevision,
+                copy,
+                message: 'Copia creada como borrador. Debes completarla antes de publicarla.'
+            };
+        } catch {
+            publicationState = {
+                ...publicationState,
+                status: 'error',
+                message: 'No se pudo crear la copia.'
+            };
+        }
+        renderPublications();
+    }
+    async function retirePublication(id) {
+        try {
+            await request(`/publications/${encodeURIComponent(id)}/retire`, 'POST', {});
+            publicationState = {
+                ...publicationState,
+                status: 'idle',
+                message: 'Publicación retirada. El cupo quedó libre.'
+            };
+            await Promise.all([loadCatalog(null), loadOwnPublications()]);
+        } catch {
+            publicationState = {
+                ...publicationState,
+                status: 'error',
+                message: 'No se pudo retirar la publicación.'
+            };
+            renderPublications();
+        }
+    }
+    function publicationSnapshot() {
+        return publicationState;
+    }
+    function consumePublicationAction(action) {
+        if (action === 'play') publicationState.play = null;
+        if (action === 'copy') publicationState.copy = null;
+    }
+    function mountPublications(container) {
+        const panel = document.createElement('details');
+        panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font:15px sans-serif;background:#f5f1e8;color:#30281f;text-align:left';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Catálogo público y mis publicaciones';
+        summary.style.cssText = 'font-weight:bold;cursor:pointer';
+        const search = document.createElement('form');
+        search.style.cssText = 'display:flex;gap:8px;margin:12px 0 4px';
+        const searchInput = document.createElement('input');
+        searchInput.placeholder = 'Nombre del nivel o autor';
+        searchInput.maxLength = 40;
+        searchInput.style.flex = '1';
+        const searchButton = document.createElement('button');
+        searchButton.type = 'submit';
+        searchButton.textContent = 'Buscar';
+        search.append(searchInput, searchButton);
+        const scope = document.createElement('p');
+        scope.textContent = 'Orden: publicaciones recientes. La búsqueda revisa como máximo las 100 más recientes. El servidor valida la estructura y la ventana registrada del chofer; no verifica la física ni evita trampas.';
+        scope.style.cssText = 'margin:4px 0 10px;color:#665c50;font-size:13px';
+        const catalogTitle = document.createElement('h3');
+        catalogTitle.textContent = 'Niveles públicos';
+        const catalogList = document.createElement('div');
+        const navigation = document.createElement('div');
+        navigation.style.cssText = 'display:flex;gap:8px;margin:8px 0 18px';
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.textContent = 'Anterior';
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.textContent = 'Siguiente';
+        navigation.append(previous, next);
+        const ownTitle = document.createElement('h3');
+        const ownList = document.createElement('div');
+        const ownNavigation = document.createElement('div');
+        ownNavigation.style.cssText = 'display:flex;gap:8px;margin:8px 0';
+        const ownPrevious = document.createElement('button');
+        ownPrevious.type = 'button';
+        ownPrevious.textContent = 'Anteriores propias';
+        const ownNext = document.createElement('button');
+        ownNext.type = 'button';
+        ownNext.textContent = 'Más publicaciones propias';
+        ownNavigation.append(ownPrevious, ownNext);
+        const feedback = document.createElement('p');
+        feedback.setAttribute('aria-live', 'polite');
+        panel.append(
+            summary, search, scope, catalogTitle, catalogList, navigation,
+            ownTitle, ownList, ownNavigation, feedback
+        );
+        container.before(panel);
+        for (const event of ['keydown', 'keyup', 'keypress'])
+            panel.addEventListener(event, (value) => value.stopPropagation());
+
+        const row = (title, detail, actions) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'display:flex;align-items:center;gap:8px;border-top:1px solid #d7cdbf;padding:8px 0';
+            const text = document.createElement('div');
+            text.style.flex = '1';
+            const strong = document.createElement('strong');
+            strong.textContent = title;
+            const small = document.createElement('div');
+            small.textContent = detail;
+            small.style.cssText = 'font-size:13px;color:#665c50';
+            text.append(strong, small);
+            item.append(text, ...actions);
+            return item;
+        };
+        const actionButton = (label, handler, disabled = false) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = label;
+            button.disabled = disabled;
+            button.addEventListener('click', handler);
+            return button;
+        };
+        renderPublications = () => {
+            catalogList.replaceChildren();
+            if (catalogState.loading) {
+                catalogList.textContent = 'Cargando catálogo...';
+            } else if (catalogState.error) {
+                catalogList.textContent = catalogState.error;
+            } else if (!catalogState.items.length) {
+                catalogList.textContent = catalogState.query
+                    ? 'No hay coincidencias dentro de las 100 publicaciones más recientes.'
+                    : 'Todavía no hay niveles publicados.';
+            } else {
+                for (const level of catalogState.items) {
+                    const author = level.author?.name || 'Combi sin nombre';
+                    const best = level.best
+                        ? `Mejor: ${level.best.total} puntos · ${level.best.driverTimeMs} ms`
+                        : 'Sin marca disponible';
+                    catalogList.append(row(
+                        level.name,
+                        `Por ${author} · ${best}`,
+                        [actionButton('Jugar', () => playPublicLevel(level.id))]
+                    ));
+                }
+            }
+            previous.disabled = catalogState.loading || !catalogState.previous.length;
+            next.disabled = catalogState.loading || !catalogState.nextCursor;
+
+            ownTitle.textContent = `Mis publicaciones (${ownPublicationState.activeCount}/${ownPublicationState.limit} activas)`;
+            ownList.replaceChildren();
+            if (ownPublicationState.loading) {
+                ownList.textContent = 'Cargando publicaciones...';
+            } else if (ownPublicationState.error) {
+                ownList.textContent = ownPublicationState.error;
+            } else if (!ownPublicationState.items.length) {
+                ownList.textContent = 'Todavía no tienes publicaciones.';
+            } else {
+                for (const level of ownPublicationState.items) {
+                    const active = level.status === 'public';
+                    const actions = [actionButton('Crear copia', () => copyPublication(level.id))];
+                    if (active) {
+                        actions.push(actionButton('Retirar', () => {
+                            const accepted = window.confirm(
+                                'Retirar quita el nivel del catálogo y libera un cupo. No puede reactivarse; sus puntuaciones y grabaciones se conservan. Las partidas en curso podrán terminar localmente, pero sus resultados serán rechazados. ¿Continuar?'
+                            );
+                            if (accepted) retirePublication(level.id);
+                        }));
+                    }
+                    ownList.append(row(
+                        level.name,
+                        active ? 'Publicación activa' : 'Publicación retirada, no se puede reactivar',
+                        actions
+                    ));
+                }
+            }
+            ownPrevious.disabled = ownPublicationState.loading ||
+                !ownPublicationState.previous.length;
+            ownNext.disabled = ownPublicationState.loading ||
+                !ownPublicationState.nextCursor;
+            feedback.textContent = publicationState.message;
+        };
+        search.addEventListener('submit', (event) => {
+            event.preventDefault();
+            catalogState.query = searchInput.value.trim();
+            catalogState.previous = [];
+            loadCatalog(null);
+        });
+        previous.addEventListener('click', () => {
+            if (!catalogState.previous.length) return;
+            loadCatalog(catalogState.previous.pop());
+        });
+        next.addEventListener('click', () => {
+            if (catalogState.nextCursor) loadCatalog(catalogState.nextCursor, true);
+        });
+        ownPrevious.addEventListener('click', () => {
+            if (!ownPublicationState.previous.length) return;
+            loadOwnPublications(ownPublicationState.previous.pop());
+        });
+        ownNext.addEventListener('click', () => {
+            if (ownPublicationState.nextCursor)
+                loadOwnPublications(ownPublicationState.nextCursor, true);
+        });
+        renderPublications();
+        loadCatalog(null);
+        loadOwnPublications();
     }
     function mount() {
         const panel = document.createElement('section');
@@ -243,6 +595,7 @@ Module['api'] = (() => {
         const canvas = document.querySelector('canvas');
         const container = canvas?.parentElement;
         if (container?.parentElement) container.before(panel); else document.body.prepend(panel);
+        if (container?.parentElement) mountPublications(container);
         for (const event of ['keydown', 'keyup', 'keypress']) panel.addEventListener(event, e => e.stopPropagation());
         let renderedName = null;
         updateUi = () => {
@@ -274,6 +627,9 @@ Module['api'] = (() => {
         captureResultScope,
         canSubmitResult,
         submitRun,
-        leaderboardSnapshot
+        leaderboardSnapshot,
+        publishDraft,
+        publicationSnapshot,
+        consumePublicationAction
     };
 })();

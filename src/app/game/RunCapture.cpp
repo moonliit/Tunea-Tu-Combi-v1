@@ -84,13 +84,19 @@ nlohmann::json ScoreJson(const Scoring::ScoreBreakdown& score) {
 void RunCapture::Start(
     const BuildModel& model,
     std::size_t passengerCount,
-    const std::string& levelId
+    const std::string& levelId,
+    const std::string& combiId,
+    const nlohmann::json& levelDefinition,
+    const nlohmann::json& draftSnapshot
 ) {
     m_attemptId = CreateAttemptId();
     m_data = {
         {"attemptId", m_attemptId},
-        {"formatVersion", "run-v1"},
+        {"formatVersion", "run-v2"},
         {"levelId", levelId},
+        {"combiId", combiId},
+        {"levelDefinition", levelDefinition},
+        {"draftSnapshot", draftSnapshot},
         {"physicsVersion", "custom-physics-v1"},
         {"rulesVersion", Scoring::RulesVersion},
         {"passengerCount", passengerCount},

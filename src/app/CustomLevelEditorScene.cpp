@@ -598,6 +598,18 @@ void CustomLevelEditorScene::Render() const {
         16,
         ready ? DARKGREEN : DARKGRAY
     );
+    const bool approved = m_context->customLevels->HasValidApproval(
+        static_cast<std::size_t>(m_context->activeCustomLevel)
+    );
+    DrawText(
+        approved
+            ? "Esta versión fue completada y puede publicarse desde el menú."
+            : "Para publicar, completa esta versión exacta. Los cambios invalidan la victoria.",
+        20,
+        m_context->windowHeight - 48,
+        13,
+        approved ? DARKGREEN : MAROON
+    );
     if (m_musicPickerOpen) {
         const auto& categories = GetCustomMusicCategories();
         const auto& tracks = categories[m_musicCategory].tracks;

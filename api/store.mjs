@@ -4,67 +4,134 @@ import {
     DynamoDBDocumentClient,
     GetCommand,
     PutCommand,
+    QueryCommand,
     TransactWriteCommand
 } from '@aws-sdk/lib-dynamodb';
 
 // only sessions use expiresAt (TTL), data belongs to COMBI#<id>
 export function createStore(table, client = DynamoDBDocumentClient.from(new DynamoDBClient({}))) {
-    const key = (PK) => ({ PK, SK: 'META' });
-    const put = (PK, item) => ({
+    const key = (PK, SK = 'META') => ({ PK, SK });
+    const transact = (...TransactItems) => client.send(
+        new TransactWriteCommand({ TransactItems })
+    );
+    const putOnce = (PK, item, SK = 'META') => ({
         Put: {
             TableName: table,
-            Item: { ...key(PK), ...item },
+            Item: { ...key(PK, SK), ...item },
             ConditionExpression: 'attribute_not_exists(PK)'
         }
     });
-    return {
-        async get(PK) {
-            return (
-                await client.send(
-                    new GetCommand({ TableName: table, Key: key(PK), ConsistentRead: true })
-                )
-            ).Item;
-        },
-        async getIdentities(ids) {
-            if (!ids.length) return new Map();
-            let keys = ids.map((id) => key(`COMBI#${id}`));
-            const items = [];
-            for (let attempt = 0; keys.length && attempt < 4; attempt++) {
-                const result = await client.send(new BatchGetCommand({
-                    RequestItems: {
-                        [table]: {
-                            Keys: keys,
-                            ConsistentRead: true,
-                            ProjectionExpression: 'PK, id, #name',
-                            ExpressionAttributeNames: { '#name': 'name' }
-                        }
+    const get = async (PK) => (
+        await client.send(new GetCommand({
+            TableName: table,
+            Key: key(PK),
+            ConsistentRead: true
+        }))
+    ).Item;
+
+    const decodeCursor = (cursor, PK) => {
+        if (!cursor) return undefined;
+        try {
+            const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+            if (value.PK !== PK || typeof value.SK !== 'string') throw new Error();
+            return key(value.PK, value.SK);
+        } catch {
+            throw new Error('Invalid cursor');
+        }
+    };
+    const encodeCursor = (value) => value
+        ? Buffer.from(JSON.stringify(key(value.PK, value.SK))).toString('base64url')
+        : null;
+
+    async function batchGet(keys, options = {}) {
+        let pending = [...new Map(
+            keys.map((value) => [`${value.PK}\0${value.SK}`, value])
+        ).values()];
+        const items = [];
+        for (let attempt = 0; pending.length && attempt < 4; attempt++) {
+            const result = await client.send(new BatchGetCommand({
+                RequestItems: {
+                    [table]: {
+                        Keys: pending,
+                        ConsistentRead: true,
+                        ...options
                     }
-                }));
-                items.push(...(result.Responses?.[table] ?? []));
-                keys = result.UnprocessedKeys?.[table]?.Keys ?? [];
-            }
-            return new Map(
-                items.map((item) => [item.id, item])
+                }
+            }));
+            items.push(...(result.Responses?.[table] ?? []));
+            pending = result.UnprocessedKeys?.[table]?.Keys ?? [];
+        }
+        return items;
+    }
+
+    async function queryPage(PK, cursor, limit, prefix = null) {
+        const result = await client.send(new QueryCommand({
+            TableName: table,
+            KeyConditionExpression: prefix
+                ? 'PK = :pk AND begins_with(SK, :prefix)'
+                : 'PK = :pk',
+            ExpressionAttributeValues: {
+                ':pk': PK,
+                ...(prefix ? { ':prefix': prefix } : {})
+            },
+            ExclusiveStartKey: decodeCursor(cursor, PK),
+            ConsistentRead: true,
+            ScanIndexForward: false,
+            Limit: limit
+        }));
+        return {
+            items: result.Items ?? [],
+            cursor: encodeCursor(result.LastEvaluatedKey)
+        };
+    }
+
+    return {
+        get,
+
+        async getIdentities(ids) {
+            const items = await batchGet(
+                ids.map((id) => key(`COMBI#${id}`)),
+                {
+                    ProjectionExpression: 'PK, id, #name',
+                    ExpressionAttributeNames: { '#name': 'name' }
+                }
             );
+            return new Map(items.map((item) => [item.id, item]));
         },
+
+        async getLeaderboards(levelIds) {
+            const items = await batchGet(
+                levelIds.map((id) => key(`LEADERBOARD#${id}`))
+            );
+            return new Map(items.map((item) => [
+                item.PK.slice('LEADERBOARD#'.length),
+                item
+            ]));
+        },
+
         async isPublicLevel(publicId) {
-            const item = await this.get(`LEVEL#${publicId}`);
-            return item?.visibility === 'public';
+            return (await get(`LEVEL#${publicId}`))?.visibility === 'public';
         },
-        async getLeaderboard(levelId) {
-            return this.get(`LEADERBOARD#${levelId}`);
-        },
-        async replaceLeaderboard(levelId, expectedRevision, next) {
-            const item = {
-                ...key(`LEADERBOARD#${levelId}`),
-                revision: next.revision,
-                entries: next.entries,
-                receipts: next.receipts,
-                updatedAt: next.updatedAt
-            };
-            await client.send(new PutCommand({
+        getLevel: (publicId) => get(`LEVEL#${publicId}`),
+        getAuthorState: (authorId) => get(`AUTHOR#${authorId}`),
+        getPublicationReceipt: (authorId, requestId) =>
+            get(`PUBLISH#${authorId}#${requestId}`),
+        getPublishedAttempt: (authorId, attemptId) =>
+            get(`PUBLISHED_ATTEMPT#${authorId}#${attemptId}`),
+        getPublishedDraft: (authorId, draftId) =>
+            get(`PUBLISHED_DRAFT#${authorId}#${draftId}`),
+        getLeaderboard: (levelId) => get(`LEADERBOARD#${levelId}`),
+
+        async replaceLeaderboard(levelId, expectedRevision, next, publicId = null) {
+            const putBoard = {
                 TableName: table,
-                Item: item,
+                Item: {
+                    ...key(`LEADERBOARD#${levelId}`),
+                    revision: next.revision,
+                    entries: next.entries,
+                    receipts: next.receipts,
+                    updatedAt: next.updatedAt
+                },
                 ConditionExpression: expectedRevision === 0
                     ? 'attribute_not_exists(PK)'
                     : '#revision = :expected',
@@ -72,18 +139,124 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
                     ExpressionAttributeNames: { '#revision': 'revision' },
                     ExpressionAttributeValues: { ':expected': expectedRevision }
                 })
-            }));
+            };
+            if (!publicId) {
+                await client.send(new PutCommand(putBoard));
+                return;
+            }
+            await transact(
+                {
+                    ConditionCheck: {
+                        TableName: table,
+                        Key: key(`LEVEL#${publicId}`),
+                        ConditionExpression: '#visibility = :public',
+                        ExpressionAttributeNames: { '#visibility': 'visibility' },
+                        ExpressionAttributeValues: { ':public': 'public' }
+                    }
+                },
+                { Put: putBoard }
+            );
         },
-        async create(identity, hash, expiresAt) {
-            await client.send(
-                new TransactWriteCommand({
-                    TransactItems: [
-                        put(`COMBI#${identity.id}`, identity),
-                        put(`SESSION#${hash}`, { combiId: identity.id, expiresAt })
-                    ]
+
+        async publishLevel({ level, board, payloadFingerprint, publicationRequestId }) {
+            const authorPK = `AUTHOR#${level.authorId}`;
+            const summary = {
+                levelId: level.id,
+                name: level.name,
+                visibility: 'public',
+                publishedAt: level.publishedAt
+            };
+            await transact(
+                {
+                    Update: {
+                        TableName: table,
+                        Key: key(authorPK),
+                        UpdateExpression: 'SET activePublications = if_not_exists(activePublications, :zero) + :one',
+                        ConditionExpression: 'attribute_not_exists(activePublications) OR activePublications < :max',
+                        ExpressionAttributeValues: { ':zero': 0, ':one': 1, ':max': 5 }
+                    }
+                },
+                putOnce(`LEVEL#${level.id}`, level),
+                putOnce('CATALOG', {
+                    levelId: level.id,
+                    name: level.name,
+                    authorId: level.authorId,
+                    publishedAt: level.publishedAt
+                }, level.catalogSk),
+                putOnce(authorPK, summary, level.authorSk),
+                putOnce(`LEADERBOARD#public:${level.id}`, board),
+                putOnce(`PUBLISH#${level.authorId}#${publicationRequestId}`, {
+                    levelId: level.id,
+                    payloadFingerprint
+                }),
+                putOnce(`PUBLISHED_ATTEMPT#${level.authorId}#${level.firstAttemptId}`, {
+                    levelId: level.id
+                }),
+                putOnce(`PUBLISHED_DRAFT#${level.authorId}#${level.draftId}`, {
+                    levelId: level.id
                 })
             );
         },
+
+        async retireLevel(level, retiredAt) {
+            const retired = {
+                ':retired': 'retired',
+                ':retiredAt': retiredAt,
+                ':public': 'public'
+            };
+            await transact(
+                {
+                    Update: {
+                        TableName: table,
+                        Key: key(`LEVEL#${level.id}`),
+                        UpdateExpression: 'SET #visibility = :retired, retiredAt = :retiredAt',
+                        ConditionExpression: 'authorId = :authorId AND #visibility = :public',
+                        ExpressionAttributeNames: { '#visibility': 'visibility' },
+                        ExpressionAttributeValues: {
+                            ...retired,
+                            ':authorId': level.authorId
+                        }
+                    }
+                },
+                {
+                    Update: {
+                        TableName: table,
+                        Key: key(`AUTHOR#${level.authorId}`),
+                        UpdateExpression: 'ADD activePublications :minusOne',
+                        ConditionExpression: 'activePublications > :zero',
+                        ExpressionAttributeValues: { ':minusOne': -1, ':zero': 0 }
+                    }
+                },
+                {
+                    Delete: {
+                        TableName: table,
+                        Key: key('CATALOG', level.catalogSk)
+                    }
+                },
+                {
+                    Update: {
+                        TableName: table,
+                        Key: key(`AUTHOR#${level.authorId}`, level.authorSk),
+                        UpdateExpression: 'SET #visibility = :retired, retiredAt = :retiredAt',
+                        ConditionExpression: '#visibility = :public',
+                        ExpressionAttributeNames: { '#visibility': 'visibility' },
+                        ExpressionAttributeValues: retired
+                    }
+                }
+            );
+        },
+
+        queryCatalog: (cursor, limit) => queryPage('CATALOG', cursor, limit),
+        queryAuthorLevels: (authorId, cursor, limit) =>
+            queryPage(`AUTHOR#${authorId}`, cursor, limit, 'LEVEL#'),
+
+        async create(identity, hash, expiresAt) {
+            await transact(
+                putOnce(`COMBI#${identity.id}`, identity),
+                putOnce(`SESSION#${hash}`, { combiId: identity.id, expiresAt })
+            );
+        },
+
         async rename(previous, next, sessionHash, now) {
             const items = [
                 {
@@ -118,7 +291,7 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
                     }
                 }
             ];
-            if (previous.nameKey && previous.nameKey !== next.nameKey)
+            if (previous.nameKey && previous.nameKey !== next.nameKey) {
                 items.push({
                     Delete: {
                         TableName: table,
@@ -127,7 +300,8 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
                         ExpressionAttributeValues: { ':id': previous.id }
                     }
                 });
-            await client.send(new TransactWriteCommand({ TransactItems: items }));
+            }
+            await transact(...items);
         }
     };
 }

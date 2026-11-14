@@ -21,7 +21,7 @@ class MainMenuScene : public I_Scene {
 public:
     explicit MainMenuScene(AppContext* context);
     void ProcessInput(float) override;
-    void Update(float) override {}
+    void Update(float) override;
     void Render() const override;
 };
 

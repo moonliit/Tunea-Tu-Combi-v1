@@ -56,6 +56,7 @@ void App::Run() {
     while (!WindowShouldClose()) {
         float deltaTime = std::min(GetFrameTime(), 0.033f);
         m_appContext.identity.Poll();
+        m_appContext.publications.Poll(static_cast<double>(deltaTime) * 1000.0);
         m_sceneManager.ProcessInput(deltaTime);
         m_sceneManager.Update(deltaTime);
         m_audioController.Update(deltaTime);

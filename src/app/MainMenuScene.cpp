@@ -72,6 +72,26 @@ MainMenuScene::MainMenuScene(AppContext* context):
     m_context(context),
     m_selectedLevel(std::clamp(context->unlockedLevel - 1, 0, OfficialLevelCount - 1)) {}
 
+void MainMenuScene::Update(float) {
+    if (auto copy = m_context->publications.TakeCopyRequest()) {
+        if (m_context->customLevels->AddCopy(copy.value())) {
+            m_editingLevels = true;
+            m_customListScroll = 0.0f;
+        }
+    }
+    if (auto play = m_context->publications.TakePlayRequest()) {
+        try {
+            LevelDefinition definition = LevelDefinition::FromJson(
+                play->at("definition")
+            );
+            definition.levelNumber = -2;
+            const std::string musicPath = play->at("music").at("path");
+            m_context->audioController->StartLevelEditorMusic(musicPath, false);
+            m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
+        } catch (const nlohmann::json::exception&) {}
+    }
+}
+
 void MainMenuScene::ProcessInput(float) {
     if (m_context->returnedToSelector) {
         m_context->returnedToSelector = false;
@@ -243,13 +263,14 @@ void MainMenuScene::ProcessLevelEditorInput() {
         maxScroll
     );
 
-    const float rowWidth = std::min(620.0f, m_context->windowWidth - 40.0f);
+    const float rowWidth = std::min(820.0f, m_context->windowWidth - 40.0f);
     const float rowX = (m_context->windowWidth - rowWidth) / 2.0f;
     for (std::size_t i = 0; i < m_context->customLevels->GetLevels().size(); ++i) {
         const float rowY = listTop + i * rowHeight - m_customListScroll;
         if (rowY + rowHeight < listTop || rowY > listBottom) continue;
         const Rectangle deleteButton{rowX + rowWidth - 92.0f, rowY + 4.0f, 84.0f, 34.0f};
-        const Rectangle editButton{rowX + rowWidth - 238.0f, rowY + 4.0f, 138.0f, 34.0f};
+        const Rectangle publishButton{rowX + rowWidth - 220.0f, rowY + 4.0f, 120.0f, 34.0f};
+        const Rectangle editButton{rowX + rowWidth - 358.0f, rowY + 4.0f, 130.0f, 34.0f};
         if (UiButton::WasClicked(deleteButton)) {
             m_context->audioController->PlayUiClick();
             m_context->customLevels->Delete(i);
@@ -262,6 +283,14 @@ void MainMenuScene::ProcessLevelEditorInput() {
                 m_context->customLevels->GetLevels()[i].musicPath, false
             );
             m_context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
+            return;
+        }
+        if (UiButton::WasClicked(publishButton) &&
+            m_context->customLevels->HasValidApproval(i)) {
+            m_context->audioController->PlayUiClick();
+            m_context->publications.Publish(
+                m_context->customLevels->GetPublicationPayload(i)
+            );
             return;
         }
     }
@@ -333,7 +362,7 @@ void MainMenuScene::Render() const {
         const float listTop = 154.0f;
         const float listBottom = static_cast<float>(m_context->windowHeight) - 76.0f;
         const float rowHeight = 50.0f;
-        const float rowWidth = std::min(620.0f, m_context->windowWidth - 40.0f);
+        const float rowWidth = std::min(820.0f, m_context->windowWidth - 40.0f);
         const float rowX = (m_context->windowWidth - rowWidth) / 2.0f;
         bool drewLevel = false;
         for (std::size_t i = 0; i < m_context->customLevels->GetLevels().size(); ++i) {
@@ -345,17 +374,39 @@ void MainMenuScene::Render() const {
             DrawRectangleLinesEx(row, 1.0f, DARKGRAY);
             const std::string& name = m_context->customLevels->GetLevels()[i].name;
             DrawText(name.c_str(), static_cast<int>(row.x + 14), static_cast<int>(row.y + 13), 16, BLACK);
+            const bool approved = m_context->customLevels->HasValidApproval(i);
             UiButton::Draw(
-                Rectangle{rowX + rowWidth - 238.0f, rowY + 4.0f, 138.0f, 34.0f},
+                Rectangle{rowX + rowWidth - 358.0f, rowY + 4.0f, 130.0f, 34.0f},
                 "Editar y jugar",
                 SKYBLUE,
                 BLACK,
                 14
             );
             UiButton::Draw(
+                Rectangle{rowX + rowWidth - 220.0f, rowY + 4.0f, 120.0f, 34.0f},
+                approved ? "Publicar" : "Falta victoria",
+                approved ? DARKGREEN : GRAY,
+                WHITE,
+                12
+            );
+            UiButton::Draw(
                 Rectangle{rowX + rowWidth - 92.0f, rowY + 4.0f, 84.0f, 34.0f},
                 "Borrar",
                 RED
+            );
+        }
+        const PublicationSnapshot& publication =
+            m_context->publications.GetSnapshot();
+        if (!publication.message.empty()) {
+            DrawText(
+                publication.message.c_str(),
+                20,
+                140,
+                13,
+                publication.status == PublicationStatus::Error ||
+                    publication.status == PublicationStatus::Unavailable
+                    ? MAROON
+                    : DARKGREEN
             );
         }
         if (m_context->customLevels->GetLevels().empty()) {

@@ -86,7 +86,7 @@ void LeaderboardClient::Submit(
     m_snapshot = {.status = LeaderboardStatus::Loading};
     const nlohmann::json payload = {
         {"attemptId", attemptId},
-        {"formatVersion", "run-v1"},
+        {"formatVersion", "run-v2"},
         {"levelId", levelId},
         {"physicsVersion", "custom-physics-v1"},
         {"rulesVersion", std::string(Scoring::RulesVersion)},

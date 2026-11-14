@@ -7,6 +7,7 @@
 #include "ui/UiControl.hpp"
 #include "app/AppContext.hpp"
 #include "app/AudioController.hpp"
+#include "app/CustomLevelCatalog.hpp"
 #include "rendering/Background.hpp"
 #include <optional>
 #include <raylib.h>
@@ -138,7 +139,7 @@ MainGameScene::MainGameScene(
 ):
     m_appContext(appContext),
     m_gravity(9.8f * 40.0f),
-    m_isCustomLevel(specs.levelNumber < 0),
+    m_isEditableDraft(specs.levelNumber < 0 && !specs.publicId.has_value()),
     m_levelId(specs.GetLeaderboardId()),
     m_level(specs),
     m_mapBounds(m_level.GetContentBounds(MapCameraMargin)),
@@ -195,7 +196,7 @@ void MainGameScene::ProcessInput(float dt) {
         }
         return;
     }
-    if (m_isCustomLevel && m_stateMachine.IsBuildMode()) {
+    if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
         const Rectangle designButton = UiButton::CenteredAbove(
             UiButton::PlaySideButton(
                 m_appContext->windowWidth, m_appContext->windowHeight
@@ -541,10 +542,19 @@ void MainGameScene::TransitionToPlayMode() {
     m_appContext->audioController->SetWheelActive(hasWheel);
     m_stateMachine.EnterPlay();
     m_runIdentity = m_appContext->identity.CaptureResultScope();
+    const nlohmann::json draftSnapshot = m_isEditableDraft &&
+        m_appContext->activeCustomLevel >= 0
+        ? m_appContext->customLevels->GetDraftSnapshot(
+            static_cast<std::size_t>(m_appContext->activeCustomLevel)
+        )
+        : nlohmann::json(nullptr);
     m_capture.Start(
         m_level.GetBuildModel(),
         m_level.GetDefinition().passengers.size(),
-        m_levelId
+        m_levelId,
+        m_runIdentity.combiId,
+        m_level.GetDefinition().ToJson(),
+        draftSnapshot
     );
     m_playSession.Start();
     auto scenario = m_appContext->audioController->GetCurrentScenario();
@@ -663,6 +673,12 @@ void MainGameScene::CompleteRun() {
         m_statistics,
         m_score
     );
+    if (m_isEditableDraft && m_appContext->activeCustomLevel >= 0) {
+        m_appContext->customLevels->MarkCompleted(
+            static_cast<std::size_t>(m_appContext->activeCustomLevel),
+            m_capture.GetData()
+        );
+    }
     m_leaderboard.Submit(
         m_levelId,
         m_capture.GetAttemptId(),
@@ -673,7 +689,7 @@ void MainGameScene::CompleteRun() {
 
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
-    if (!m_isCustomLevel) {
+    if (m_level.GetDefinition().levelNumber > 0) {
         m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
     }
     m_stateMachine.EnterResults();
@@ -823,7 +839,7 @@ void MainGameScene::Render() const {
         11,
         false
     );
-    if (m_isCustomLevel && m_stateMachine.IsBuildMode()) {
+    if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
         UiButton::Draw(
             UiButton::CenteredAbove(
                 UiButton::PlaySideButton(

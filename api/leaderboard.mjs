@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { ApiError } from './identity.mjs';
 import { calculateScore, RULES_VERSION } from './scoring.mjs';
 
-export const CAPTURE_FORMAT_VERSION = 'run-v1';
+export const CAPTURE_FORMAT_VERSION = 'run-v2';
 export const PHYSICS_VERSION = 'custom-physics-v1';
 
 const MAX_ENTRIES = 5;
@@ -41,7 +41,7 @@ function parseLevelId(value) {
     return { levelId: value, publicId: match[1] };
 }
 
-function validateStatistics(value) {
+export function validateStatistics(value) {
     if (!exactKeys(value, STAT_KEYS)) throw new ApiError(400, 'INVALID_STATISTICS');
     if (!Object.values(value).every(Number.isSafeInteger))
         throw new ApiError(400, 'INVALID_STATISTICS');
@@ -87,7 +87,7 @@ function compareEntries(first, second) {
     return first.combiId < second.combiId ? -1 : first.combiId > second.combiId ? 1 : 0;
 }
 
-function fingerprint(identityId, body) {
+export function attemptFingerprint(identityId, body) {
     return createHash('sha256')
         .update(JSON.stringify([
             identityId,
@@ -158,7 +158,8 @@ async function responseFor(store, levelId, board, submission = null) {
 
 const retryable = (error) =>
     error?.name === 'ConditionalCheckFailedException' ||
-    error?.name === 'TransactionConflictException';
+    error?.name === 'TransactionConflictException' ||
+    error?.name === 'TransactionCanceledException';
 
 export function createLeaderboardService(
     store,
@@ -182,7 +183,7 @@ export function createLeaderboardService(
         async submit(identity, body) {
             const parsed = parseSubmission(body);
             await validateLevel(parsed);
-            const attemptFingerprint = fingerprint(identity.id, body);
+            const submissionFingerprint = attemptFingerprint(identity.id, body);
             const submittedAt = clock();
 
             for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -193,7 +194,7 @@ export function createLeaderboardService(
                 if (receipt) {
                     if (
                         receipt.combiId !== identity.id ||
-                        receipt.fingerprint !== attemptFingerprint
+                        receipt.fingerprint !== submissionFingerprint
                     ) {
                         throw new ApiError(409, 'ATTEMPT_ID_CONFLICT');
                     }
@@ -230,7 +231,7 @@ export function createLeaderboardService(
                     receipts: board.receipts.concat({
                         attemptId: body.attemptId,
                         combiId: identity.id,
-                        fingerprint: attemptFingerprint,
+                        fingerprint: submissionFingerprint,
                         receivedAt: submittedAt
                     }).slice(-MAX_RECEIPTS),
                     updatedAt: clock()
@@ -239,7 +240,8 @@ export function createLeaderboardService(
                     await store.replaceLeaderboard(
                         parsed.levelId,
                         board.revision,
-                        next
+                        next,
+                        parsed.publicId
                     );
                     return responseFor(
                         store,
@@ -249,6 +251,8 @@ export function createLeaderboardService(
                     );
                 } catch (error) {
                     if (!retryable(error)) throw error;
+                    if (parsed.publicId && !(await store.isPublicLevel(parsed.publicId)))
+                        throw new ApiError(404, 'LEVEL_NOT_FOUND');
                     await pause(10 * (attempt + 1) + Math.random() * 20);
                 }
             }
@@ -259,5 +263,6 @@ export function createLeaderboardService(
 
 export const leaderboardInternals = {
     compareEntries,
-    parseSubmission
+    parseSubmission,
+    readBoard
 };
