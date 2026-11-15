@@ -26,6 +26,8 @@ private:
     int m_subStepCount;
     int m_velocityIterations;
     int m_positionIterations;
+    bool m_firstTerrainContactSeen = false;
+    float m_firstLandingProtectionRemaining = 0.0f;
 
 public:
     explicit World(

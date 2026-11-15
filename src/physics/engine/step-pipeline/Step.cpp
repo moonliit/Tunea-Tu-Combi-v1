@@ -7,6 +7,7 @@
 #include "physics/engine/step-pipeline/04_PositionsCorrection.hpp"
 #include "physics/engine/step-pipeline/05_JointBreakageCleanup.hpp"
 #include "app/game/Part.hpp"
+#include <algorithm>
 using namespace std;
 using namespace Math;
 using namespace Physics;
@@ -53,8 +54,10 @@ void World::ApplyExplosion(
 }
 
 void World::Step(float deltaTime) {
+    constexpr float FirstLandingProtectionSeconds = 0.35f;
     m_impactEvents.clear();
     float subDt = deltaTime / m_subStepCount;
+    bool protectFirstLanding = m_firstLandingProtectionRemaining > 0.0f;
 
     for (auto& joint : m_joints) {
         if (!joint) continue;
@@ -120,6 +123,16 @@ void World::Step(float deltaTime) {
                 impulse += std::abs(static_cast<float>(point.normalImpulse));
             }
             if (impulse <= 0.0f) continue;
+            const auto isTerrain = [](const BaseRigidBody& body) {
+                return body.GetRbShape() == RbShape::Edge ||
+                    body.GetRbShape() == RbShape::TerrainMesh;
+            };
+            if (!m_firstTerrainContactSeen &&
+                (isTerrain(*bodyA) != isTerrain(*bodyB))) {
+                m_firstTerrainContactSeen = true;
+                m_firstLandingProtectionRemaining = FirstLandingProtectionSeconds;
+                protectFirstLanding = true;
+            }
             if (bodyA->GetPart() != nullptr) {
                 m_impactEvents.push_back({bodyA->GetPart(), impulse});
             }
@@ -144,7 +157,18 @@ void World::Step(float deltaTime) {
         body->GetForceMut() = Vector2D::Zero();
     }
 
-    CleanupBrokenJoints(m_joints, m_jointConnectedCache, m_breakagePositions);
+    // Keep collision impulses and effects, but ignore joint stress from the
+    // first touchdown and its immediate bounces.
+    if (protectFirstLanding) {
+        for (const auto& joint : m_joints) {
+            if (joint) joint->ResetStress();
+        }
+    } else {
+        CleanupBrokenJoints(m_joints, m_jointConnectedCache, m_breakagePositions);
+    }
+    m_firstLandingProtectionRemaining = std::max(
+        0.0f, m_firstLandingProtectionRemaining - deltaTime
+    );
 }
 
 std::vector<PhysicsImpact> World::ConsumeImpactEvents() {
