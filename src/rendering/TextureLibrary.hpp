@@ -1,6 +1,7 @@
 #ifndef RENDERING_TEXTURE_LIBRARY_HPP
 #define RENDERING_TEXTURE_LIBRARY_HPP
 
+#include "app/LevelCatalog.hpp"
 #include "app/game/Part.hpp"
 #include "rendering/Background.hpp"
 
@@ -55,6 +56,7 @@ struct UiTextures {
     UiButtonSkin menuDialogCancel;
     UiButtonSkin menuDialogCreate;
     UiButtonSkin menuToEditor;
+    std::array<UiButtonSkin, MaxOfficialLevelCount> menuLevelTitles{};
 
     UiGameTextures game;
 };

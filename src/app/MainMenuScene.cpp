@@ -48,7 +48,7 @@ void RemoveLastCharacter(std::string& text) {
 
 void StartLevel(AppContext* context, int level) {
     LevelDefinition definition = LevelDefinition::FromJsonPath(
-        OfficialLevels[level].path
+        OfficialLevels[level].jsonPath
     );
     definition.levelNumber = level + 1;
     context->audioController->PlayUiClick();
@@ -440,14 +440,36 @@ void MainMenuScene::Render() const {
             const float width = offset == 0 ? cardWidth : sideCardWidth;
             const float height = offset == 0 ? 120.0f : 82.0f;
             const float cardCenterX = centerX + offset * (cardWidth / 2.0f + sideCardWidth / 2.0f + gap);
-            Rectangle card{cardCenterX - width / 2.0f, cardY + (120.0f - height) / 2.0f, width, height};
             const bool unlocked = levelIndex < m_context->unlockedLevel;
             const Color cardColor = unlocked ? (offset == 0 ? SKYBLUE : Fade(SKYBLUE, 0.65f)) : GRAY;
-            DrawRectangleRec(card, cardColor);
-            DrawRectangleLinesEx(card, offset == 0 ? 3.0f : 2.0f, DARKGRAY);
-            const char* level = OfficialLevels[levelIndex].label;
-            const int fontSize = offset == 0 ? 24 : 18;
-            DrawTextFont(level, static_cast<int>(card.x + (card.width - MeasureText(level, fontSize)) / 2), static_cast<int>(card.y + (card.height - fontSize) / 2), fontSize, BLACK);
+
+            Rectangle card{
+                cardCenterX - width / 2.0f,
+                cardY + (120.0f - height) / 2.0f,
+                width,
+                height
+            };
+
+        UiButton::DrawTextured(
+            card,
+            ui.menuLevelTitles[levelIndex],
+            unlocked,
+            "Crear nivel"
+        );
+
+            // const int levelNumber = OfficialLevels[levelIndex].levelIndex;
+            // Texture2D levelTitleTexture = m_context->textureLibrary->GetLevelTitleTexture(levelNumber);
+            //
+            // const int fontSize = offset == 0 ? 24 : 18;
+            // DrawRectangleRec(card, cardColor);
+            // DrawRectangleLinesEx(card, offset == 0 ? 3.0f : 2.0f, DARKGRAY);
+            // DrawTextFont(
+            //     levelLabel,
+            //     static_cast<int>(card.x + (card.width - MeasureText(levelLabel, fontSize)) / 2),
+            //     static_cast<int>(card.y + (card.height - fontSize) / 2),
+            //     fontSize,
+            //     BLACK
+            // );
         }
     } else if (m_editingLevels) {
         const char* title = "Editor de niveles";

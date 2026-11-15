@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <print>
+#include <format>
 
 namespace {
 
@@ -43,6 +44,11 @@ Texture2D LoadSmoothTexture(const char* path, bool useBilinearFilter = true) {
     }
     SetTextureFilter(texture, filter);
     return texture;
+}
+
+std::string GetLevelTitlePath(int levelNumber) {
+    std::string num = (levelNumber < 10) ? std::format("0{}", levelNumber) : std::to_string(levelNumber);
+    return std::format("assets/textures/level/title/level_{}", num);
 }
 
 UiButtonSkin LoadButtonSkin(const char* basePath) {
@@ -106,6 +112,12 @@ void TextureLibrary::Initialize() {
     m_ui.menuDialogCancel = LoadButtonSkin("assets/textures/ui/main_menu/dialog/cancelar");
     m_ui.menuDialogCreate = LoadButtonSkin("assets/textures/ui/main_menu/dialog/crear");
     m_ui.menuToEditor = LoadButtonSkin("assets/textures/ui/main_menu/nav/to_editor");
+
+    for (std::size_t index = 0; index < m_ui.menuLevelTitles.size(); ++index) {
+        m_ui.menuLevelTitles[index] = LoadButtonSkin(
+            GetLevelTitlePath(static_cast<int>(index + 1)).c_str()
+        );
+    }
 
     // main game UI
     m_ui.game.toolbarSlot = LoadButtonSkin("assets/textures/ui/game/toolbar/slot");
