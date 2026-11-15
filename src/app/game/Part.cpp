@@ -67,13 +67,15 @@ void Part::SetAttachmentBody(std::shared_ptr<I_RigidBody> body) {
 
 void Part::SetContainedBody(
     std::shared_ptr<I_RigidBody> body,
-    I_PhysicsWorld* physicsWorld
+    I_PhysicsWorld* physicsWorld,
+    EditorGrid* grid
 ) {
     if (!body || m_physicsBody) return;
     m_attachmentRotationOffset =
         PartOrientationRadians(m_orientation) - body->GetRotation();
     m_attachmentBody = std::move(body);
     m_physicsWorld = physicsWorld;
+    m_grid = grid;
 }
 
 bool Part::CanContain(const Part& part) const {
@@ -114,11 +116,18 @@ void Part::ApplyRadialImpulseForce(float magnitude, float radius) {
     if (!m_physicsWorld || (!m_physicsBody && !m_attachmentBody)) return;
     const std::shared_ptr<I_RigidBody>& body =
         m_physicsBody ? m_physicsBody : m_attachmentBody;
-    const Vector2D position = body->GetPosition();
-    const Vector2D center = m_attachmentBody
-        ? m_attachmentBody->GetPosition()
-        : position;
-    const float explosionMagnitude = m_attachmentBody
+    const Vector2D bodyPosition = body->GetPosition();
+    const bool contained = m_attachmentBody != nullptr && m_physicsBody == nullptr;
+    Vector2D center = bodyPosition;
+    if (contained) {
+        if (m_grid) {
+            center = m_grid->CoordToWorld(m_gridCoord);
+        } else {
+            center = m_attachmentBody->GetPosition();
+        }
+    }
+
+    const float explosionMagnitude = contained
         ? magnitude * ContainedTntExplosionMultiplier
         : magnitude;
     m_physicsWorld->ApplyExplosion(
@@ -307,7 +316,7 @@ void Part::SetPhysicsBody(
 
     if (m_containedPart) {
         m_containedPart->ResetPhysicsBody();
-        m_containedPart->SetContainedBody(m_physicsBody, m_physicsWorld);
+        m_containedPart->SetContainedBody(m_physicsBody, m_physicsWorld, m_grid);
     }
 }
 

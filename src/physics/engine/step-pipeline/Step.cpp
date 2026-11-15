@@ -7,6 +7,8 @@
 #include "physics/engine/step-pipeline/04_PositionsCorrection.hpp"
 #include "physics/engine/step-pipeline/05_JointBreakageCleanup.hpp"
 #include "app/game/Part.hpp"
+#include <algorithm>
+#include <cmath>
 using namespace std;
 using namespace Math;
 using namespace Physics;
@@ -54,7 +56,12 @@ void World::ApplyExplosion(
 
 void World::Step(float deltaTime) {
     m_impactEvents.clear();
-    float subDt = deltaTime / m_subStepCount;
+    if (m_subStepCount <= 0 || deltaTime <= 0.0f) return;
+    const float subDt = deltaTime / static_cast<float>(m_subStepCount);
+    const float linearDamping = std::max(0.0f, m_linearDamping);
+    const float angularDamping = std::max(0.0f, m_angularDamping);
+    const float linearDampFactor = std::exp(-linearDamping * subDt);
+    const float angularDampFactor = std::exp(-angularDamping * subDt);
 
     for (auto& joint : m_joints) {
         if (!joint) continue;
@@ -69,16 +76,19 @@ void World::Step(float deltaTime) {
             if (body->GetBodyType() == BodyType::Static) continue;
 
             Vector2D& vel = body->GetLinearVelocityMut();
-            RealNum invMass = body->GetMassData().invMass;
-            Vector2D force = body->GetForceMut();
+            const RealNum invMass = body->GetMassData().invMass;
+            const Vector2D force = body->GetForce();
 
-            vel.x += body->GetForce().x * invMass * subDt;
-            vel.y += body->GetForce().y * invMass * subDt;
+            vel += force * invMass * subDt;
             vel += m_gravity * subDt;
+
+            // exponential damping (frame-rate/substep independent)
+            vel *= linearDampFactor;
+            body->GetAngularVelocityMut() *= angularDampFactor;
 
             // integration phase
             Transform& t = body->GetTransformMut();
-            t.position += body->GetLinearVelocity() * subDt;
+            t.position += vel * subDt;
             t.rotation += body->GetAngularVelocityMut() * subDt;
 
             body->UpdateAABB();

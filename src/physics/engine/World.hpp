@@ -26,6 +26,8 @@ private:
     int m_subStepCount;
     int m_velocityIterations;
     int m_positionIterations;
+    float m_linearDamping = 0.05f;
+    float m_angularDamping = 0.675f;
 
 public:
     explicit World(
