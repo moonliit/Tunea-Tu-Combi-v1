@@ -4,16 +4,28 @@
 #include "app/CustomLevelCatalog.hpp"
 #include "app/SceneManager.hpp"
 #include "app/game/Level.hpp"
+#include "app/game/Part.hpp"
+#include "app/game/PartDefinition.hpp"
+#include "math/Terrain.hpp"
+#include "physics/engine/World.hpp"
+#include "rendering/Background.hpp"
 #include "ui/UiButton.hpp"
 #include <raylib.h>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <memory>
+#include <numbers>
+#include <optional>
 #include <utility>
-#include <print>
+#include <vector>
 
 namespace {
 
+float MainMenuTitleLevelTimer = 0.1f;
+constexpr float TitleTerrainTileLength = 1600.0f;
+constexpr float TitleTerrainBaseY = 260.0f;
 constexpr int MaxLevelNameCharacters = 24;
 std::size_t CountCharacters(const std::string& text) {
     return static_cast<std::size_t>(std::count_if(
@@ -70,9 +82,13 @@ void CreateCustomLevel(AppContext* context, const std::string& name) {
 
 MainMenuScene::MainMenuScene(AppContext* context):
     m_context(context),
-    m_selectedLevel(std::clamp(context->unlockedLevel - 1, 0, OfficialLevelCount - 1)) {}
+    m_selectedLevel(std::clamp(context->unlockedLevel - 1, 0, OfficialLevelCount - 1))
+{
+    InitTitleWorld();
+}
 
-void MainMenuScene::Update(float) {
+
+void MainMenuScene::Update(float deltaTime) {
     if (auto copy = m_context->publications.TakeCopyRequest()) {
         if (m_context->customLevels->AddCopy(copy.value())) {
             m_editingLevels = true;
@@ -89,6 +105,12 @@ void MainMenuScene::Update(float) {
             m_context->audioController->StartLevelEditorMusic(musicPath, false);
             m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
         } catch (const nlohmann::json::exception&) {}
+    }
+
+    if (MainMenuTitleLevelTimer >= 0.0f) {
+        MainMenuTitleLevelTimer -= deltaTime;
+    } else if (!m_selectingLevel) {
+        UpdateTitleWorld(deltaTime);
     }
 }
 
@@ -345,6 +367,8 @@ void MainMenuScene::Render() const {
     const UiTextures& ui = m_context->textureLibrary->GetUi();
 
     if (!m_selectingLevel) {
+        RenderTitleWorld();
+        DrawRectangle(0, 0, m_context->windowWidth, m_context->windowHeight, Fade(BLACK, 0.12f));
         const Texture2D& logo = ui.logo;
         const float maxLogoWidth = m_context->windowWidth * 0.7f;
         const float maxLogoHeight = m_context->windowHeight * 0.35f;
@@ -400,7 +424,7 @@ void MainMenuScene::Render() const {
         );
     } else if (!m_editingLevels) {
         const char* title = "Selecciona un nivel";
-        DrawTextFont(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, m_context->windowHeight / 2 - 120, 30, BLACK);
+        DrawText(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, m_context->windowHeight / 2 - 120, 30, BLACK);
         Rectangle menuButton{
             static_cast<float>(m_context->windowWidth - 230),
             20.0f,
@@ -449,31 +473,16 @@ void MainMenuScene::Render() const {
                 width,
                 height
             };
-
-        UiButton::DrawTextured(
-            card,
-            ui.menuLevelTitles[levelIndex],
-            unlocked,
-            "Crear nivel"
-        );
-
-            // const int levelNumber = OfficialLevels[levelIndex].levelIndex;
-            // Texture2D levelTitleTexture = m_context->textureLibrary->GetLevelTitleTexture(levelNumber);
-            //
-            // const int fontSize = offset == 0 ? 24 : 18;
-            // DrawRectangleRec(card, cardColor);
-            // DrawRectangleLinesEx(card, offset == 0 ? 3.0f : 2.0f, DARKGRAY);
-            // DrawTextFont(
-            //     levelLabel,
-            //     static_cast<int>(card.x + (card.width - MeasureText(levelLabel, fontSize)) / 2),
-            //     static_cast<int>(card.y + (card.height - fontSize) / 2),
-            //     fontSize,
-            //     BLACK
-            // );
+            UiButton::DrawTextured(
+                card,
+                ui.menuLevelTitles[levelIndex],
+                unlocked,
+                "Crear nivel"
+            );
         }
     } else if (m_editingLevels) {
         const char* title = "Editor de niveles";
-        DrawTextFont(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, 38, 30, BLACK);
+        DrawText(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, 38, 30, BLACK);
         UiButton::DrawTextured(
             Rectangle{
                 (m_context->windowWidth - 210.0f) / 2.0f,
@@ -503,7 +512,7 @@ void MainMenuScene::Render() const {
             DrawRectangleRec(row, BLACK);
             DrawRectangleLinesEx(row, 5.0f, {238, 18, 121, 255});
             const std::string& name = m_context->customLevels->GetLevels()[i].name;
-            DrawTextFont(name.c_str(), static_cast<int>(row.x + 20), static_cast<int>(row.y + 20), 32, {252, 169, 33, 255});
+            DrawText(name.c_str(), static_cast<int>(row.x + 20), static_cast<int>(row.y + 20), 32, {252, 169, 33, 255});
             const bool approved = m_context->customLevels->HasValidApproval(i);
             // here:
             UiButton::DrawTextured(
@@ -528,7 +537,7 @@ void MainMenuScene::Render() const {
         const PublicationSnapshot& publication =
             m_context->publications.GetSnapshot();
         if (!publication.message.empty()) {
-            DrawTextFont(
+            DrawText(
                 publication.message.c_str(),
                 20,
                 140,
@@ -541,7 +550,7 @@ void MainMenuScene::Render() const {
         }
         if (m_context->customLevels->GetLevels().empty()) {
             const char* emptyText = "Todavía no hay niveles personalizados";
-            DrawTextFont(
+            DrawText(
                 emptyText,
                 (m_context->windowWidth - MeasureText(emptyText, 18)) / 2,
                 170,
@@ -550,7 +559,7 @@ void MainMenuScene::Render() const {
             );
         } else if (!drewLevel) {
             const char* scrollText = "Usa la rueda del mouse para ver más niveles";
-            DrawTextFont(scrollText, (m_context->windowWidth - MeasureText(scrollText, 16)) / 2, 170, 16, DARKGRAY);
+            DrawText(scrollText, (m_context->windowWidth - MeasureText(scrollText, 16)) / 2, 170, 16, DARKGRAY);
         }
 
         UiButton::DrawTextured(
@@ -577,14 +586,14 @@ void MainMenuScene::Render() const {
             DrawRectangleRec(dialog, RAYWHITE);
             DrawRectangleLinesEx(dialog, 2.0f, DARKGRAY);
             const char* prompt = "Nombre del nivel";
-            DrawTextFont(prompt, static_cast<int>(dialog.x + 24), static_cast<int>(dialog.y + 22), 20, BLACK);
+            DrawText(prompt, static_cast<int>(dialog.x + 24), static_cast<int>(dialog.y + 22), 20, BLACK);
             const Rectangle input{dialog.x + 24, dialog.y + 62, dialog.width - 48, 40};
             DrawRectangleRec(input, WHITE);
             DrawRectangleLinesEx(input, 1.0f, DARKGRAY);
             const char* placeholder = "Escribe un nombre...";
             const char* shownName = m_newLevelName.empty() ? placeholder : m_newLevelName.c_str();
-            DrawTextFont(shownName, static_cast<int>(input.x + 10), static_cast<int>(input.y + 11), 18, DARKGRAY);
-            DrawTextFont(
+            DrawText(shownName, static_cast<int>(input.x + 10), static_cast<int>(input.y + 11), 18, DARKGRAY);
+            DrawText(
                 TextFormat("%d/%d", static_cast<int>(CountCharacters(m_newLevelName)), MaxLevelNameCharacters),
                 static_cast<int>(input.x + input.width - 58),
                 static_cast<int>(input.y + 45),
@@ -607,8 +616,163 @@ void MainMenuScene::Render() const {
     }
 
 #ifndef __EMSCRIPTEN__
-    DrawTextFont("Modo local: sin reserva de nombre ni publicacion online", 14, m_context->windowHeight - 18, 12, DARKGRAY);
+    DrawText("Modo local: sin reserva de nombre ni publicacion online", 14, m_context->windowHeight - 18, 12, DARKGRAY);
 #endif
 
     EndDrawing();
+}
+
+void MainMenuScene::InitTitleWorld() {
+    ResetTitleWorld();
+}
+
+void MainMenuScene::ResetTitleWorld() {
+    const float tileLength = TitleTerrainTileLength;
+    const float baseY = TitleTerrainBaseY;
+    const float depth = 500.0f;
+
+    m_titleTerrainLength = tileLength * 3.0f;
+    // spawn in middle tile to avoid a visible beginning
+    m_titleModel = std::make_unique<BuildModel>(
+        Math::GridCoord{6, 4},
+        Math::Vector2D{220.0f + tileLength, baseY + 20.0f},
+        40.0f
+    );
+
+    // sample vehicle
+    m_titleModel->PlacePart(Math::GridCoord{2, 1}, PartType::SquareBlock);
+    m_titleModel->PlacePart(Math::GridCoord{3, 1}, PartType::SquareBlock);
+    m_titleModel->PlacePart(Math::GridCoord{4, 1}, PartType::DriverBox);
+    m_titleModel->PlacePart(Math::GridCoord{1, 1}, PartType::Fan);
+    m_titleModel->PlacePart(Math::GridCoord{2, 2}, PartType::CircleWheel);
+    m_titleModel->PlacePart(Math::GridCoord{4, 2}, PartType::CircleWheel);
+
+    // periodic tileable terrain for seamless looping
+    std::vector<Math::Vector2D> top;
+    const float step = 40.0f;
+    for (float x = -400.0f; x <= m_titleTerrainLength + 400.0f; x += step) {
+        const float phase = (2.0f * std::numbers::pi_v<float> * x) / tileLength;
+        const float y = baseY
+            + 18.0f * std::sin(phase)
+            + 10.0f * std::sin(2.0f * phase + 1.3f);
+        top.push_back({x, y});
+    }
+
+    Math::TerrainDefinition terrain;
+    Math::TerrainPolygon polygon;
+    Math::TerrainSegment segment;
+    segment.type = Math::TerrainSegmentType::Line;
+    segment.points = top;
+    segment.points.push_back({top.back().x, baseY + depth});
+    segment.points.push_back({top.front().x, baseY + depth});
+    segment.points.push_back(top.front());
+    polygon.segments.push_back(std::move(segment));
+    terrain.polygons.push_back(std::move(polygon));
+
+    m_titleSession = std::make_unique<PlaySession>(*m_titleModel, terrain, Math::Vector2D{0.0f, 392.0f});
+    m_titleSession->Start();
+
+    m_titleRenderer = std::make_unique<WorldRenderer>(*m_context->textureLibrary, BackgroundId::Barranco);
+
+    m_titleCamera = {};
+    m_titleCamera.offset = {m_context->windowWidth * 0.45f, m_context->windowHeight * 0.62f};
+    m_titleCamera.rotation = 0.0f;
+    m_titleCamera.zoom = 0.8f;
+    m_titleCamera.target = {tileLength + 220.0f, baseY - 40.0f};
+    if (auto follow = GetTitleDriverPosition()) {
+        m_titleCamera.target = {follow->x, follow->y};
+    }
+
+    for (const Part* constPart : m_titleSession->GetRuntimeGrid().GetActiveParts()) {
+        Part* part = const_cast<Part*>(constPart);
+        if (part->GetType() == PartType::Fan) {
+            part->Activate();
+        }
+    }
+
+    m_titleRenderer->SetBackgroundOrigin(m_titleCamera.target.x);
+    m_titleElapsedMs = 0.0;
+}
+
+void MainMenuScene::UpdateTitleWorld(float deltaTime) {
+    if (!m_titleSession) InitTitleWorld();
+    m_titleSession->Update(deltaTime);
+    m_titleElapsedMs += static_cast<double>(deltaTime) * 1000.0;
+
+    auto followOpt = GetTitleDriverPosition();
+    if (followOpt && std::isfinite(followOpt->x) && std::isfinite(followOpt->y)) {
+        Vector2 follow = *followOpt;
+
+        // wrap vehicle within middle tile for seamless looping
+        const float tileLength = TitleTerrainTileLength;
+        auto* world = dynamic_cast<Physics::World*>(&m_titleSession->GetPhysics());
+        if (world && follow.x > tileLength * 2.0f) {
+            for (auto& body : world->GetBodies()) {
+                if (!body || body->GetBodyType() == BodyType::Static) continue;
+                body->GetTransformMut().position.x -= tileLength;
+                body->UpdateAABB();
+            }
+            follow.x -= tileLength;
+        } else if (world && follow.x < tileLength) {
+            for (auto& body : world->GetBodies()) {
+                if (!body || body->GetBodyType() == BodyType::Static) continue;
+                body->GetTransformMut().position.x += tileLength;
+                body->UpdateAABB();
+            }
+            follow.x += tileLength;
+        }
+
+        m_titleCamera.target.x = follow.x - 120.0f;
+        m_titleCamera.target.y = follow.y - 20.0f;
+        if (m_titleRenderer) {
+            m_titleRenderer->SetBackgroundOrigin(m_titleCamera.target.x);
+        }
+    }
+}
+
+void MainMenuScene::RenderTitleWorld() const {
+    if (!m_titleRenderer || !m_titleSession || !m_titleModel) return;
+    m_titleRenderer->Render(
+        m_titleCamera,
+        GameState::Play,
+        m_titleModel->GetGrid(),
+        *m_titleSession,
+        std::nullopt,
+        PartOrientation::Up,
+        std::nullopt,
+        PartOrientation::Up,
+        m_context->windowHeight
+    );
+}
+
+std::optional<Vector2> MainMenuScene::GetTitleDriverPosition() const {
+    if (!m_titleSession) return std::nullopt;
+
+    const EditorGrid& grid = m_titleSession->GetRuntimeGrid();
+    const auto finitePos = [](const PartRenderState& state) -> std::optional<Vector2> {
+        const float x = static_cast<float>(state.position.x);
+        const float y = static_cast<float>(state.position.y);
+        if (std::isfinite(x) && std::isfinite(y)) return Vector2{x, y};
+        return std::nullopt;
+    };
+
+    // prefer driver box position
+    for (const Part* part : grid.GetActiveParts()) {
+        if (part->GetType() == PartType::DriverBox &&
+            part->HasContainedPart() && part->GetContainedPart() &&
+            part->GetContainedPart()->GetType() == PartType::Driver) {
+            if (auto pos = finitePos(part->GetRenderState(grid))) {
+                return pos;
+            }
+        }
+    }
+
+    for (const Part* part : grid.GetActiveParts()) {
+        if (part->GetType() == PartType::Driver) continue;
+        if (auto pos = finitePos(part->GetRenderState(grid))) {
+            return pos;
+        }
+    }
+
+    return std::nullopt;
 }

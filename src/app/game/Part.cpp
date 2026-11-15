@@ -295,12 +295,20 @@ void Part::SetPhysicsBody(
             );
             break;
         case PartType::Driver:
+            // Driver is represented as an attached/contained part (no standalone physics body).
             break;
     }
 
     m_physicsBody = body;
-    m_physicsBody->m_part = this;
+    if (m_physicsBody) {
+        m_physicsBody->m_part = this;
+    }
     m_physicsWorld = physics.get();
+
+    if (m_containedPart) {
+        m_containedPart->ResetPhysicsBody();
+        m_containedPart->SetContainedBody(m_physicsBody, m_physicsWorld);
+    }
 }
 
 PartRenderState Part::GetRenderState(const EditorGrid& grid) const {

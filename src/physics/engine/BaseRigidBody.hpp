@@ -41,12 +41,12 @@ namespace Physics {
         MassData m_massData;
         Material m_material;
 
-        Math::Vector2D m_linearVelocity;
-        Math::RealNum m_angularVelocity;
+        Math::Vector2D m_linearVelocity = Math::Vector2D::Zero();
+        Math::RealNum m_angularVelocity = 0.0f;
 
-        Math::Vector2D m_force;
+        Math::Vector2D m_force = Math::Vector2D::Zero();
 
-        BodyType m_bodyType;
+        BodyType m_bodyType = BodyType::Dynamic;
         Math::AABB m_aabb;
 
     public:

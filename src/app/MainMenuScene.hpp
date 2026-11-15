@@ -3,8 +3,13 @@
 
 #include "app/I_Scene.hpp"
 #include "app/AppContext.hpp"
+#include "app/game/BuildModel.hpp"
+#include "app/game/PlaySession.hpp"
+#include "rendering/WorldRenderer.hpp"
 #include <raylib.h>
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,7 +22,21 @@ class MainMenuScene : public I_Scene {
     bool m_creatingLevel = false;
     float m_customListScroll = 0.0f;
 
+    std::unique_ptr<BuildModel> m_titleModel;
+    std::unique_ptr<PlaySession> m_titleSession;
+    std::unique_ptr<WorldRenderer> m_titleRenderer;
+    Camera2D m_titleCamera{};
+    const Part* m_titleDriver = nullptr;
+    double m_titleElapsedMs = 0.0;
+    float m_titleTerrainLength = 0.0f;
+
     void ProcessLevelEditorInput();
+    void InitTitleWorld();
+    void ResetTitleWorld();
+    void UpdateTitleWorld(float deltaTime);
+    void RenderTitleWorld() const;
+    std::optional<Vector2> GetTitleDriverPosition() const;
+
 public:
     explicit MainMenuScene(AppContext* context);
     void ProcessInput(float) override;

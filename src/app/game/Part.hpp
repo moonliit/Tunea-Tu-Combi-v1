@@ -91,6 +91,9 @@ public:
     std::shared_ptr<I_RigidBody> GetPhysicsBody() const {
         return m_physicsBody;
     }
+    std::shared_ptr<I_RigidBody> GetAttachmentBody() const {
+        return m_attachmentBody;
+    }
     void SetAttachmentBody(std::shared_ptr<I_RigidBody> body);
     void SetContainedBody(
         std::shared_ptr<I_RigidBody> body,
