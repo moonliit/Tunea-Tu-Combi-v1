@@ -105,6 +105,11 @@ public:
     bool IsActivationActive() const { return m_activationActive; }
 
     void SetPhysicsBody(EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics);
+    void AdoptPhysicsBody(
+        std::shared_ptr<I_RigidBody> body,
+        I_PhysicsWorld* physicsWorld,
+        EditorGrid* grid
+    );
     void ResetPhysicsBody() {
         m_physicsBody = nullptr;
         m_attachmentBody = nullptr;
