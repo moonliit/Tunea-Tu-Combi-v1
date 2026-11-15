@@ -43,6 +43,8 @@ class GhostPlayback {
         double x;
         double y;
         double rotation;
+        double attachmentRotation;
+        bool hasAttachmentRotation;
     };
     struct Frame {
         std::int64_t timeMs;
@@ -59,6 +61,7 @@ class GhostPlayback {
     bool m_advanceWhileLoading = false;
     GhostLoadStatus m_status = GhostLoadStatus::Idle;
     std::unordered_map<PartId, Definition> m_definitions;
+    std::unordered_map<PartId, PartId> m_legacyWheelHosts;
     std::vector<Frame> m_frames;
     std::vector<GhostRenderState> m_renderStates;
     struct PassengerPickup {
@@ -80,6 +83,7 @@ public:
     void Play();
     void Pause();
     void Restart();
+    void PrepareCompetition();
     void StartCompetition();
     void StopAndRewind();
     void Update(double frameMs);

@@ -125,11 +125,16 @@ export function validateRecordingCapture(value, expected) {
         previousTime = frame.timeMs;
         const frameIds = new Set();
         for (const state of frame.parts) {
-            if (!exactKeys(state, ['id', 'rotationMilli', 'xMilli', 'yMilli']) ||
+            const stateKeys = state?.attachmentRotationMilli === undefined
+                ? ['id', 'rotationMilli', 'xMilli', 'yMilli']
+                : ['attachmentRotationMilli', 'id', 'rotationMilli', 'xMilli', 'yMilli'];
+            if (!exactKeys(state, stateKeys) ||
                 !parts.has(state.id) || frameIds.has(state.id) ||
                 !integer(state.xMilli, -100000000, 100000000) ||
                 !integer(state.yMilli, -100000000, 100000000) ||
-                !integer(state.rotationMilli, -100000000, 100000000)) invalid();
+                !integer(state.rotationMilli, -100000000, 100000000) ||
+                (state.attachmentRotationMilli !== undefined &&
+                    !integer(state.attachmentRotationMilli, -100000000, 100000000))) invalid();
             frameIds.add(state.id);
         }
     }

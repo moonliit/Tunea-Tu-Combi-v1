@@ -835,7 +835,8 @@ void MainGameScene::ResetToBuildMode() {
     m_goalWindow.Reset();
     m_previousPartPositions.clear();
     m_capture.Clear();
-    m_ghostPlayback.StopAndRewind();
+    if (m_competeAgainstGhost) m_ghostPlayback.PrepareCompetition();
+    else m_ghostPlayback.StopAndRewind();
     m_leaderboard.Reset();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
@@ -865,7 +866,7 @@ bool MainGameScene::ProcessGhostControls() {
     const GhostLoadStatus status = m_ghostPlayback.GetStatus();
     const bool canUse = GhostCanBeRequested(status);
     if (UiButton::WasClicked(GhostPreviewButton())) {
-        if (canUse) {
+        if (canUse && !m_competeAgainstGhost) {
             m_appContext->audioController->PlayUiClick();
             m_ghostPlayback.Play();
         }
@@ -877,7 +878,7 @@ bool MainGameScene::ProcessGhostControls() {
         return true;
     }
     if (UiButton::WasClicked(GhostRestartButton())) {
-        if (canUse) {
+        if (canUse && !m_competeAgainstGhost) {
             m_appContext->audioController->PlayUiClick();
             m_ghostPlayback.Restart();
         }
@@ -887,7 +888,8 @@ bool MainGameScene::ProcessGhostControls() {
         if (canUse) {
             m_appContext->audioController->PlayUiClick();
             m_competeAgainstGhost = !m_competeAgainstGhost;
-            if (m_competeAgainstGhost) m_ghostPlayback.EnsureLoaded();
+            if (m_competeAgainstGhost) m_ghostPlayback.PrepareCompetition();
+            else m_ghostPlayback.StopAndRewind();
         }
         return true;
     }
@@ -907,11 +909,13 @@ void MainGameScene::RenderGhostControls() const {
     DrawTextFont("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
     UiButton::Draw(
         GhostPreviewButton(),
-        m_ghostPlayback.IsPlaying()
+        m_competeAgainstGhost
+            ? "LISTO PARA COMPETIR"
+            : m_ghostPlayback.IsPlaying()
             ? "REPRODUCIENDO RECORRIDO"
             : "VER RECORRIDO DEL CAMPEÓN",
-        canUse ? DARKGREEN : DARKGRAY,
-        canUse ? WHITE : GRAY,
+        canUse && !m_competeAgainstGhost ? DARKGREEN : DARKGRAY,
+        canUse && !m_competeAgainstGhost ? WHITE : GRAY,
         11
     );
     UiButton::Draw(
@@ -924,8 +928,8 @@ void MainGameScene::RenderGhostControls() const {
     UiButton::Draw(
         GhostRestartButton(),
         "REINICIAR",
-        canUse ? ORANGE : DARKGRAY,
-        canUse ? WHITE : GRAY,
+        canUse && !m_competeAgainstGhost ? ORANGE : DARKGRAY,
+        canUse && !m_competeAgainstGhost ? WHITE : GRAY,
         12
     );
     UiButton::Draw(
