@@ -1,0 +1,700 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Tunea tu Combi: the web game behind CloudFront, its REST API (one Lambda per
+  call), and the DynamoDB table and S3 buckets they use. Deploy with infra/deploy.sh.
+
+Parameters:
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues: [PriceClass_100, PriceClass_200, PriceClass_All]
+    Description: Where CloudFront serves from. 100 is the cheapest (US, Canada, Europe, Israel).
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [7, 14, 30, 60, 90, 180, 365]
+    Description: How long Lambda and API access logs are kept.
+  ApiRateLimit:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: Requests per second the whole API accepts on average.
+  ApiBurstLimit:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    Description: Requests the whole API accepts in a short burst.
+  CleanupSchedule:
+    Type: String
+    Default: rate(6 hours)
+    Description: How often expired recordings are deleted from S3.
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    MemorySize: 256
+    Timeout: 10
+    LoggingConfig:
+      LogGroup: !Ref FunctionLogGroup
+    # Shared by every function. The real boundary is each function's own IAM
+    # role below: a function can only use what its role lets it.
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref Table
+        CONTENT_BUCKET: !Ref ContentBucket
+        PUBLIC_ORIGIN: !Sub 'https://${Distribution.DomainName}'
+
+Resources:
+  # ------------------------------------------------------------------ data
+  # The table and the content bucket hold players' data: deleting the stack
+  # keeps them (see infra/README.md to remove them on purpose).
+  Table:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: PK, AttributeType: S }
+        - { AttributeName: SK, AttributeType: S }
+      KeySchema:
+        - { AttributeName: PK, KeyType: HASH }
+        - { AttributeName: SK, KeyType: RANGE }
+      # only sessions carry expiresAt (seconds since the epoch)
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  ContentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - Id: abort-incomplete-uploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 }
+
+  ContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ContentBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ContentBucket.Arn
+              - !Sub '${ContentBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': 'false' }
+
+  # ------------------------------------------------------------------ website
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+
+  # only this CloudFront distribution may read the site
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: 's3:GetObject'
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt SiteBucket.Arn
+              - !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              Bool: { 'aws:SecureTransport': 'false' }
+
+  SiteOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-site'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # The API sends Cache-Control and CloudFront obeys it: JSON answers say
+  # no-store, a recording pinned by its hash says it can be kept for an hour.
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-api'
+        MinTTL: 0
+        DefaultTTL: 0
+        MaxTTL: 86400
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: false
+          EnableAcceptEncodingBrotli: false
+          CookiesConfig: { CookieBehavior: none }
+          HeadersConfig: { HeaderBehavior: none }
+          QueryStringsConfig: { QueryStringBehavior: all }
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${AWS::StackName}: game and API'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref PriceClass
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOriginAccessControl.Id
+            S3OriginConfig: { OriginAccessIdentity: '' }
+          - Id: api
+            DomainName: !Sub '${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              OriginReadTimeout: 30
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          # Managed-CachingOptimized
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          # Managed-SecurityHeadersPolicy
+          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            Compress: false
+            CachePolicyId: !Ref ApiCachePolicy
+            # Managed-AllViewerExceptHostHeader: cookies, headers and query string
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+
+  # ------------------------------------------------------------------ logs
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/${AWS::StackName}/functions'
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/${AWS::StackName}/api-access'
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ------------------------------------------------------------------ API
+  # A plain HTTP API, not AWS::Serverless::HttpApi: that one carries its routes
+  # inside itself, so it would depend on the functions, the functions on
+  # PUBLIC_ORIGIN, and PUBLIC_ORIGIN on CloudFront, which needs the API.
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${AWS::StackName}-api'
+      ProtocolType: HTTP
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ApiRateLimit
+        ThrottlingBurstLimit: !Ref ApiBurstLimit
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","ip":"$context.identity.sourceIp",
+          "requestTime":"$context.requestTime","routeKey":"$context.routeKey",
+          "path":"$context.path","status":"$context.status",
+          "responseLatency":"$context.responseLatency",
+          "integrationError":"$context.integrationErrorMessage"}
+
+  # ------------------------------------------------------------------ functions
+  # One Lambda per call, each with only the permissions its code uses.
+  # DynamoDB: reading is GetItem/BatchGetItem/Query; writing includes
+  # ConditionCheckItem because the transactions check conditions.
+  # S3: GetObject also needs ListBucket, or a missing object answers 403
+  # instead of 404.
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/health
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/health.handler
+
+  SessionGetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/session
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/session-get.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+
+  SessionCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: POST /api/v1/session
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/session-create.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: !GetAtt Table.Arn
+
+  IdentityRenameFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: PUT /api/v1/identities/{identityId}/name
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/identity-rename.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: !GetAtt Table.Arn
+
+  LeaderboardGetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/levels/{levelId}/leaderboard
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/leaderboard-get.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+
+  AttemptSubmitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: PUT /api/v1/levels/{levelId}/attempts/{attemptId}
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/attempt-submit.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:PutObjectTagging
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+
+  RecordingUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: PUT /api/v1/levels/{levelId}/attempts/{attemptId}/recording
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/recording-upload.handler
+      # unpacks and checks up to 32 MiB of JSON
+      MemorySize: 1024
+      Timeout: 25
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: [s3:PutObject, s3:PutObjectTagging]
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+
+  RecordingChampionGetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/levels/{levelId}/leaderboard/champion/recording
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/recording-champion-get.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt ContentBucket.Arn
+
+  RecordingAttemptGetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/levels/{levelId}/attempts/{attemptId}/recording
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/recording-attempt-get.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt ContentBucket.Arn
+
+  LevelListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/levels
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/level-list.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+
+  LevelGetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/levels/{levelId}
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/level-get.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub '${ContentBucket.Arn}/levels/*'
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt ContentBucket.Arn
+
+  LevelPublishFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: POST /api/v1/levels
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/level-publish.handler
+      # checks a level and its winning run, up to 2 MiB of JSON
+      MemorySize: 512
+      Timeout: 25
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: [s3:PutObject, s3:DeleteObject]
+              Resource:
+                - !Sub '${ContentBucket.Arn}/levels/*'
+                - !Sub '${ContentBucket.Arn}/recordings/*'
+            - Effect: Allow
+              Action: s3:PutObjectTagging
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+
+  LevelListMineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: GET /api/v1/me/levels
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/level-list-mine.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+
+  LevelRetireFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: DELETE /api/v1/levels/{levelId}
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/level-retire.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:PutObjectTagging
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+
+  LevelCopyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: POST /api/v1/levels/{levelId}/copies
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/level-copy.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub '${ContentBucket.Arn}/levels/*'
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt ContentBucket.Arn
+
+  # Not an HTTP route: EventBridge starts it on a schedule.
+  RecordingsCleanupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Deletes expired recordings from S3
+      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
+      CodeUri: ../build/api/
+      Handler: functions/recordings-cleanup.handler
+      Timeout: 300
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
+              Resource: !GetAtt Table.Arn
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt ContentBucket.Arn
+              Condition:
+                StringLike: { 's3:prefix': 'recordings/*' }
+            - Effect: Allow
+              Action: [s3:GetObjectTagging, s3:PutObjectTagging, s3:DeleteObject]
+              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
+      EventInvokeConfig:
+        MaximumRetryAttempts: 1
+        MaximumEventAgeInSeconds: 3600
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref CleanupSchedule
+
+  # ------------------------------------------------------------------ routes
+  # For each function: how API Gateway reaches it (integration), which call
+  # goes there (route) and the permission that lets API Gateway invoke it.
+
+  HealthIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt HealthFunction.Arn }
+  HealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/health', Target: !Sub 'integrations/${HealthIntegration}' }
+  HealthPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref HealthFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  SessionGetIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt SessionGetFunction.Arn }
+  SessionGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/session', Target: !Sub 'integrations/${SessionGetIntegration}' }
+  SessionGetPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref SessionGetFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  SessionCreateIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt SessionCreateFunction.Arn }
+  SessionCreateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'POST /api/v1/session', Target: !Sub 'integrations/${SessionCreateIntegration}' }
+  SessionCreatePermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref SessionCreateFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  IdentityRenameIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt IdentityRenameFunction.Arn }
+  IdentityRenameRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'PUT /api/v1/identities/{identityId}/name', Target: !Sub 'integrations/${IdentityRenameIntegration}' }
+  IdentityRenamePermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref IdentityRenameFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LeaderboardGetIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LeaderboardGetFunction.Arn }
+  LeaderboardGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/levels/{levelId}/leaderboard', Target: !Sub 'integrations/${LeaderboardGetIntegration}' }
+  LeaderboardGetPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LeaderboardGetFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  AttemptSubmitIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt AttemptSubmitFunction.Arn }
+  AttemptSubmitRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'PUT /api/v1/levels/{levelId}/attempts/{attemptId}', Target: !Sub 'integrations/${AttemptSubmitIntegration}' }
+  AttemptSubmitPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref AttemptSubmitFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  RecordingUploadIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt RecordingUploadFunction.Arn }
+  RecordingUploadRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'PUT /api/v1/levels/{levelId}/attempts/{attemptId}/recording', Target: !Sub 'integrations/${RecordingUploadIntegration}' }
+  RecordingUploadPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref RecordingUploadFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  RecordingChampionGetIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt RecordingChampionGetFunction.Arn }
+  RecordingChampionGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/levels/{levelId}/leaderboard/champion/recording', Target: !Sub 'integrations/${RecordingChampionGetIntegration}' }
+  RecordingChampionGetPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref RecordingChampionGetFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  RecordingAttemptGetIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt RecordingAttemptGetFunction.Arn }
+  RecordingAttemptGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/levels/{levelId}/attempts/{attemptId}/recording', Target: !Sub 'integrations/${RecordingAttemptGetIntegration}' }
+  RecordingAttemptGetPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref RecordingAttemptGetFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LevelListIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LevelListFunction.Arn }
+  LevelListRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/levels', Target: !Sub 'integrations/${LevelListIntegration}' }
+  LevelListPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LevelListFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LevelGetIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LevelGetFunction.Arn }
+  LevelGetRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/levels/{levelId}', Target: !Sub 'integrations/${LevelGetIntegration}' }
+  LevelGetPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LevelGetFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LevelPublishIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LevelPublishFunction.Arn }
+  LevelPublishRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'POST /api/v1/levels', Target: !Sub 'integrations/${LevelPublishIntegration}' }
+  LevelPublishPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LevelPublishFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LevelListMineIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LevelListMineFunction.Arn }
+  LevelListMineRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/me/levels', Target: !Sub 'integrations/${LevelListMineIntegration}' }
+  LevelListMinePermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LevelListMineFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LevelRetireIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LevelRetireFunction.Arn }
+  LevelRetireRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'DELETE /api/v1/levels/{levelId}', Target: !Sub 'integrations/${LevelRetireIntegration}' }
+  LevelRetirePermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LevelRetireFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+  LevelCopyIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt LevelCopyFunction.Arn }
+  LevelCopyRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties: { ApiId: !Ref HttpApi, RouteKey: 'POST /api/v1/levels/{levelId}/copies', Target: !Sub 'integrations/${LevelCopyIntegration}' }
+  LevelCopyPermission:
+    Type: AWS::Lambda::Permission
+    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref LevelCopyFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
+
+Outputs:
+  SiteUrl:
+    Description: Where the game lives
+    Value: !Sub 'https://${Distribution.DomainName}'
+  DistributionId:
+    Value: !Ref Distribution
+  SiteBucketName:
+    Description: Upload the web build here (infra/deploy.sh web does it)
+    Value: !Ref SiteBucket
+  ContentBucketName:
+    Description: Recordings and published levels (kept if the stack is deleted)
+    Value: !Ref ContentBucket
+  TableName:
+    Description: Identities, sessions, leaderboards and the catalog (kept if the stack is deleted)
+    Value: !Ref Table
+  ApiEndpoint:
+    Description: The API without CloudFront, for debugging only
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com'
