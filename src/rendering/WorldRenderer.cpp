@@ -218,6 +218,11 @@ void WorldRenderer::Render(
             }
             m_partRenderer.Render(part->GetRenderState(runtimeGrid));
         }
+        for (const auto& ejected : playSession.GetEjectedParts()) {
+            if (ejected) {
+                m_partRenderer.Render(ejected->GetRenderState(runtimeGrid));
+            }
+        }
 
     }
 

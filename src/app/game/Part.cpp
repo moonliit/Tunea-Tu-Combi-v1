@@ -311,6 +311,26 @@ void Part::SetPhysicsBody(
     }
 }
 
+void Part::AdoptPhysicsBody(
+    std::shared_ptr<I_RigidBody> body,
+    I_PhysicsWorld* physicsWorld,
+    EditorGrid* grid
+) {
+    m_physicsBody = std::move(body);
+    m_attachmentBody = nullptr;
+    m_attachmentRotationOffset = 0.0f;
+    m_physicsWorld = physicsWorld;
+    m_grid = grid;
+    m_propulsionActive = false;
+    m_activationActive = false;
+    m_activeTimeRemaining = 0.0f;
+    m_cooldownRemaining = 0.0f;
+    m_removalRequested = false;
+    if (m_physicsBody) {
+        m_physicsBody->m_part = this;
+    }
+}
+
 PartRenderState Part::GetRenderState(const EditorGrid& grid) const {
     const float cellSize = grid.GetCellSize();
     Vector2D position = m_physicsBody

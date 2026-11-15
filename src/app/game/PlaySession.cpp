@@ -1,5 +1,7 @@
 #include "app/game/PlaySession.hpp"
+#include "app/game/PartDefinition.hpp"
 #include "physics/engine/World.hpp"
+#include "physics/engine/BaseRigidBody.hpp"
 
 #include <unordered_set>
 #include <algorithm>
@@ -9,6 +11,7 @@ namespace {
 
 constexpr float DamageImpulseThreshold = 150.0f;
 constexpr float TntImpactImpulseThreshold = 10.0f;
+constexpr float ContainerEjectDamageThreshold = 150.0f;
 
 bool AreSamePoint(
     const Math::Vector2D& first,
@@ -128,6 +131,7 @@ void PlaySession::CreatePhysicsWorld(
 }
 
 void PlaySession::Start() {
+    m_ejectedParts.clear();
     m_runtimeModel = m_model;
     m_assembler.Assemble(m_runtimeModel, m_physics);
     BuildActivationSubscriptions();
@@ -139,6 +143,7 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     for (Part* part : m_runtimeModel.GetGrid().GetActiveParts()) {
         part->ResetPhysicsBody();
     }
+    m_ejectedParts.clear();
 
     CreatePhysicsWorld(SampleTerrain(terrain), true);
     m_activationRegistry.Clear();
@@ -153,9 +158,35 @@ void PlaySession::Update(float deltaTime) {
 
 void PlaySession::ProcessImpacts() {
     std::unordered_set<Part*> impactedPartsForTnt;
+    std::unordered_set<Part*> ejectedContainers;
+    std::vector<Part*> containersToEject;
+
     for (const PhysicsImpact& impact : m_physics->ConsumeImpactEvents()) {
+        if (impact.part == nullptr) continue;
+
+        // container hit: explode contained tnt or eject contained part on strong impact
+        if (GetPartDefinition(impact.part->GetType()).role == PartRole::Container &&
+            impact.part->HasContainedPart() &&
+            impact.impulse >= ContainerEjectDamageThreshold &&
+            ejectedContainers.find(impact.part) == ejectedContainers.end()) {
+            Part* contained = impact.part->GetContainedPart();
+            if (contained != nullptr && contained->GetType() == PartType::TNTBarrel) {
+                contained->Activate();
+                if (impactedPartsForTnt.find(contained) == impactedPartsForTnt.end()) {
+                    m_tntConsumedAmount++;
+                    impactedPartsForTnt.insert(contained);
+                }
+                m_damageConsumed = true;
+                ejectedContainers.insert(impact.part);
+            } else {
+                containersToEject.push_back(impact.part);
+                m_damageConsumed = true;
+                ejectedContainers.insert(impact.part);
+            }
+            continue;
+        }
+
         if (
-            impact.part != nullptr &&
             impact.part->GetType() == PartType::TNTBarrel &&
             impact.impulse >= TntImpactImpulseThreshold
         ) {
@@ -170,6 +201,16 @@ void PlaySession::ProcessImpacts() {
             m_damageConsumed = true;
         }
     }
+
+    for (Part* container : containersToEject) {
+        if (container != nullptr && container->HasContainedPart()) {
+            EjectContainedPart(*container, 0.0f);
+        }
+    }
+    if (!containersToEject.empty()) {
+        BuildActivationSubscriptions();
+    }
+
     for (const Math::Vector2D& breakagePos : m_physics->ConsumeBreakagePositions()) {
         // todo: draw breakage effect
         m_breakageConsumed = true;
@@ -250,6 +291,59 @@ void PlaySession::BuildActivationSubscriptions() {
     for (Part* part : m_runtimeModel.GetGrid().GetActiveParts()) {
         subscribePart(*part, subscribePart);
     }
+    for (const auto& ejected : m_ejectedParts) {
+        if (ejected) {
+            subscribePart(*ejected, subscribePart);
+        }
+    }
+}
+
+void PlaySession::EjectContainedPart(Part& container, float) {
+    if (!container.HasContainedPart() || !m_physics) return;
+    std::unique_ptr<Part> ejected = container.RemoveContainedPart();
+    if (!ejected) return;
+
+    const float cellSize = m_runtimeModel.GetGrid().GetCellSize();
+    std::shared_ptr<I_RigidBody> containerBody = container.GetPhysicsBody();
+    Math::Vector2D position = containerBody
+        ? containerBody->GetPosition()
+        : m_runtimeModel.GetGrid().CoordToWorld(container.GetGridCoord());
+    Math::RealNum rotation = containerBody
+        ? containerBody->GetRotation()
+        : Math::RealNum{PartOrientationRadians(container.GetOrientation())};
+
+    Math::Vector2D linearVelocity{0.0f, 0.0f};
+    Math::RealNum angularVelocity = 0.0f;
+    if (auto baseBody = std::dynamic_pointer_cast<Physics::BaseRigidBody>(containerBody)) {
+        linearVelocity = baseBody->GetLinearVelocity();
+        angularVelocity = baseBody->GetAngularVelocity();
+    }
+
+    // spawn outside container to reduce overlap/collision glitches
+    const Math::Vector2D outDir = Math::Vector2D::FromAngle(rotation - 1.5707963f);
+    const float radius = std::max(4.0f, cellSize * 0.22f);
+    const float offsetDist = cellSize * 0.55f;
+    Math::Vector2D spawnPos = position + outDir * (offsetDist + radius);
+    Math::Vector2D spawnVelocity = (linearVelocity + (outDir * offsetDist * angularVelocity)) * 1.05f;
+
+    float mass = GetPartDefinition(ejected->GetType()).mass;
+    if (mass <= 0.0f) mass = 0.5f;
+
+    std::shared_ptr<I_RigidBody> body = m_physics->CreateCircle(
+        spawnPos,
+        radius,
+        mass,
+        BodyType::Dynamic
+    );
+    if (!body) return;
+
+    ejected->AdoptPhysicsBody(body, m_physics.get(), &m_runtimeModel.GetGrid());
+    if (auto ejectedBase = std::dynamic_pointer_cast<Physics::BaseRigidBody>(body)) {
+        ejectedBase->GetLinearVelocityMut() = spawnVelocity;
+        ejectedBase->GetAngularVelocityMut() = angularVelocity;
+    }
+
+    m_ejectedParts.push_back(std::move(ejected));
 }
 
 void PlaySession::ActivateAction(ActivationAction action) {
