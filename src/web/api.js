@@ -79,18 +79,26 @@ Module['api'] = (() => {
         const controller = new AbortController();
         const timer = setTimeout(
             () => controller.abort(),
-            path === '/publications' ? 20000 : 8000
+            method === 'POST' && path === '/levels' ? 20000 : 8000
         );
         try {
-            const response = await fetch('/api' + path, {
+            const response = await fetch('/api/v1' + path, {
                 method, credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
-                ...(method !== 'GET' ? { headers: { 'content-type': 'application/json', 'x-combi-request': '1' }, body: JSON.stringify(body ?? {}) } : {})
+                ...(method !== 'GET' ? {
+                    headers: {
+                        'x-combi-request': '1',
+                        ...(body !== undefined ? { 'content-type': 'application/json' } : {})
+                    },
+                    ...(body !== undefined ? { body: JSON.stringify(body) } : {})
+                } : {})
             });
             const data = await response.json();
             if (!response.ok) throw Object.assign(new Error(data.error), { status: response.status });
             return data;
         } finally { clearTimeout(timer); }
     }
+    const levelPath = (levelId) => `/levels/${encodeURIComponent(levelId)}`;
+    const publicLevelPath = (id) => levelPath(`public:${id}`);
     function fail(error) {
         accept(null);
         notice = messages[error.message] ?? 'Sin conexión confirmada. Puedes jugar localmente, pero no puedes reservar ni publicar.';
@@ -132,7 +140,7 @@ Module['api'] = (() => {
             const expectedId = identity.id;
             const current = await request('/session');
             if (current.identity.id !== expectedId) throw new Error('SESSION_CHANGED');
-            const result = await request('/identity/name', 'PUT', { name, expectedId });
+            const result = await request(`/identities/${encodeURIComponent(expectedId)}/name`, 'PUT', { name });
             if (result.identity.id !== expectedId) throw new Error('SESSION_CHANGED');
             accept(result.identity);
             leaderboardState = {
@@ -241,15 +249,13 @@ Module['api'] = (() => {
                 payload.scope.epoch === epoch &&
                 status === 'ready';
             const result = ownsRun
-                ? await request('/leaderboard/attempts', 'POST', {
-                    attemptId: payload.attemptId,
+                ? await request(`${levelPath(payload.levelId)}/attempts/${encodeURIComponent(payload.attemptId)}`, 'PUT', {
                     formatVersion: payload.formatVersion,
-                    levelId: payload.levelId,
                     physicsVersion: payload.physicsVersion,
                     rulesVersion: payload.rulesVersion,
                     statistics: payload.statistics
                 })
-                : await request(`/leaderboard?levelId=${encodeURIComponent(payload.levelId)}`);
+                : await request(`${levelPath(payload.levelId)}/leaderboard`);
             if (generation !== leaderboardGeneration) return;
             leaderboardState = {
                 status: 'ready',
@@ -307,14 +313,13 @@ Module['api'] = (() => {
         try {
             const bytes = await gzipJson(pending.capture);
             if (bytes.byteLength > 2 * 1024 * 1024) throw new Error('RECORDING_TOO_LARGE');
-            const response = await fetch(`/api/recordings/${encodeURIComponent(pending.attemptId)}`, {
+            const response = await fetch(`/api/v1${levelPath(pending.levelId)}/attempts/${encodeURIComponent(pending.attemptId)}/recording`, {
                 method: 'PUT',
                 credentials: 'same-origin',
                 cache: 'no-store',
                 headers: {
                     'content-type': 'application/vnd.tunea-tu-combi.run+gzip',
-                    'x-combi-request': '1',
-                    'x-combi-level': pending.levelId
+                    'x-combi-request': '1'
                 },
                 body: bytes
             });
@@ -325,7 +330,7 @@ Module['api'] = (() => {
             recordingRetryCount = 0;
             if (recordingRetryTimer) clearTimeout(recordingRetryTimer);
             recordingRetryTimer = null;
-            const refreshed = await request(`/leaderboard?levelId=${encodeURIComponent(pending.levelId)}`);
+            const refreshed = await request(`${levelPath(pending.levelId)}/leaderboard`);
             leaderboardState = {
                 ...leaderboardState,
                 entries: refreshed.entries,
@@ -371,7 +376,7 @@ Module['api'] = (() => {
         ghostState = { status: 'loading', message: '', capture: null, reference: null };
         try {
             if (!levelId) throw new Error('RECORDING_UNAVAILABLE');
-            const board = await request(`/leaderboard?levelId=${encodeURIComponent(levelId)}`);
+            const board = await request(`${levelPath(levelId)}/leaderboard`);
             if (generation !== ghostGeneration) return false;
             const recording = board.championRecording;
             if (recording?.status !== 'ready' || !recording.attemptId || !recording.sha256) {
@@ -436,14 +441,11 @@ Module['api'] = (() => {
             message: 'Descargando recorrido campeón...'
         };
         try {
-            const query = new URLSearchParams({
-                levelId: reference.levelId,
-                attemptId: reference.attemptId,
-                sha256: reference.sha256
-            });
-            const response = await fetch(`/api/recordings?${query}`, {
-                credentials: 'same-origin', cache: 'no-store'
-            });
+            const response = await fetch(
+                `/api/v1${levelPath(reference.levelId)}/attempts/${encodeURIComponent(reference.attemptId)}/recording` +
+                    `?sha256=${encodeURIComponent(reference.sha256)}`,
+                { credentials: 'same-origin' }
+            );
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
                 throw Object.assign(
@@ -517,7 +519,7 @@ Module['api'] = (() => {
         try {
             const query = encodeURIComponent(catalogState.query);
             const cursorValue = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
-            const result = await request(`/catalog?query=${query}${cursorValue}`);
+            const result = await request(`/levels?query=${query}${cursorValue}`);
             if (pushPrevious) catalogState.previous.push(catalogState.currentCursor);
             catalogState.currentCursor = cursor;
             catalogState.nextCursor = result.cursor ?? null;
@@ -541,7 +543,7 @@ Module['api'] = (() => {
         renderPublications();
         try {
             const cursorValue = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-            const result = await request(`/publications/mine${cursorValue}`);
+            const result = await request(`/me/levels${cursorValue}`);
             if (pushPrevious) ownPublicationState.previous.push(ownPublicationState.currentCursor);
             ownPublicationState.currentCursor = cursor;
             ownPublicationState.nextCursor = result.cursor ?? null;
@@ -565,7 +567,7 @@ Module['api'] = (() => {
         try {
             if (status !== 'ready' || !identity?.id || payload.capture?.combiId !== identity.id)
                 throw new Error('IDENTITY_CHANGED');
-            const result = await request('/publications', 'POST', payload);
+            const result = await request('/levels', 'POST', payload);
             if (result.status === 'retired') throw new Error('LEVEL_ALREADY_RETIRED');
             publicationState = {
                 ...publicationState,
@@ -590,7 +592,7 @@ Module['api'] = (() => {
     }
     async function playPublicLevel(id) {
         try {
-            const level = await request(`/levels/${encodeURIComponent(id)}`);
+            const level = await request(publicLevelPath(id));
             publicationRevision++;
             publicationState = {
                 ...publicationState,
@@ -609,7 +611,7 @@ Module['api'] = (() => {
     }
     async function copyPublication(id) {
         try {
-            const copy = await request(`/publications/${encodeURIComponent(id)}/copy`, 'POST', {});
+            const copy = await request(`${publicLevelPath(id)}/copies`, 'POST');
             publicationRevision++;
             publicationState = {
                 ...publicationState,
@@ -628,7 +630,7 @@ Module['api'] = (() => {
     }
     async function retirePublication(id) {
         try {
-            await request(`/publications/${encodeURIComponent(id)}/retire`, 'POST', {});
+            await request(publicLevelPath(id), 'DELETE');
             publicationState = {
                 ...publicationState,
                 status: 'idle',

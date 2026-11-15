@@ -53,13 +53,20 @@ incremental. CMake genera `compile_commands.json` dentro del build nativo y
 | `just run`   | Compila y ejecuta la versión nativa                                            |
 | `just web`   | Compila la versión WebAssembly en `build/web/`                                 |
 | `just serve` | Compila para WebAssembly y levanta un servidor local (`http://localhost:6931`) |
+| `just aws-deploy` | Compila el juego y crea o actualiza todo en AWS: infraestructura, Lambdas y web (ver `infra/README.md`) |
+| `just aws-deploy-api` | Crea o actualiza solo la infraestructura y las Lambdas de AWS               |
+| `just aws-deploy-web` | Compila el juego y lo sube al sitio desplegado                              |
+| `just aws-outputs` | Muestra dónde quedó todo en AWS, como la dirección del juego                   |
+| `just aws-destroy` | Borra todo en AWS, incluidos los datos de los jugadores (pide confirmación)    |
 | `just clean` | Elimina los artefactos compilados                                              |
 
 ## Estructura del Proyecto
 
 ```text
 .
+├── api/             # Backend en AWS Lambda
 ├── assets/          # Texturas, fuentes, sonidos y recursos del juego
+├── infra/           # Plantilla de AWS y script para desplegar todo desde cero
 ├── build/           # Artefactos compilados (native/ y web/)
 ├── include/         # Cabeceras de terceros y propias
 │   ├── raylib/

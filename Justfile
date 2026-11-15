@@ -51,6 +51,25 @@ serve: web
     @echo "Serving ray.html on http://localhost:6931..."
     emrun --port 6931 {{web_dir}}/ray.html
 
+# Builds the game and creates or updates the infrastructure
+aws-deploy: web aws-deploy-api aws-deploy-web
+
+# Creates or updates only the AWS infrastructure and the Lambdas
+aws-deploy-api:
+    ./infra/deploy.sh backend
+
+# Builds the game and uploads it to the deployed site
+aws-deploy-web: web
+    ./infra/deploy.sh web
+
+# Shows where everything was deployed in AWS
+aws-outputs:
+    ./infra/deploy.sh outputs
+
+# Deletes everything in AWS (players' data included, asks for confirmation)
+aws-destroy:
+    ./infra/deploy.sh destroy
+
 # Removes all build artifacts
 clean:
     rm -rf {{build_dir}} {{build_dir}}/native-release compile_commands.json
