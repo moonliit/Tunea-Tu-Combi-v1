@@ -2,11 +2,132 @@
 
 #include "app/game/PartDefinition.hpp"
 #include "math/Vector2D.hpp"
-#include "raylib.h"
 #include "ui/UiButton.hpp"
 #include "ui/UiLayout.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <format>
+#include <optional>
+#include <string>
+
+namespace {
+
+void DrawHotkeyBadge(Rectangle bounds, int hotkey) {
+    const Rectangle badge{
+        bounds.x + bounds.width - 23.0f,
+        bounds.y + 5.0f,
+        18.0f,
+        18.0f
+    };
+    DrawRectangleRec(badge, Fade(BLACK, 0.75f));
+    DrawTextFont(
+        TextFormat("%d", hotkey),
+        static_cast<int>(badge.x + 5.0f),
+        static_cast<int>(badge.y + 2.0f),
+        12,
+        WHITE
+    );
+}
+
+void DrawCenteredTexture(const Texture2D& texture, Rectangle bounds, float padding, Color tint) {
+    if (texture.id == 0) return;
+    const float maxW = std::max(1.0f, bounds.width - padding * 2.0f);
+    const float maxH = std::max(1.0f, bounds.height - padding * 2.0f);
+    const float scale = std::min(maxW / texture.width, maxH / texture.height);
+    const float w = texture.width * scale;
+    const float h = texture.height * scale;
+    UiButton::DrawTextureFit(
+        texture,
+        Rectangle{
+            bounds.x + (bounds.width - w) / 2.0f,
+            bounds.y + (bounds.height - h) / 2.0f,
+            w,
+            h
+        },
+        tint
+    );
+}
+
+PartType ToolbarToPartType(ToolbarPart part) {
+    return static_cast<PartType>(part);
+}
+
+const UiButtonSkin& SkinForEditorAction(const UiGameTextures& game, EditorAction action) {
+    switch (action) {
+        case EditorAction::MoveLeft: return game.moveLeft;
+        case EditorAction::MoveRight: return game.moveRight;
+        case EditorAction::MoveUp: return game.moveUp;
+        case EditorAction::MoveDown: return game.moveDown;
+        case EditorAction::ClearBuild: return game.clearBuild;
+        case EditorAction::ClearSelection: return game.clearSelection;
+        case EditorAction::EnterView: return game.enterView;
+        case EditorAction::StartPlay: return game.modePlay;
+        case EditorAction::ReturnToBuild: return game.modeEdit;
+    }
+    return game.modeEdit;
+}
+
+void DrawTexturedControl(
+    const UiControl& control,
+    const UiButtonSkin& skin,
+    const UiGameTextures& gameUi,
+    bool selected,
+    std::optional<const Texture2D*> contentTexture,
+    std::optional<int> hotkey
+) {
+    const bool hovered = control.enabled && UiButton::IsHovered(control.bounds);
+    const bool pressed = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    const Texture2D& frame = UiButton::ResolveButtonTexture(skin, control.enabled, hovered, pressed);
+    if (frame.id != 0) {
+        UiButton::DrawTextureFit(frame, control.bounds, WHITE);
+    } else {
+        Color color = control.color;
+        if (!control.enabled) color = Color{70, 70, 70, 255};
+        DrawRectangleRec(control.bounds, color);
+        DrawRectangleLinesEx(control.bounds, 1.0f, DARKGRAY);
+    }
+
+    if (selected) {
+        if (gameUi.toolbarSelected.id != 0) {
+            UiButton::DrawTextureFit(gameUi.toolbarSelected, control.bounds, WHITE);
+        } else {
+            DrawRectangleLinesEx(control.bounds, 3.0f, YELLOW);
+        }
+    } else if (hovered && control.enabled) {
+        DrawRectangleLinesEx(control.bounds, 2.0f, Fade(WHITE, 0.6f));
+    }
+
+    if (contentTexture.has_value() && contentTexture.value() != nullptr &&
+        contentTexture.value()->id != 0) {
+        Color tint = control.enabled ? WHITE : Color{140, 140, 140, 220};
+        if (control.type == UiControlType::Activation && control.active) {
+            tint = WHITE;
+        }
+        DrawCenteredTexture(*contentTexture.value(), control.bounds, 5.0f, tint);
+    }
+
+    // label overlay (kept for clarity; can be hidden when art includes text)
+    if (!control.label.empty()) {
+        const char* label = control.label.data();
+        int fontSize = control.labelFontSize;
+        if (control.type == UiControlType::ToolbarPart) fontSize = 11;
+        int textX = static_cast<int>(control.bounds.x) + control.labelOffsetX;
+        int textY = static_cast<int>(control.bounds.y) + control.labelOffsetY;
+        if (control.type == UiControlType::ToolbarPart) {
+            textX = static_cast<int>(control.bounds.x + (control.bounds.width - MeasureText(label, fontSize)) / 2.0f);
+            textY = static_cast<int>(control.bounds.y + control.bounds.height - fontSize - 4);
+        }
+        DrawTextFont(label, textX + 1, textY + 1, fontSize, Fade(BLACK, 0.6f));
+        DrawTextFont(label, textX, textY, fontSize, control.enabled ? WHITE : GRAY);
+    }
+
+    if (hotkey.has_value()) {
+        DrawHotkeyBadge(control.bounds, hotkey.value());
+    }
+}
+
+}
 
 void GameUiRenderer::Render(
     int screenWidth,
@@ -15,15 +136,18 @@ void GameUiRenderer::Render(
     const BuildSession& buildSession,
     const EditorGrid& grid,
     const Camera2D& camera,
-    const ActivationRegistry& activationRegistry
+    const ActivationRegistry& activationRegistry,
+    const TextureLibrary& textures
 ) const {
+    (void)camera;
     DrawRectangle(
         0, static_cast<int>(screenHeight - UIBarHeight), screenWidth,
-        static_cast<int>(UIBarHeight), LIGHTGRAY
+        static_cast<int>(UIBarHeight), Fade(BLACK, 0.95f)
     );
-    DrawRectangleLines(
-        0, static_cast<int>(screenHeight - UIBarHeight), screenWidth,
-        static_cast<int>(UIBarHeight), GRAY
+    DrawLineEx(
+        {0, static_cast<float>(screenHeight - UIBarHeight)},
+        {static_cast<float>(screenWidth), static_cast<float>(screenHeight - UIBarHeight)},
+        5, {237, 18, 121,255}
     );
 
     const auto controls = UiLayout::BuildControls(
@@ -34,123 +158,62 @@ void GameUiRenderer::Render(
         screenHeight
     );
     const auto& selectedPartType = buildSession.GetSelectedPartType();
+    const UiGameTextures& gameUi = textures.GetUi().game;
+
     int activationIndex = 0;
     int toolbarIndex = 0;
     for (const UiControl& control : controls) {
-        const bool containedPartToolbar = control.type == UiControlType::ToolbarPart &&
-            control.toolbarPart == ToolbarPart::TNTBarrel;
-        Color color = control.color;
-        if (!control.enabled && control.type == UiControlType::ToolbarPart) {
-            color = Color{50, 50, 50, 255};
-        } else if (control.type == UiControlType::ToolbarPart &&
-            selectedPartType.has_value() &&
-            control.toolbarPart.has_value() &&
-            static_cast<PartType>(control.toolbarPart.value()) ==
-                selectedPartType.value()) {
-            color = control.color;
-        } else if (control.type == UiControlType::ToolbarPart) {
-            color = DARKGRAY;
-        } else if (control.type == UiControlType::Activation &&
-                   control.active) {
-            color = IsFanAction(control.activationAction.value())
-                ? DARKGREEN
-                : RED;
-        } else if (control.type == UiControlType::Editor) {
-            color = control.color;
-        }
-        DrawRectangle(
-            static_cast<int>(control.bounds.x),
-            static_cast<int>(control.bounds.y),
-            static_cast<int>(control.bounds.width),
-            static_cast<int>(control.bounds.height),
-            color
-        );
-        DrawText(
-            control.label.data(),
-            static_cast<int>(control.bounds.x) + control.labelOffsetX,
-            static_cast<int>(control.bounds.y) + control.labelOffsetY,
-            control.type == UiControlType::ToolbarPart
-                ? 14
-                : control.labelFontSize,
-            control.enabled ? WHITE : GRAY
-        );
-        if (containedPartToolbar) {
-            const std::string containerName =
-                std::string(GetPartDefinition(PartType::SquareBlock).name);
-            const std::string containerHint = std::format(
-                "(inside {})",
-                containerName
-            );
-            int hintFontSize = 7;
-            const int maxHintWidth = static_cast<int>(control.bounds.width) - 8;
-            while (hintFontSize > 5 &&
-                   MeasureText(containerHint.c_str(), hintFontSize) > maxHintWidth) {
-                --hintFontSize;
-            }
-            DrawText(
-                containerHint.c_str(),
-                static_cast<int>(control.bounds.x +
-                    (control.bounds.width - MeasureText(containerHint.c_str(), hintFontSize)) / 2),
-                static_cast<int>(control.bounds.y) + 31,
-                hintFontSize,
-                WHITE
-            );
-        }
-        if (control.type == UiControlType::Activation) {
-            ++activationIndex;
-            const int hotkey = activationIndex == 10 ? 0 : activationIndex;
-            DrawRectangle(
-                static_cast<int>(control.bounds.x + control.bounds.width) - 23,
-                static_cast<int>(control.bounds.y) + 5,
-                18,
-                18,
-                BLACK
-            );
-            DrawText(
-                TextFormat("%d", hotkey),
-                static_cast<int>(control.bounds.x + control.bounds.width) - 18,
-                static_cast<int>(control.bounds.y) + 7,
-                12,
-                WHITE
-            );
-        }
+        bool selected = false;
+        std::optional<int> hotkey;
+        std::optional<const Texture2D*> contentTexture;
+        const UiButtonSkin* skin = &gameUi.toolbarSlot;
+
         if (control.type == UiControlType::ToolbarPart) {
-            // Show the number key (1-6) that activates this editor part.
-            const int hotkey = toolbarIndex + 1;
-            DrawRectangle(
-                static_cast<int>(control.bounds.x + control.bounds.width) - 23,
-                static_cast<int>(control.bounds.y) + 5,
-                18,
-                18,
-                BLACK
-            );
-            DrawText(
-                TextFormat("%d", hotkey),
-                static_cast<int>(control.bounds.x + control.bounds.width) - 18,
-                static_cast<int>(control.bounds.y) + 7,
-                12,
-                WHITE
-            );
             ++toolbarIndex;
+            hotkey = toolbarIndex;
+            if (control.toolbarPart.has_value()) {
+                const PartType partType = ToolbarToPartType(control.toolbarPart.value());
+                contentTexture = &textures.GetPartTexture(partType);
+                if (selectedPartType.has_value() && selectedPartType.value() == partType) {
+                    selected = true;
+                }
+            }
+            skin = &gameUi.toolbarSlot;
+        } else if (control.type == UiControlType::Activation) {
+            ++activationIndex;
+            hotkey = activationIndex == 10 ? 0 : activationIndex;
+            selected = control.active;
+            skin = &gameUi.toolbarSlot;
+            // content/label shown via overlay; tint active
+        } else if (control.type == UiControlType::Editor && control.editorAction.has_value()) {
+            skin = &SkinForEditorAction(gameUi, control.editorAction.value());
+        }
+
+        DrawTexturedControl(
+            control, *skin, gameUi, selected, contentTexture, hotkey
+        );
+
+        if (control.type == UiControlType::Activation && control.active) {
+            DrawRectangleRec(control.bounds, Fade(IsFanAction(control.activationAction.value()) ? GREEN : ORANGE, 0.18f));
         }
     }
 
+    // ENTER badge for main mode button (play/edit side button) when present
     if (state == GameState::Build || state == GameState::Play) {
         const Rectangle modeButton = UiButton::PlaySideButton(screenWidth, screenHeight);
+        const Texture2D& badgeTex = textures.GetUi().keyEnterBadge;
         const Rectangle enterBadge{
-            modeButton.x + modeButton.width - 42.0f,
+            modeButton.x + modeButton.width - 80.0f,
             modeButton.y + 4.0f,
-            38.0f,
-            16.0f
+            76.0f,
+            32.0f
         };
-        DrawRectangleRec(enterBadge, Fade(BLACK, 0.65f));
-        DrawText(
-            "ENTER",
-            static_cast<int>(enterBadge.x + 3.0f),
-            static_cast<int>(enterBadge.y + 2.0f),
-            11,
-            WHITE
-        );
+        if (badgeTex.id != 0) {
+            UiButton::DrawTextureFit(badgeTex, enterBadge);
+        } else {
+            DrawRectangleRec(enterBadge, Fade(BLACK, 0.65f));
+            DrawTextFont("ENTER", static_cast<int>(enterBadge.x + 3.0f), static_cast<int>(enterBadge.y + 2.0f), 11, WHITE);
+        }
     }
 
     if (state == GameState::Build) {
@@ -159,17 +222,17 @@ void GameUiRenderer::Render(
             const int columns = 3;
             const int rows = (static_cast<int>(actions.size()) + columns - 1) / columns;
             const int panelX = screenWidth - 196;
-            const int panelY = 60;
+            const int panelY = 80;
             const int panelHeight = 24 + rows * 22;
             DrawRectangle(panelX, panelY, 184, panelHeight, Fade(DARKGRAY, 0.82f));
-            DrawText("EN PLAY (teclas 1-0)", panelX + 8, panelY + 5, 12, WHITE);
+            DrawTextFont("EN PLAY (teclas 1-0)", panelX + 8, panelY + 5, 12, WHITE);
             for (std::size_t index = 0; index < actions.size(); ++index) {
                 const int column = static_cast<int>(index) % columns;
                 const int row = static_cast<int>(index) / columns;
                 const int x = panelX + 8 + column * 58;
                 const int y = panelY + 25 + row * 22;
                 const int hotkey = index == 9 ? 0 : static_cast<int>(index) + 1;
-                DrawText(
+                DrawTextFont(
                     TextFormat("%d %s", hotkey, GetActivationLabel(actions[index])),
                     x,
                     y,
@@ -204,18 +267,6 @@ void GameUiRenderer::Render(
     const int verticalPadding = 4;
     const int modeControlsTextY = modeTextY + verticalPadding + modeTextFontSize;
 
-    DrawText(
-        modeText.c_str(),
-        modeTextX,
-        modeTextY,
-        modeTextFontSize,
-        modeTextColor
-    );
-    DrawText(
-        modeControlsText.c_str(),
-        modeTextX,
-        modeControlsTextY,
-        modeControlsFontSize,
-        modeTextColor
-    );
+    DrawTextFont(modeText.c_str(), modeTextX, modeTextY, modeTextFontSize, modeTextColor);
+    DrawTextFont(modeControlsText.c_str(), modeTextX, modeControlsTextY, modeControlsFontSize, modeTextColor);
 }

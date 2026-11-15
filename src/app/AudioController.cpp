@@ -149,6 +149,11 @@ const MusicWithPath& AudioController::GetMusicFromScenario(Scenario scenario) co
     if (scenario.type == Scenario::LevelEditorMusicPreview) {
         return m_levelEditorMusicLoaded ? m_levelEditorMusicClean : m_menuMusicClean;
     }
+    if (scenario.levelIndex == -1 && !scenario.levelEditorTrackName.empty()) {
+        return scenario.type == Scenario::PlayLevel
+            ? m_levelEditorMusicClean
+            : m_levelEditorMusicCustom;
+    }
     if (scenario.levelIndex > 0 && scenario.levelIndex <= OfficialLevelCount) {
         return scenario.type == Scenario::PlayLevel
             ? m_cleanLevelMusic[scenario.levelIndex - 1]
@@ -184,57 +189,99 @@ void AudioController::UpdateVariantFade(float deltaTime) {
     ApplyMusicVolume();
 }
 
-void AudioController::StartLevel(int levelNumber) {
-    Scenario scenario = {Scenario::VehicleBuild, levelNumber};
-    SetCurrentScenario(scenario);
-    if (m_customMusicActive) {
-        StopMusicStream(SelectedMusic().music);
+void AudioController::StartLevel(int levelNumber, const std::string& trackName) {
+    const Scenario scenario = {Scenario::VehicleBuild, levelNumber, trackName};
+    const bool sameScene = m_current.AreOnSameScene(scenario) &&
+        ((levelNumber == -1 && !trackName.empty() && m_current.levelEditorTrackName == trackName) ||
+         (levelNumber != -1 && m_current.levelIndex == levelNumber));
+
+    if (sameScene && IsMusicStreamPlaying(SelectedMusic().music)) {
+        SetCurrentScenario(scenario);
         m_customMusicActive = false;
+        m_returningToMenu = false;
+        m_transitioning = false;
+        // ensure normal playback volume logic applies (not stuck in variant fade-only mode)
+        if (m_volume <= 0.0f) m_volume = 1.0f;
+        ApplyMusicVolume();
+        if (!IsMusicStreamPlaying(SelectedMusic().music)) {
+            PlayMusicStream(SelectedMusic().music);
+        }
+        return;
     }
-    const int target = std::clamp(levelNumber, 1, OfficialLevelCount);
+
+    // default: transition into the level (fade/restart as appropriate)
+    SetCurrentScenario(scenario);
+    m_customMusicActive = false;
     m_returningToMenu = false;
-    BeginTransition(scenario);
+    if (IsMusicStreamPlaying(SelectedMusic().music)) {
+        // keep current playback; Update() will fade to target if transitioning
+        BeginTransition(scenario);
+    } else {
+        m_transitioning = false;
+        m_volume = 1.0f;
+        ApplyMusicVolume();
+        PlayMusicStream(SelectedMusic().music);
+        SeekMusicStream(SelectedMusic().music, 0.0f);
+        UpdateMusicStream(SelectedMusic().music);
+    }
 }
 
 void AudioController::StartLevelEditorMusic(const std::string& path, bool preview) {
     if (!m_initialized || path.empty()) return;
-    if (!m_levelEditorMusicLoaded) {
+
+    const std::string trackName = MusicWithPath::GetTrackName(path);
+    const bool sameTrackLoaded = m_levelEditorMusicLoaded &&
+        m_levelEditorMusicClean.GetTrackName() == trackName;
+
+    if (sameTrackLoaded) {
+        const bool wasPlaying = IsMusicStreamPlaying(SelectedMusic().music);
+        const Scenario target = preview
+            ? Scenario{Scenario::LevelEditorMusicPreview, 0, trackName}
+            : Scenario{Scenario::LevelEditorBuild, 0, trackName};
+
+        SetCurrentScenario(target);
+        m_customMusicActive = true;
+        m_returningToMenu = false;
+        m_transitioning = false;
+
+        // SetCurrentScenario doesnt start playback when nothing was playing
+        if (!wasPlaying && !IsMusicStreamPlaying(SelectedMusic().music)) {
+            m_variantFade = 1.0f;
+            ApplyMusicVolume();
+            PlayMusicStream(SelectedMusic().music);
+            SeekMusicStream(SelectedMusic().music, 0.0f);
+        }
+        UpdateMusicStream(SelectedMusic().music);
+        return;
+    }
+
+    // switching to a different editor track: unload previous editor streams if present
+    if (m_levelEditorMusicLoaded) {
+        StopMusicStream(SelectedMusic().music);
+        UnloadMusicStream(m_levelEditorMusicClean.music);
+        UnloadMusicStream(m_levelEditorMusicCustom.music);
+        m_levelEditorMusicLoaded = false;
+    } else {
         StopMusicStream(SelectedMusic().music);
     }
 
-    if (m_levelEditorMusicLoaded &&
-        m_levelEditorMusicClean.GetTrackName() != MusicWithPath::GetTrackName(path)) {
-        UnloadMusicStream(m_levelEditorMusicClean.music);
-    } else if (m_levelEditorMusicLoaded &&
-        m_levelEditorMusicClean.GetTrackName() == MusicWithPath::GetTrackName(path)) {
-        auto trackName = MusicWithPath::GetTrackName(path);
-        if (m_customMusicActive) {
-            StopMusicStream(SelectedMusic().music);
-            m_customMusicActive = false;
-        }
-        if (preview) {
-            SetCurrentScenario({Scenario::LevelEditorMusicPreview, 0, trackName});
-        } else {
-            SetCurrentScenario({Scenario::LevelEditorBuild, 0, trackName});
-        }
-        return;
-    }
     m_levelEditorMusicCustom = MusicWithPath::Load(path);
     m_levelEditorMusicLoaded = IsMusicValid(m_levelEditorMusicCustom.music);
     if (!m_levelEditorMusicLoaded) return;
-    std::string trackName = m_levelEditorMusicCustom.GetTrackName();
+
     m_levelEditorMusicCustom.music.looping = true;
     m_customMusicPath = path;
     m_levelEditorMusicClean = m_levelEditorMusicCustom.GetAndLoadDual();
-    if (preview) {
-        SetCurrentScenario({Scenario::LevelEditorMusicPreview, 0, trackName});
-    } else {
-        SetCurrentScenario({Scenario::LevelEditorBuild, 0, trackName});
-    }
+    m_levelEditorMusicClean.music.looping = true;
+
+    m_current = preview
+        ? Scenario{Scenario::LevelEditorMusicPreview, 0, trackName}
+        : Scenario{Scenario::LevelEditorBuild, 0, trackName};
     m_customMusicActive = true;
     m_variantFade = 1.0f;
     ApplyMusicVolume();
     PlayMusicStream(SelectedMusic().music);
+    SeekMusicStream(SelectedMusic().music, 0.0f);
     UpdateMusicStream(SelectedMusic().music);
     m_returningToMenu = false;
     m_transitioning = false;
@@ -266,23 +313,33 @@ void AudioController::SetCurrentScenario(Scenario scenario) {
 Scenario AudioController::GetCurrentScenario() const { return m_current; }
 
 void AudioController::ReturnToSelector() {
+    // SetCurrentScenario handles stopping/starting streams
+    m_customMusicActive = false;
     SetCurrentScenario({Scenario::LevelSelect});
-    if (m_customMusicActive) {
-        StopMusicStream(SelectedMusic().music);
-        m_customMusicActive = true;
-    }
     m_returningToMenu = true;
+    m_transitioning = false;
+    ApplyMusicVolume();
+    if (!IsMusicStreamPlaying(SelectedMusic().music)) {
+        PlayMusicStream(SelectedMusic().music);
+        SeekMusicStream(SelectedMusic().music, 0.0f);
+        UpdateMusicStream(SelectedMusic().music);
+    }
 }
 
 void AudioController::ResetToMenu() {
-    SetCurrentScenario({Scenario::MainMenu});
-    if (m_customMusicActive) {
-        StopMusicStream(SelectedMusic().music);
-        m_customMusicActive = false;;
-    }
-    PlaySound(m_radioStatic);
+    // SetCurrentScenario handles stopping/starting streams
+    m_customMusicActive = false;
+    m_transitioning = false;
     m_returningToMenu = false;
-    BeginTransition({Scenario::MainMenu});
+    SetCurrentScenario({Scenario::MainMenu});
+    m_volume = 1.0f;
+    ApplyMusicVolume();
+    if (!IsMusicStreamPlaying(SelectedMusic().music)) {
+        PlayMusicStream(SelectedMusic().music);
+        SeekMusicStream(SelectedMusic().music, 0.0f);
+    }
+    UpdateMusicStream(SelectedMusic().music);
+    PlaySound(m_radioStatic);
 }
 
 void AudioController::PlayUiClick() { PlaySound(m_uiClick); }

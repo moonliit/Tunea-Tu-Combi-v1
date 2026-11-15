@@ -210,6 +210,8 @@ void CustomLevelEditorScene::ProcessInput(float) {
         LevelDefinition definition = custom.definition;
         definition.levelNumber = -1;
         definition.initialCamera.reset();
+        auto scenario = m_context->audioController->GetCurrentScenario();
+        m_context->audioController->StartLevel(-1, scenario.levelEditorTrackName);
         m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
         return;
     }
@@ -531,13 +533,13 @@ void CustomLevelEditorScene::Render() const {
     );
     if (!custom.hasGrid) {
         const char* required = "¡Obligatorio!";
-        DrawText(required,
+        DrawTextFont(required,
             static_cast<int>(gridButton.x + (gridButton.width - MeasureText(required, 12)) / 2),
             static_cast<int>(gridButton.y + gridButton.height + 2.0f), 12, RED);
     }
     if (!custom.hasGoal) {
         const char* required = "¡Obligatorio!";
-        DrawText(required,
+        DrawTextFont(required,
             static_cast<int>(goalButton.x + (goalButton.width - MeasureText(required, 12)) / 2),
             static_cast<int>(goalButton.y + goalButton.height + 2.0f), 12, RED);
     }
@@ -558,14 +560,14 @@ void CustomLevelEditorScene::Render() const {
     DrawRectangleLinesEx(editButton, 1.0f, DARKGRAY);
     const char* editLabel = "EDITAR";
     const char* combiLabel = "COMBI";
-    DrawText(
+    DrawTextFont(
         editLabel,
         static_cast<int>(editButton.x + (editButton.width - MeasureText(editLabel, 20)) / 2),
         static_cast<int>(editButton.y + 22),
         20,
         WHITE
     );
-    DrawText(
+    DrawTextFont(
         combiLabel,
         static_cast<int>(editButton.x + (editButton.width - MeasureText(combiLabel, 16)) / 2),
         static_cast<int>(editButton.y + 50),
@@ -579,7 +581,7 @@ void CustomLevelEditorScene::Render() const {
         16.0f
     };
     DrawRectangleRec(enterBadge, Fade(BLACK, 0.65f));
-    DrawText(
+    DrawTextFont(
         "ENTER",
         static_cast<int>(enterBadge.x + 3.0f),
         static_cast<int>(enterBadge.y + 2.0f),
@@ -596,8 +598,8 @@ void CustomLevelEditorScene::Render() const {
         : m_designTool == DesignTool::Passenger
         ? "Haz clic sobre el terreno para colocar un pasajero"
         : "Haz clic sobre el terreno para colocar la meta en su superficie";
-    DrawText(instructions, 20, 64, 16, DARKGRAY);
-    DrawText(
+    DrawTextFont(instructions, 20, 64, 16, DARKGRAY);
+    DrawTextFont(
         TextFormat(
             "Terreno %s   Grid %s   Meta %s",
             custom.hasTerrain ? "OK" : "-",
@@ -612,7 +614,7 @@ void CustomLevelEditorScene::Render() const {
     const bool approved = m_context->customLevels->HasValidApproval(
         static_cast<std::size_t>(m_context->activeCustomLevel)
     );
-    DrawText(
+    DrawTextFont(
         approved
             ? "Esta versión fue completada y puede publicarse desde el menú."
             : "Para publicar, completa esta versión exacta. Los cambios invalidan la victoria.",
@@ -630,7 +632,7 @@ void CustomLevelEditorScene::Render() const {
         const Rectangle panel{panelX, panelY, 700.0f, 540.0f};
         DrawRectangleRec(panel, RAYWHITE);
         DrawRectangleLinesEx(panel, 2.0f, DARKGRAY);
-        DrawText("Música del nivel", static_cast<int>(panelX + 18), static_cast<int>(panelY + 18), 22, BLACK);
+        DrawTextFont("Música del nivel", static_cast<int>(panelX + 18), static_cast<int>(panelY + 18), 22, BLACK);
         for (std::size_t i = 0; i < categories.size(); ++i) {
             const Rectangle tab{panelX + 18.0f + (i % 4) * 164.0f,
                 panelY + 50.0f + (i / 4) * 36.0f, 158.0f, 30.0f};
@@ -647,7 +649,7 @@ void CustomLevelEditorScene::Render() const {
             const std::string label = tracks[i].artist.empty()
                 ? tracks[i].title
                 : tracks[i].title + " - " + tracks[i].artist;
-            DrawText(label.c_str(), static_cast<int>(row.x + 12), static_cast<int>(row.y + 13), 16, BLACK);
+            DrawTextFont(label.c_str(), static_cast<int>(row.x + 12), static_cast<int>(row.y + 13), 16, BLACK);
         }
         UiButton::Draw(Rectangle{panelX + 372.0f, panelY + 484.0f, 150.0f, 38.0f}, "Confirmar", SKYBLUE);
         UiButton::Draw(Rectangle{panelX + 532.0f, panelY + 484.0f, 150.0f, 38.0f}, "Cancelar", LIGHTGRAY);

@@ -2,6 +2,7 @@
 #include "ui/UiButton.hpp"
 #include "app/game/Level.hpp"
 #include "app/game/PartDefinition.hpp"
+#include <print>
 #include "math/GridCoord.hpp"
 #include "math/Vector2D.hpp"
 #include "ui/UiControl.hpp"
@@ -238,14 +239,30 @@ void MainGameScene::ProcessInput(float dt) {
             UiButton::PlaySideButton(
                 m_appContext->windowWidth, m_appContext->windowHeight
             ),
+            110.0f,
             52.0f,
-            32.0f,
             8.0f
         );
         if (UiButton::WasClicked(designButton)) {
             m_appContext->audioController->SetFanActive(false);
             m_appContext->audioController->SetWheelActive(false);
-            m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel});
+            if (m_appContext->activeCustomLevel >= 0 &&
+                m_appContext->activeCustomLevel <
+                    static_cast<int>(m_appContext->customLevels->GetLevels().size())) {
+                m_appContext->audioController->StartLevelEditorMusic(
+                    m_appContext->customLevels->GetLevels()[m_appContext->activeCustomLevel].musicPath,
+                    false
+                );
+            } else {
+                auto scenario = m_appContext->audioController->GetCurrentScenario();
+                if (!scenario.levelEditorTrackName.empty()) {
+                    m_appContext->audioController->SetCurrentScenario(
+                        {Scenario::LevelEditorBuild, -1, scenario.levelEditorTrackName}
+                    );
+                } else {
+                    m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel});
+                }
+            }
             m_appContext->returnToCustomDesign = true;
             m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
             return;
@@ -253,7 +270,7 @@ void MainGameScene::ProcessInput(float dt) {
     }
 
     const Rectangle menuButton = UiButton::AtTopRight(
-        m_appContext->windowWidth, 12.0f, 20.0f, 78.0f, 32.0f
+        m_appContext->windowWidth, 12.0f, 20.0f, 102.0f, 52.0f
     );
     if (UiButton::WasClicked(menuButton)) {
         m_appContext->audioController->SetFanActive(false);
@@ -602,7 +619,11 @@ void MainGameScene::TransitionToPlayMode() {
     if (m_competeAgainstGhost) m_ghostPlayback.StartCompetition();
     else m_ghostPlayback.StopAndRewind();
     auto scenario = m_appContext->audioController->GetCurrentScenario();
-    m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel, scenario.levelIndex});
+    m_appContext->audioController->SetCurrentScenario({
+        Scenario::PlayLevel,
+        scenario.levelIndex,
+        scenario.levelEditorTrackName
+    });
 
     const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
     const std::vector<TrackedPart> trackedParts = CollectParts(runtimeGrid);
@@ -825,7 +846,11 @@ void MainGameScene::ResetToBuildMode() {
 
     m_playSession.Reset(m_level.GetTerrain());
     auto scenario = m_appContext->audioController->GetCurrentScenario();
-    m_appContext->audioController->SetCurrentScenario({Scenario::VehicleBuild, scenario.levelIndex});
+    m_appContext->audioController->SetCurrentScenario({
+        Scenario::VehicleBuild,
+        scenario.levelIndex,
+        scenario.levelEditorTrackName
+    });
     std::fill(m_passengerCollected.begin(), m_passengerCollected.end(), false);
     m_carriedPassengers.clear();
 }
@@ -879,7 +904,7 @@ void MainGameScene::RenderGhostControls() const {
     const bool canUse = GhostCanBeRequested(status);
     DrawRectangleRec(GhostPanel(), Fade(DARKBLUE, 0.84f));
     DrawRectangleLinesEx(GhostPanel(), 2.0f, SKYBLUE);
-    DrawText("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
+    DrawTextFont("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
     UiButton::Draw(
         GhostPreviewButton(),
         m_ghostPlayback.IsPlaying()
@@ -951,7 +976,7 @@ void MainGameScene::RenderGhostControls() const {
             message = "Fantasma no disponible";
             break;
     }
-    DrawText(message.c_str(), 22, 180, 11, messageColor);
+    DrawTextFont(message.c_str(), 22, 180, 11, messageColor);
 }
 
 void MainGameScene::Render() const {
@@ -1044,7 +1069,8 @@ void MainGameScene::Render() const {
         m_buildSession,
         m_level.GetGrid(),
         m_camera,
-        m_playSession.GetActivationRegistry()
+        m_playSession.GetActivationRegistry(),
+        *m_appContext->textureLibrary
     );
     if (m_stateMachine.IsBuildMode() && !m_levelId.empty()) {
         RenderGhostControls();
@@ -1066,8 +1092,8 @@ void MainGameScene::Render() const {
             m_appContext->windowHeight,
             Fade(DARKGRAY, 0.5f)
         );
-        const char* label = "¡Ya llegó el chofer, causa!";
-        DrawText(
+        const char* label = "Ya llego el chofer, causa!";
+        DrawTextFont(
             label,
             static_cast<int>(centerX - MeasureText(label, 30) / 2),
             static_cast<int>(centerY - 90.0f),
@@ -1075,7 +1101,7 @@ void MainGameScene::Render() const {
             WHITE
         );
         const char* number = TextFormat("%d", count);
-        DrawText(
+        DrawTextFont(
             number,
             static_cast<int>(centerX - MeasureText(number, 120) / 2),
             static_cast<int>(centerY - 35.0f),
@@ -1083,32 +1109,29 @@ void MainGameScene::Render() const {
             WHITE
         );
     }
-    UiButton::Draw(
+    UiButton::DrawTextured(
         UiButton::AtTopRight(
-            m_appContext->windowWidth, 12.0f, 20.0f, 78.0f, 32.0f
+            m_appContext->windowWidth, 12.0f, 20.0f, 102.0f, 52.0f
         ),
-        "Menú",
-        DARKGRAY,
-        WHITE,
-        16,
-        false,
-        11,
-        false
+        m_appContext->textureLibrary->GetUi().game.navMenu,
+        true,
+        "Menú"
     );
     if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
-        UiButton::Draw(
+        UiButton::DrawTextured(
             UiButton::CenteredAbove(
                 UiButton::PlaySideButton(
                     m_appContext->windowWidth, m_appContext->windowHeight
                 ),
-                100.0f,
-                32.0f,
+                110.0f,
+                50.0f,
+                // 100.0f,
+                // 52.0f,
                 8.0f
             ),
-            "DISEÑO",
-            DARKGRAY,
-            WHITE,
-            14
+            m_appContext->textureLibrary->GetUi().game.navDiseno,
+            true,
+            "DISEÑO"
         );
     }
 
@@ -1118,25 +1141,25 @@ void MainGameScene::Render() const {
 void MainGameScene::RenderResults() const {
     const int width = m_appContext->windowWidth;
     const int height = m_appContext->windowHeight;
-    DrawText("Resultados", 36, 28, 34, BLACK);
+    DrawTextFont("Resultados", 36, 28, 34, BLACK);
 
     const Rectangle rankingPanel{30.0f, 82.0f, width * 0.44f, height - 165.0f};
     DrawRectangleRec(rankingPanel, Fade(LIGHTGRAY, 0.55f));
     DrawRectangleLinesEx(rankingPanel, 2.0f, GRAY);
-    DrawText("Ranking", 52, 106, 26, DARKGRAY);
+    DrawTextFont("Ranking", 52, 106, 26, DARKGRAY);
     const LeaderboardSnapshot& leaderboard = m_leaderboard.GetSnapshot();
     if (leaderboard.status == LeaderboardStatus::Loading) {
-        DrawText("Esperando confirmación del servidor...", 52, 150, 15, GRAY);
+        DrawTextFont("Esperando confirmación del servidor...", 52, 150, 15, GRAY);
     } else if (leaderboard.status == LeaderboardStatus::Unavailable) {
-        DrawText("Ranking global no disponible.", 52, 150, 17, MAROON);
+        DrawTextFont("Ranking global no disponible.", 52, 150, 17, MAROON);
         if (leaderboard.personalBest.available) {
             const std::string local = "Récord personal local: " +
                 std::to_string(leaderboard.personalBest.total);
-            DrawText(local.c_str(), 52, 183, 16, DARKGRAY);
+            DrawTextFont(local.c_str(), 52, 183, 16, DARKGRAY);
         }
     } else if (leaderboard.status == LeaderboardStatus::Ready) {
         if (leaderboard.entries.empty()) {
-            DrawText("Aún no hay marcas clasificadas.", 52, 150, 16, GRAY);
+            DrawTextFont("Aún no hay marcas clasificadas.", 52, 150, 16, GRAY);
         }
         int rowY = 142;
         for (const LeaderboardEntry& entry : leaderboard.entries) {
@@ -1161,9 +1184,9 @@ void MainGameScene::RenderResults() const {
                 : entry.name;
             const std::string label = "#" + std::to_string(entry.rank) +
                 "  " + name;
-            DrawText(label.c_str(), 50, rowY + 5, 16, own ? BLACK : DARKGRAY);
+            DrawTextFont(label.c_str(), 50, rowY + 5, 16, own ? BLACK : DARKGRAY);
             const std::string totalValue = std::to_string(entry.total);
-            DrawText(
+            DrawTextFont(
                 totalValue.c_str(),
                 static_cast<int>(rankingPanel.x + rankingPanel.width - 14.0f) -
                     MeasureText(totalValue.c_str(), 18),
@@ -1176,10 +1199,10 @@ void MainGameScene::RenderResults() const {
             if (own) {
                 detail += current ? " · esta partida" : " · tu récord anterior";
             }
-            DrawText(detail.c_str(), 50, rowY + 28, 12, own ? MAROON : GRAY);
+            DrawTextFont(detail.c_str(), 50, rowY + 28, 12, own ? MAROON : GRAY);
             rowY += 53;
         }
-        DrawText(
+        DrawTextFont(
             leaderboard.submissionConfirmed
                 ? "Puntos recalculados; física no verificada."
                 : "Resultado local no enviado al ranking.",
@@ -1188,7 +1211,7 @@ void MainGameScene::RenderResults() const {
             11,
             GRAY
         );
-        DrawText(
+        DrawTextFont(
             leaderboard.championRunRef.empty()
                 ? "Fantasma campeón: no disponible."
                 : "Fantasma campeón: grabación lista.",
@@ -1201,15 +1224,15 @@ void MainGameScene::RenderResults() const {
 
     const int panelX = static_cast<int>(width * 0.52f);
     const int valueX = width - 55;
-    DrawText("Puntuación", panelX, 86, 28, BLACK);
+    DrawTextFont("Puntuación", panelX, 86, 28, BLACK);
     const auto row = [panelX, valueX](
         const std::string& label,
         std::int64_t value,
         int y
     ) {
-        DrawText(label.c_str(), panelX, y, 18, DARKGRAY);
+        DrawTextFont(label.c_str(), panelX, y, 18, DARKGRAY);
         const std::string number = std::to_string(value);
-        DrawText(
+        DrawTextFont(
             number.c_str(),
             valueX - MeasureText(number.c_str(), 18),
             y,
@@ -1248,9 +1271,9 @@ void MainGameScene::RenderResults() const {
         279
     );
     DrawLine(panelX, 365, valueX, 365, DARKGRAY);
-    DrawText("TOTAL", panelX, 382, 30, BLACK);
+    DrawTextFont("TOTAL", panelX, 382, 30, BLACK);
     const std::string total = std::to_string(m_score.total);
-    DrawText(
+    DrawTextFont(
         total.c_str(),
         valueX - MeasureText(total.c_str(), 42),
         375,
@@ -1260,8 +1283,8 @@ void MainGameScene::RenderResults() const {
     if (leaderboard.personalBest.available) {
         const std::string personal = "Récord personal local: " +
             std::to_string(leaderboard.personalBest.total);
-        DrawText(personal.c_str(), panelX, 435, 16, DARKGRAY);
-        DrawText(
+        DrawTextFont(personal.c_str(), panelX, 435, 16, DARKGRAY);
+        DrawTextFont(
             leaderboard.personalBest.currentAttempt
                 ? "Nueva mejor marca local"
                 : "Tu mejor marca local anterior sigue vigente",
@@ -1277,7 +1300,7 @@ void MainGameScene::RenderResults() const {
         "Volver a niveles",
         SKYBLUE
     );
-    DrawText("ENTER", width / 2 + 72, height - 57, 10, DARKGRAY);
+    DrawTextFont("ENTER", width / 2 + 72, height - 57, 10, DARKGRAY);
 }
 
 std::optional<std::string> MainGameScene::PersonalRecordOwner() const {

@@ -4,6 +4,7 @@
 #include "app/game/GameState.hpp"
 #include "app/game/BuildSession.hpp"
 #include "app/game/ActivationRegistry.hpp"
+#include "rendering/TextureLibrary.hpp"
 
 #include <raylib.h>
 
@@ -16,7 +17,8 @@ public:
         const BuildSession& buildSession,
         const EditorGrid& grid,
         const Camera2D& camera,
-        const ActivationRegistry& activationRegistry
+        const ActivationRegistry& activationRegistry,
+        const TextureLibrary& textures
     ) const;
 };
 

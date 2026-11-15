@@ -13,8 +13,8 @@ constexpr float ControlHeight = 50.0f;
 constexpr float ControlGap = 10.0f;
 constexpr float EditorControlStartX = 390.0f;
 constexpr float EditorControlStartY = 20.0f;
-constexpr float EditorControlWidth = 62.0f;
-constexpr float EditorControlHeight = 32.0f;
+constexpr float EditorControlWidth = 102.0f;
+constexpr float EditorControlHeight = 52.0f;
 constexpr float EditorControlGap = 6.0f;
 
 UiControl MakeToolbarControl(
@@ -136,12 +136,12 @@ std::vector<UiControl> UiLayout::BuildControls(
             ToolbarPart::WindSail
         };
         constexpr std::string_view labels[] = {
-            "Driver Box",
-            "Square Box",
-            "Wheel",
-            "TNT",
-            "Fan",
-            "Sail"
+            "Cabina del chofer",
+            "Cabina de pasajero",
+            "Llanta",
+            "Tanque SOLGAS",
+            "Ventilador",
+            "Inflador de globos"
         };
         constexpr Color colors[] = {
             Color{106, 90, 205, 255},
@@ -179,7 +179,7 @@ std::vector<UiControl> UiLayout::BuildControls(
         const float editorTotalWidth =
             4.0f * (EditorControlWidth + EditorControlGap) - EditorControlGap;
         const float editorStartX =
-            screenWidth - editorTotalWidth - 120;
+            screenWidth - editorTotalWidth - 165;
         const auto canMoveUp = grid.CanShiftContents({0, -1});
         const auto canMoveRight = grid.CanShiftContents({1, 0});
         const auto canMoveDown = grid.CanShiftContents({0, 1});
@@ -191,7 +191,6 @@ std::vector<UiControl> UiLayout::BuildControls(
                 EditorAction::MoveUp,
                 EditorAction::MoveRight
             };
-            const std::string_view labels[] = {"Left", "Down", "Up", "Right"};
             const bool enabled[] = {canMoveLeft, canMoveDown, canMoveUp, canMoveRight};
             Rectangle bounds{
                 editorStartX + static_cast<float>(index) *
@@ -201,7 +200,7 @@ std::vector<UiControl> UiLayout::BuildControls(
                 EditorControlHeight
             };
             controls.push_back(MakeEditorControl(
-                index, actions[index], labels[index], BLUE, enabled[index],
+                index, actions[index], "", BLUE, enabled[index],
                 bounds
             ));
         }
@@ -215,7 +214,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             state == GameState::Build
                 ? EditorAction::StartPlay
                 : EditorAction::ReturnToBuild,
-            state == GameState::Build ? "PLAY" : "EDIT",
+            "",
             DARKGREEN,
             state == GameState::Play || grid.ContainsPartType(PartType::DriverBox),
             largeSideButton,
@@ -228,18 +227,15 @@ std::vector<UiControl> UiLayout::BuildControls(
         controls.push_back(MakeEditorControl(
             0,
             EditorAction::ReturnToBuild,
-            "EDIT",
-            DARKGREEN,
+            "",
+            DARKBLUE,
             true,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
-                static_cast<float>(screenHeight) / 2 + 155,
+                static_cast<float>(screenHeight) / 2 + 180,
                 110.0f,
-                40.0f
-            },
-            14,
-            17,
-            13
+                75.0f
+            }
         ));
         return controls;
     }
@@ -247,30 +243,27 @@ std::vector<UiControl> UiLayout::BuildControls(
         controls.push_back(MakeEditorControl(
             6,
             EditorAction::ClearSelection,
-            "DROP",
+            "",
             DARKGRAY,
             true,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
-                static_cast<float>(screenHeight) / 2 + 55,
+                static_cast<float>(screenHeight) / 2 + 90,
                 110.0f,
-                40.0f
-            },
-            14,
-            12,
-            13
+                75.0f
+            }
         ));
         controls.push_back(MakeEditorControl(
             7,
             EditorAction::ClearBuild,
-            "BASURA",
+            "",
             MAROON,
             true,
             Rectangle{
                 20.0f,
-                static_cast<float>(screenHeight) / 2 - 20,
+                static_cast<float>(screenHeight - 130) / 2,
                 110.0f,
-                40.0f
+                110.0f
             },
             14,
             17,
@@ -279,14 +272,14 @@ std::vector<UiControl> UiLayout::BuildControls(
         controls.push_back(MakeEditorControl(
             8,
             EditorAction::EnterView,
-            "VIEW",
+            "",
             DARKBLUE,
             true,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
-                static_cast<float>(screenHeight) / 2 + 155,
+                static_cast<float>(screenHeight) / 2 + 180,
                 110.0f,
-                40.0f
+                75.0f
             }
         ));
     }

@@ -104,40 +104,57 @@ void MainMenuScene::ProcessInput(float) {
         return;
     }
 
-    if (!m_selectingLevel) {
-        if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            m_context->audioController->PlayUiClick();
-            m_context->audioController->ReturnToSelector();
-            m_selectingLevel = true;
-        }
-        return;
-    }
-
     if (m_editingLevels) {
         ProcessLevelEditorInput();
         return;
     }
 
-    Rectangle resetButton{static_cast<float>(m_context->windowWidth - 130), 20.0f, 110.0f, 36.0f};
-    if (UiButton::WasClicked(resetButton)) {
+    Rectangle menuButton{
+        static_cast<float>(m_context->windowWidth - 230),
+        20.0f,
+        210.0f,
+        69.0f
+    };
+    if (UiButton::WasClicked(menuButton)) {
         m_context->audioController->PlayUiClick();
-        m_context->unlockedLevel = 1;
-        m_context->completedLevel = 0;
         m_context->audioController->ResetToMenu();
         m_selectingLevel = false;
         m_selectedLevel = 0;
         return;
     }
 
-    const Rectangle editorButton = UiButton::CenteredAtBottom(
-        m_context->windowWidth,
-        m_context->windowHeight,
-        230.0f,
-        42.0f,
-        22.0f
-    );
-    if (UiButton::WasClicked(editorButton)) {
+    const float buttonWidth = 145.0f;
+    const float buttonHeight = 145.0f;
+    const float buttonY = m_context->windowHeight / 2.0f + 22.0f;
+    const float separationX = 100.0f;
+    const float sumWidth = buttonWidth * 2.0f + separationX;
+    const float button1X = (m_context->windowWidth - sumWidth) / 2.0f;
+    const float button2X = button1X + buttonWidth + separationX;
+
+    const Rectangle playButton = Rectangle{
+        button1X,
+        buttonY,
+        buttonWidth,
+        buttonHeight
+    };
+    const Rectangle editorButton =  Rectangle{
+        button2X,
+        buttonY,
+        buttonWidth,
+        buttonHeight
+    };
+
+    if (UiButton::WasClicked(playButton) && !m_selectingLevel && !m_editingLevels) {
         m_context->audioController->PlayUiClick();
+        m_context->audioController->SetCurrentScenario({Scenario::LevelSelect});
+        m_selectingLevel = true;
+        m_editingLevels = false;
+        return;
+    }
+    if (UiButton::WasClicked(editorButton) && !m_selectingLevel && !m_editingLevels) {
+        m_context->audioController->PlayUiClick();
+        m_context->audioController->SetCurrentScenario({Scenario::LevelSelect});
+        m_selectingLevel = true;
         m_editingLevels = true;
         return;
     }
@@ -153,13 +170,27 @@ void MainMenuScene::ProcessInput(float) {
         m_selectedLevel = m_context->unlockedLevel - 1;
     }
 
+    if (!m_selectingLevel) return;
+
     const float cardWidth = std::min(200.0f, (m_context->windowWidth - 180.0f) / 3.0f);
     const float sideCardWidth = cardWidth * 0.68f;
+    const float gap = 20.0f;
     const float cardGap = 20.0f;
     const float centerX = m_context->windowWidth / 2.0f;
     const float cardY = static_cast<float>(m_context->windowHeight) / 2.0f - 60.0f;
-    const Rectangle leftArrow{centerX - cardWidth / 2.0f - cardGap - sideCardWidth - 48.0f, cardY + 38.0f, 40.0f, 44.0f};
-    const Rectangle rightArrow{centerX + cardWidth / 2.0f + cardGap + sideCardWidth + 8.0f, cardY + 38.0f, 40.0f, 44.0f};
+
+    const Rectangle leftArrow{
+        centerX - cardWidth / 2.0f - gap - sideCardWidth - 72.0f,
+        cardY + 38.0f,
+        60.0f,
+        66.0f
+    };
+    const Rectangle rightArrow{
+        centerX + cardWidth / 2.0f + gap + sideCardWidth + 16.0f,
+        cardY + 38.0f,
+        60.0f,
+        66.0f
+    };
     if (IsKeyPressed(KEY_LEFT) || UiButton::WasClicked(leftArrow))
         m_selectedLevel = (m_selectedLevel + OfficialLevelCount - 1) % OfficialLevelCount;
     if (IsKeyPressed(KEY_RIGHT) || UiButton::WasClicked(rightArrow))
@@ -228,7 +259,7 @@ void MainMenuScene::ProcessLevelEditorInput() {
         (m_context->windowWidth - 210.0f) / 2.0f,
         92.0f,
         210.0f,
-        42.0f
+        70.0f
     };
     if (UiButton::WasClicked(createButton)) {
         m_context->audioController->PlayUiClick();
@@ -240,19 +271,22 @@ void MainMenuScene::ProcessLevelEditorInput() {
     const Rectangle menuButton = UiButton::CenteredAtBottom(
         m_context->windowWidth,
         m_context->windowHeight,
-        110.0f,
-        38.0f,
+        210.0f,
+        70.0f,
         22.0f
     );
     if (UiButton::WasClicked(menuButton)) {
         m_context->audioController->PlayUiClick();
+        m_context->audioController->ResetToMenu();
+        m_selectingLevel = false;
         m_editingLevels = false;
+        m_selectedLevel = 0;
         return;
     }
 
-    const float listTop = 154.0f;
+    const float listTop = 182.0f;
     const float listBottom = static_cast<float>(m_context->windowHeight) - 76.0f;
-    const float rowHeight = 50.0f;
+    const float rowHeight = 75.0f;
     const float maxScroll = std::max(
         0.0f,
         m_context->customLevels->GetLevels().size() * rowHeight - (listBottom - listTop)
@@ -263,14 +297,18 @@ void MainMenuScene::ProcessLevelEditorInput() {
         maxScroll
     );
 
+    const float yPadding = 15.0f;
     const float rowWidth = std::min(820.0f, m_context->windowWidth - 40.0f);
     const float rowX = (m_context->windowWidth - rowWidth) / 2.0f;
+
     for (std::size_t i = 0; i < m_context->customLevels->GetLevels().size(); ++i) {
-        const float rowY = listTop + i * rowHeight - m_customListScroll;
+        const float rowY = listTop + i * (rowHeight + yPadding) - m_customListScroll;
         if (rowY + rowHeight < listTop || rowY > listBottom) continue;
-        const Rectangle deleteButton{rowX + rowWidth - 92.0f, rowY + 4.0f, 84.0f, 34.0f};
-        const Rectangle publishButton{rowX + rowWidth - 220.0f, rowY + 4.0f, 120.0f, 34.0f};
-        const Rectangle editButton{rowX + rowWidth - 358.0f, rowY + 4.0f, 130.0f, 34.0f};
+
+        const Rectangle editButton{rowX + rowWidth - 260.0f, rowY + 9.0f, 120.0f, 57.0f};
+        const Rectangle publishButton{rowX + rowWidth - 398.0f, rowY + 9.0f, 120.0f, 57.0f};
+        const Rectangle deleteButton{rowX + rowWidth - 132.0f, rowY + 9.0f, 120.0f, 57.0f};
+
         if (UiButton::WasClicked(deleteButton)) {
             m_context->audioController->PlayUiClick();
             m_context->customLevels->Delete(i);
@@ -304,28 +342,99 @@ void MainMenuScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
 
+    const UiTextures& ui = m_context->textureLibrary->GetUi();
+
     if (!m_selectingLevel) {
-        const char* title = "Tunea tu combi";
-        DrawText(title, (m_context->windowWidth - MeasureText(title, 40)) / 2, m_context->windowHeight / 2 - 40, 40, BLACK);
-        const char* prompt = "Presiona ENTER o haz clic para continuar";
-        DrawText(prompt, (m_context->windowWidth - MeasureText(prompt, 20)) / 2, m_context->windowHeight / 2 + 30, 20, DARKGRAY);
+        const Texture2D& logo = ui.logo;
+        const float maxLogoWidth = m_context->windowWidth * 0.7f;
+        const float maxLogoHeight = m_context->windowHeight * 0.35f;
+        float logoWidth = static_cast<float>(logo.width);
+        float logoHeight = static_cast<float>(logo.height);
+        if (logoWidth > 0.0f && logoHeight > 0.0f) {
+            const float scale = std::min(maxLogoWidth / logoWidth, maxLogoHeight / logoHeight);
+            logoWidth *= scale;
+            logoHeight *= scale;
+        } else {
+            logoWidth = maxLogoWidth;
+            logoHeight = maxLogoHeight * 0.5f;
+        }
+        UiButton::DrawTextureFit(
+            logo,
+            Rectangle{
+                (m_context->windowWidth - logoWidth) / 2.0f,
+                m_context->windowHeight/10.0f,
+                logoWidth,
+                logoHeight
+            }
+        );
+
+        const float buttonWidth = 145.0f;
+        const float buttonHeight = 145.0f;
+        const float buttonY = m_context->windowHeight / 2.0f + 22.0f;
+        const float separationX = 100.0f;
+        const float sumWidth = buttonWidth * 2.0f + separationX;
+        const float button1X = (m_context->windowWidth - sumWidth) / 2.0f;
+        const float button2X = button1X + buttonWidth + separationX;
+
+        UiButton::DrawTextured(
+            Rectangle{
+                button1X,
+                buttonY,
+                buttonWidth,
+                buttonHeight
+            },
+            ui.game.modePlay,
+            true,
+            "Jugar"
+        );
+        UiButton::DrawTextured(
+            Rectangle{
+                button2X,
+                buttonY,
+                buttonWidth,
+                buttonHeight
+            },
+            ui.menuToEditor,
+            true,
+            "Editor de niveles"
+        );
     } else if (!m_editingLevels) {
         const char* title = "Selecciona un nivel";
-        DrawText(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, m_context->windowHeight / 2 - 120, 30, BLACK);
-        if (m_context->completedLevel > 0) {
-            const char* message = TextFormat("¡Completaste el nivel %d! Ya puedes intentar el siguiente.", m_context->completedLevel);
-            DrawText(message, (m_context->windowWidth - MeasureText(message, 18)) / 2, m_context->windowHeight / 2 - 82, 18, DARKGREEN);
-        }
-        Rectangle resetButton{static_cast<float>(m_context->windowWidth - 130), 20.0f, 110.0f, 36.0f};
-        UiButton::Draw(resetButton, "Reiniciar", LIGHTGRAY, BLACK, 16, false, 18);
+        DrawTextFont(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, m_context->windowHeight / 2 - 120, 30, BLACK);
+        Rectangle menuButton{
+            static_cast<float>(m_context->windowWidth - 230),
+            20.0f,
+            210.0f,
+            69.0f
+        };
+        UiButton::DrawTextured(
+            menuButton,
+            ui.menuBack,
+            true,
+            "Menu"
+        );
 
         const float cardWidth = std::min(200.0f, (m_context->windowWidth - 180.0f) / 3.0f);
         const float sideCardWidth = cardWidth * 0.68f;
         const float gap = 20.0f;
         const float centerX = m_context->windowWidth / 2.0f;
         const float cardY = static_cast<float>(m_context->windowHeight) / 2.0f - 60.0f;
-        UiButton::Draw(Rectangle{centerX - cardWidth / 2.0f - gap - sideCardWidth - 48.0f, cardY + 38.0f, 40.0f, 44.0f}, "<", LIGHTGRAY, BLACK, 24);
-        UiButton::Draw(Rectangle{centerX + cardWidth / 2.0f + gap + sideCardWidth + 8.0f, cardY + 38.0f, 40.0f, 44.0f}, ">", LIGHTGRAY, BLACK, 24);
+
+        const Rectangle leftArrow{
+            centerX - cardWidth / 2.0f - gap - sideCardWidth - 72.0f,
+            cardY + 38.0f,
+            60.0f,
+            66.0f
+        };
+        const Rectangle rightArrow{
+            centerX + cardWidth / 2.0f + gap + sideCardWidth + 16.0f,
+            cardY + 38.0f,
+            60.0f,
+            66.0f
+        };
+        UiButton::DrawTextureFit(ui.arrowLeft, leftArrow);
+        UiButton::DrawTextureFit(ui.arrowRight, rightArrow);
+
         for (int offset = -1; offset <= 1; ++offset) {
             const int levelIndex = (m_selectedLevel + offset + OfficialLevelCount) % OfficialLevelCount;
             const float width = offset == 0 ? cardWidth : sideCardWidth;
@@ -338,67 +447,66 @@ void MainMenuScene::Render() const {
             DrawRectangleLinesEx(card, offset == 0 ? 3.0f : 2.0f, DARKGRAY);
             const char* level = OfficialLevels[levelIndex].label;
             const int fontSize = offset == 0 ? 24 : 18;
-            DrawText(level, static_cast<int>(card.x + (card.width - MeasureText(level, fontSize)) / 2), static_cast<int>(card.y + (card.height - fontSize) / 2), fontSize, BLACK);
+            DrawTextFont(level, static_cast<int>(card.x + (card.width - MeasureText(level, fontSize)) / 2), static_cast<int>(card.y + (card.height - fontSize) / 2), fontSize, BLACK);
         }
-        UiButton::Draw(
-            UiButton::CenteredAtBottom(
-                m_context->windowWidth,
-                m_context->windowHeight,
-                230.0f,
-                42.0f,
-                22.0f
-            ),
-            "Editor de niveles"
-        );
     } else if (m_editingLevels) {
         const char* title = "Editor de niveles";
-        DrawText(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, 38, 30, BLACK);
-        UiButton::Draw(
-            Rectangle{(m_context->windowWidth - 210.0f) / 2.0f, 92.0f, 210.0f, 42.0f},
-            "Crear nivel",
-            SKYBLUE
+        DrawTextFont(title, (m_context->windowWidth - MeasureText(title, 30)) / 2, 38, 30, BLACK);
+        UiButton::DrawTextured(
+            Rectangle{
+                (m_context->windowWidth - 210.0f) / 2.0f,
+                92.0f,
+                210.0f,
+                70.0f,
+            },
+            ui.menuCreateLevel,
+            true,
+            "Crear nivel"
         );
 
-        const float listTop = 154.0f;
+        const float listTop = 182.0f;
         const float listBottom = static_cast<float>(m_context->windowHeight) - 76.0f;
-        const float rowHeight = 50.0f;
+
+        const float rowHeight = 75.0f;
         const float rowWidth = std::min(820.0f, m_context->windowWidth - 40.0f);
         const float rowX = (m_context->windowWidth - rowWidth) / 2.0f;
+        const float yPadding = 15.0f;
         bool drewLevel = false;
+
         for (std::size_t i = 0; i < m_context->customLevels->GetLevels().size(); ++i) {
-            const float rowY = listTop + i * rowHeight - m_customListScroll;
+            const float rowY = listTop + i * (rowHeight + yPadding) - m_customListScroll;
             if (rowY + rowHeight < listTop || rowY > listBottom) continue;
             drewLevel = true;
-            const Rectangle row{rowX, rowY, rowWidth, 42.0f};
-            DrawRectangleRec(row, LIGHTGRAY);
-            DrawRectangleLinesEx(row, 1.0f, DARKGRAY);
+            const Rectangle row{rowX, rowY, rowWidth, rowHeight};
+            DrawRectangleRec(row, BLACK);
+            DrawRectangleLinesEx(row, 5.0f, {238, 18, 121, 255});
             const std::string& name = m_context->customLevels->GetLevels()[i].name;
-            DrawText(name.c_str(), static_cast<int>(row.x + 14), static_cast<int>(row.y + 13), 16, BLACK);
+            DrawTextFont(name.c_str(), static_cast<int>(row.x + 20), static_cast<int>(row.y + 20), 32, {252, 169, 33, 255});
             const bool approved = m_context->customLevels->HasValidApproval(i);
-            UiButton::Draw(
-                Rectangle{rowX + rowWidth - 358.0f, rowY + 4.0f, 130.0f, 34.0f},
-                "Editar y jugar",
-                SKYBLUE,
-                BLACK,
-                14
+            // here:
+            UiButton::DrawTextured(
+                Rectangle{rowX + rowWidth - 260.0f, rowY + 9.0f, 120.0f, 57.0f},
+                ui.menuEditAndPlay,
+                true,
+                "Editar y jugar"
             );
-            UiButton::Draw(
-                Rectangle{rowX + rowWidth - 220.0f, rowY + 4.0f, 120.0f, 34.0f},
-                approved ? "Publicar" : "Falta victoria",
-                approved ? DARKGREEN : GRAY,
-                WHITE,
-                12
+            UiButton::DrawTextured(
+                Rectangle{rowX + rowWidth - 398.0f, rowY + 9.0f, 120.0f, 57.0f},
+                ui.menuPublish,
+                approved,
+                approved ? "Publicar" : "Falta victoria"
             );
-            UiButton::Draw(
-                Rectangle{rowX + rowWidth - 92.0f, rowY + 4.0f, 84.0f, 34.0f},
-                "Borrar",
-                RED
+            UiButton::DrawTextured(
+                Rectangle{rowX + rowWidth - 132.0f, rowY + 9.0f, 120.0f, 57.0f},
+                ui.menuDelete,
+                true,
+                "Borrar"
             );
         }
         const PublicationSnapshot& publication =
             m_context->publications.GetSnapshot();
         if (!publication.message.empty()) {
-            DrawText(
+            DrawTextFont(
                 publication.message.c_str(),
                 20,
                 140,
@@ -411,7 +519,7 @@ void MainMenuScene::Render() const {
         }
         if (m_context->customLevels->GetLevels().empty()) {
             const char* emptyText = "Todavía no hay niveles personalizados";
-            DrawText(
+            DrawTextFont(
                 emptyText,
                 (m_context->windowWidth - MeasureText(emptyText, 18)) / 2,
                 170,
@@ -420,17 +528,19 @@ void MainMenuScene::Render() const {
             );
         } else if (!drewLevel) {
             const char* scrollText = "Usa la rueda del mouse para ver más niveles";
-            DrawText(scrollText, (m_context->windowWidth - MeasureText(scrollText, 16)) / 2, 170, 16, DARKGRAY);
+            DrawTextFont(scrollText, (m_context->windowWidth - MeasureText(scrollText, 16)) / 2, 170, 16, DARKGRAY);
         }
 
-        UiButton::Draw(
+        UiButton::DrawTextured(
             UiButton::CenteredAtBottom(
                 m_context->windowWidth,
                 m_context->windowHeight,
-                110.0f,
-                38.0f,
+                210.0f,
+                70.0f,
                 22.0f
             ),
+            ui.menuBack,
+            true,
             "Menú"
         );
 
@@ -445,34 +555,37 @@ void MainMenuScene::Render() const {
             DrawRectangleRec(dialog, RAYWHITE);
             DrawRectangleLinesEx(dialog, 2.0f, DARKGRAY);
             const char* prompt = "Nombre del nivel";
-            DrawText(prompt, static_cast<int>(dialog.x + 24), static_cast<int>(dialog.y + 22), 20, BLACK);
+            DrawTextFont(prompt, static_cast<int>(dialog.x + 24), static_cast<int>(dialog.y + 22), 20, BLACK);
             const Rectangle input{dialog.x + 24, dialog.y + 62, dialog.width - 48, 40};
             DrawRectangleRec(input, WHITE);
             DrawRectangleLinesEx(input, 1.0f, DARKGRAY);
             const char* placeholder = "Escribe un nombre...";
             const char* shownName = m_newLevelName.empty() ? placeholder : m_newLevelName.c_str();
-            DrawText(shownName, static_cast<int>(input.x + 10), static_cast<int>(input.y + 11), 18, DARKGRAY);
-            DrawText(
+            DrawTextFont(shownName, static_cast<int>(input.x + 10), static_cast<int>(input.y + 11), 18, DARKGRAY);
+            DrawTextFont(
                 TextFormat("%d/%d", static_cast<int>(CountCharacters(m_newLevelName)), MaxLevelNameCharacters),
                 static_cast<int>(input.x + input.width - 58),
                 static_cast<int>(input.y + 45),
                 14,
                 DARKGRAY
             );
-            UiButton::Draw(
+            UiButton::DrawTextured(
                 Rectangle{dialog.x + 24, dialog.y + 148, 130, 38},
+                ui.menuDialogCancel,
+                true,
                 "Cancelar"
             );
-            UiButton::Draw(
+            UiButton::DrawTextured(
                 Rectangle{dialog.x + dialog.width - 154, dialog.y + 148, 130, 38},
-                "Crear",
-                m_newLevelName.empty() ? GRAY : SKYBLUE
+                ui.menuDialogCreate,
+                !m_newLevelName.empty(),
+                "Crear"
             );
         }
     }
 
 #ifndef __EMSCRIPTEN__
-    DrawText("Modo local: sin reserva de nombre ni publicacion online", 14, m_context->windowHeight - 18, 12, DARKGRAY);
+    DrawTextFont("Modo local: sin reserva de nombre ni publicacion online", 14, m_context->windowHeight - 18, 12, DARKGRAY);
 #endif
 
     EndDrawing();

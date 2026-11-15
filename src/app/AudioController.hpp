@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <optional>
+#include <print>
 
 struct Scenario {
     enum Type {
@@ -17,8 +18,8 @@ struct Scenario {
         LevelEditorBuild,
         LevelEditorMusicPreview,
     } type;
-    int levelIndex = 0;
-    std::string levelEditorTrackName;
+    int levelIndex = -1;
+    std::string levelEditorTrackName = "";
 
     bool IsClean() const {
         return type == MainMenu || type == PlayLevel || type == LevelEditorMusicPreview;
@@ -26,7 +27,25 @@ struct Scenario {
     bool IsCustom() const {
         return type == LevelSelect || type == VehicleBuild || type == LevelEditorBuild;
     }
+    std::string TypeToString() const {
+        switch (type) {
+            case MainMenu: return "MainMenu";
+            case LevelSelect: return "LevelSelect";
+            case PlayLevel: return "PlayLevel";
+            case VehicleBuild: return "VehicleBuild";
+            case LevelEditorBuild: return "LevelEditorBuild";
+            case LevelEditorMusicPreview: return "LevelEditorMusicPreview";
+            default: return "Unknown";
+        }
+    }
     bool AreOnSameScene(const Scenario& other) const {
+        if (type == LevelEditorBuild && other.type == VehicleBuild) {
+            return levelEditorTrackName == other.levelEditorTrackName;
+        }
+        if (type == VehicleBuild && other.type == LevelEditorBuild) {
+            return other.levelEditorTrackName == levelEditorTrackName;
+        }
+
         if (type == MainMenu || type == LevelSelect) {
             return other.type == MainMenu || other.type == LevelSelect;
         }
@@ -122,7 +141,7 @@ class AudioController {
 public:
     void Initialize();
     void Shutdown();
-    void StartLevel(int levelNumber);
+    void StartLevel(int levelNumber = -1, const std::string& trackName = "");
     void StartLevelEditorMusic(const std::string& path, bool preview);
     void SetCurrentScenario(Scenario scenario);
     Scenario GetCurrentScenario() const;

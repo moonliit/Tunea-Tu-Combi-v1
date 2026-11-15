@@ -1,16 +1,21 @@
 #ifndef UI_BUTTON_HPP
 #define UI_BUTTON_HPP
 
+#include "rendering/TextureLibrary.hpp"
 #include <raylib.h>
 
 namespace UiButton {
 
 inline Rectangle PlaySideButton(int windowWidth, int windowHeight) {
+    const float sidePadding = 20.0f;
+    const float width = 170.0f;
+    const float height = 150.0f;
+
     return Rectangle{
-        static_cast<float>(windowWidth - 150),
-        static_cast<float>(windowHeight / 2 - 45),
-        130.0f,
-        90.0f
+        static_cast<float>(windowWidth - width - sidePadding),
+        static_cast<float>((windowHeight - height)/ 2),
+        width,
+        height
     };
 }
 
@@ -51,7 +56,7 @@ inline Rectangle CenteredAbove(
     float gap
 ) {
     return Rectangle{
-        reference.x + (reference.width - width) / 2.0f,
+        reference.x + reference.width  - width - gap,
         reference.y - gap - height,
         width,
         height
@@ -61,6 +66,34 @@ inline Rectangle CenteredAbove(
 inline bool WasClicked(Rectangle bounds) {
     return CheckCollisionPointRec(GetMousePosition(), bounds) &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+
+inline bool IsHovered(Rectangle bounds) {
+    return CheckCollisionPointRec(GetMousePosition(), bounds);
+}
+
+inline void DrawTextureFit(const Texture2D& texture, Rectangle bounds, Color tint = WHITE) {
+    if (texture.id == 0) return;
+    DrawTexturePro(
+        texture,
+        Rectangle{0.0f, 0.0f, static_cast<float>(texture.width), static_cast<float>(texture.height)},
+        bounds,
+        Vector2{0.0f, 0.0f},
+        0.0f,
+        tint
+    );
+}
+
+inline const Texture2D& ResolveButtonTexture(
+    const UiButtonSkin& skin,
+    bool enabled = true,
+    bool hovered = false,
+    bool pressed = false
+) {
+    if (!enabled) return skin.disabled;
+    if (pressed) return skin.pressed;
+    if (hovered) return skin.hover;
+    return skin.normal;
 }
 
 inline void Draw(
@@ -79,13 +112,32 @@ inline void Draw(
         ? static_cast<int>(bounds.x +
             (bounds.width - MeasureText(label, fontSize)) / 2)
         : static_cast<int>(bounds.x) + leftPadding;
-    DrawText(
+    DrawTextFont(
         label,
         textX,
         static_cast<int>(bounds.y + (bounds.height - fontSize) / 2),
         fontSize,
         foreground
     );
+}
+
+inline void DrawTextured(
+    Rectangle bounds,
+    const UiButtonSkin& skin,
+    bool enabled = true,
+    const char* fallbackLabel = nullptr,
+    Color fallbackBackground = LIGHTGRAY,
+    Color fallbackForeground = BLACK,
+    int fontSize = 18
+) {
+    const bool hovered = enabled && IsHovered(bounds);
+    const bool pressed = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    const Texture2D& texture = ResolveButtonTexture(skin, enabled, hovered, pressed);
+    if (texture.id != 0) {
+        DrawTextureFit(texture, bounds, WHITE);
+    } else {
+        Draw(bounds, fallbackLabel ? fallbackLabel : "", fallbackBackground, fallbackForeground, fontSize);
+    }
 }
 
 }
