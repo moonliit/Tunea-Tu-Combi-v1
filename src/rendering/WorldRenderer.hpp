@@ -37,7 +37,8 @@ public:
         PartOrientation selectedOrientation,
         const std::optional<PartType>& repositionedPartType,
         PartOrientation repositionedOrientation,
-        int screenHeight
+        int screenHeight,
+        bool showParts = true
     ) const;
     void RenderGhostPlayback(const std::vector<GhostRenderState>& states) const;
 };

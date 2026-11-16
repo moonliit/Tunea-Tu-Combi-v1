@@ -3,6 +3,7 @@
 
 #include <string>
 #include <memory>
+#include <optional>
 #include "app/SceneManager.hpp"
 #include "identity/IdentitySession.hpp"
 #include "publication/PublicationClient.hpp"
@@ -21,6 +22,8 @@ struct AppContext {
     int completedLevel = 0;
     bool returnToCustomDesign = false;
     bool returnedToSelector = false;
+    std::optional<bool> requestedCustomSelector;
+    bool requestedCommunitySelector = false;
     AudioController* audioController = nullptr;
     TextureLibrary* textureLibrary = nullptr;
     std::shared_ptr<CustomLevelCatalog> customLevels;

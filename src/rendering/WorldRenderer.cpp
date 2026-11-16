@@ -137,7 +137,8 @@ void WorldRenderer::Render(
     PartOrientation selectedOrientation,
     const std::optional<PartType>& repositionedPartType,
     PartOrientation repositionedOrientation,
-    int screenHeight
+    int screenHeight,
+    bool showParts
 ) const {
     RenderBackground(
         m_textures.GetBackground(m_background),
@@ -148,6 +149,11 @@ void WorldRenderer::Render(
 
     for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {
         RenderTerrainMesh(m_textures, mesh, playSession.GetTerrainVisual());
+    }
+
+    if (!showParts) {
+        EndMode2D();
+        return;
     }
 
     if (state == GameState::Build || state == GameState::View) {
@@ -206,7 +212,7 @@ void WorldRenderer::Render(
                 }
             }
         }
-    } else if (state == GameState::Play) {
+    } else if (state == GameState::Play || state == GameState::Results) {
         const EditorGrid& runtimeGrid = playSession.GetRuntimeGrid();
         for (const Part* part : runtimeGrid.GetActiveParts()) {
             if (part->HasContainedPart()) {
@@ -218,7 +224,11 @@ void WorldRenderer::Render(
             }
             m_partRenderer.Render(part->GetRenderState(runtimeGrid));
         }
-
+        for (const auto& ejected : playSession.GetEjectedParts()) {
+            if (ejected) {
+                m_partRenderer.Render(ejected->GetRenderState(runtimeGrid));
+            }
+        }
     }
 
     EndMode2D();

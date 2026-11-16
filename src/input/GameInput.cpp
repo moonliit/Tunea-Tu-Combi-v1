@@ -48,9 +48,9 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
             ToolbarPart::DriverBox,
             ToolbarPart::SquareBlock,
             ToolbarPart::CircleWheel,
-            ToolbarPart::TNTBarrel,
             ToolbarPart::Fan,
-            ToolbarPart::WindSail
+            ToolbarPart::WindSail,
+            ToolbarPart::TNTBarrel
         };
         for (std::size_t index = 0;
              index < std::size(numberKeys) && index < std::size(numberParts);

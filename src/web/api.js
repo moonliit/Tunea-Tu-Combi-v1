@@ -1,5 +1,9 @@
 // the session secret only exists in the HttpOnly cookie
 Module['api'] = (() => {
+    const matchaStyles = document.createElement('style');
+    matchaStyles.textContent = `@font-face{font-family:"Matcha Style";src:url("./MatchaStyle.ttf") format("truetype")}
+        .combi-matcha,.combi-matcha button,.combi-matcha input{font-family:"Matcha Style",sans-serif}`;
+    document.head.append(matchaStyles);
     let identity = null;
     let status = 'local';
     let epoch = 0;
@@ -649,13 +653,40 @@ Module['api'] = (() => {
     function publicationSnapshot() {
         return publicationState;
     }
+    function catalogSnapshot() {
+        return {
+            loading: catalogState.loading,
+            error: catalogState.error,
+            hasPrevious: catalogState.previous.length > 0,
+            hasNext: Boolean(catalogState.nextCursor),
+            items: catalogState.items.map(level => ({
+                id: level.id,
+                name: level.name,
+                author: level.author?.name || 'Combi sin nombre'
+            }))
+        };
+    }
+    function openCatalog() {
+        catalogState.query = '';
+        catalogState.previous = [];
+        loadCatalog(null);
+    }
+    function nextCatalogPage() {
+        if (catalogState.nextCursor && !catalogState.loading)
+            loadCatalog(catalogState.nextCursor, true);
+    }
+    function previousCatalogPage() {
+        if (catalogState.previous.length && !catalogState.loading)
+            loadCatalog(catalogState.previous.pop());
+    }
     function consumePublicationAction(action) {
         if (action === 'play') publicationState.play = null;
         if (action === 'copy') publicationState.copy = null;
     }
     function mountPublications(container) {
         const panel = document.createElement('details');
-        panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font:15px sans-serif;background:#f5f1e8;color:#30281f;text-align:left';
+        panel.classList.add('combi-matcha');
+        panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font-size:15px;background:#f5f1e8;color:#30281f;text-align:left';
         const summary = document.createElement('summary');
         summary.textContent = 'Niveles de la comunidad';
         summary.style.cssText = 'font-weight:bold;cursor:pointer';
@@ -813,8 +844,9 @@ Module['api'] = (() => {
     }
     function mount() {
         const panel = document.createElement('section');
+        panel.classList.add('combi-matcha');
         panel.setAttribute('aria-label', 'Identidad de tu combi');
-        panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font:15px sans-serif;background:#eef4e7;color:#203021;text-align:left';
+        panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font-size:15px;background:#eef4e7;color:#203021;text-align:left';
         const state = document.createElement('p');
         state.setAttribute('role', 'status');
         const form = document.createElement('form');
@@ -881,6 +913,11 @@ Module['api'] = (() => {
         loadPreparedChampionGhost,
         ghostSnapshot,
         publishDraft,
+        catalogSnapshot,
+        openCatalog,
+        nextCatalogPage,
+        previousCatalogPage,
+        playPublicLevel,
         publicationSnapshot,
         consumePublicationAction
     };

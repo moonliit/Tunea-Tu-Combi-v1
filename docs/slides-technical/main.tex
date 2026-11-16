@@ -40,7 +40,7 @@
 \newcommand{\R}{\mathbb{R}}
 
 \title[Tunea Tu Combi]{Tunea Tu Combi}
-\subtitle{Juego de construcción y simulación física inspirado en Bad Piggies}
+\subtitle{Construcción, simulación física y progresión}
 \author{Proyecto de Computación Gráfica}
 \institute{Universidad de Ingeniería y Tecnología (UTEC)}
 \date{\today}
@@ -61,72 +61,90 @@
   \tableofcontents[hideallsubsections]
 \end{frame}
 
-\section{Juego y arquitectura}
+\section{Juego y experiencia}
 
-\begin{frame}{Premisa del juego: construir, lanzar, aprender}
-  \begin{block}{Idea de diseño}
-    El jugador ensambla un pequeño vehículo a partir de piezas disponibles,
-    lo lanza en un nivel basado en terreno y itera sobre el diseño cuando el
-    resultado no es el esperado.
+\begin{frame}{Premisa y gameplay loop}
+  \begin{block}{Idea central}
+    El jugador diseña un vehículo con las partes disponibles, lo prueba en un
+    nivel con terreno y meta, observa qué falla y vuelve a iterar sobre el diseño.
   \end{block}
 
-  \vspace{0.25cm}
+  \vspace{0.15cm}
   \begin{columns}[T]
-    \column{0.48\textwidth}
-    \textbf{Ciclo del jugador}
+    \column{0.5\textwidth}
+    \textbf{Gameplay loop}
     \begin{enumerate}
-      \item Selecciona y coloca piezas en la cuadrícula del editor.
-      \item Rota, reubica y conecta componentes.
-      \item Inicia la simulación y observa el resultado.
-      \item Vuelve a la construcción para mejorar el diseño.
+      \item Elegir nivel y planear la \emph{combi}.
+      \item Construir en la grilla (colocar, rotar, reubicar).
+      \item Iniciar la simulación y activar partes cuando convenga.
+      \item Leer el resultado: llegar, romperse, volcar o perder carga.
+      \item Ajustar el diseño y reintentar para mejorar el puntaje.
     \end{enumerate}
-    \column{0.48\textwidth}
-    \textbf{Enfoque del proyecto de gráficos}
+    \column{0.46\textwidth}
+    \textbf{Objetivo del intento}
     \begin{itemize}
-      \item Edición espacial basada en cuadrícula.
-      \item Ensamblado procedural de física.
-      \item Colisiones y restricciones articuladas en 2D.
-      \item Separación clara entre modelo, física y renderizado.
+      \item Llevar al \emph{Conductor} hasta la zona de meta.
+      \item Mantener la condición de victoria el tiempo requerido.
+      \item Entregar partes/pasajeros relevantes para maximizar score.
+      \item Balancear potencia, estabilidad y costo de construcción.
     \end{itemize}
   \end{columns}
 \end{frame}
 
-\begin{frame}{Arquitectura de nivel de aplicación}
+\begin{frame}{Proceso: construir y jugar un nivel}
   \begin{center}
   \begin{tikzpicture}[
     box/.style={draw=utecblue,rounded corners,fill=utecblue!9,
-      minimum width=2.6cm,minimum height=0.75cm,align=center,font=\footnotesize},
+      minimum width=2.55cm,minimum height=0.8cm,align=center,font=\small},
     arrow/.style={-{Latex[length=2mm]},thick,utecblue}
   ]
-    \node[box] (app) {App / AppContext};
-    \node[box,right=0.5cm of app] (scene) {SceneManager};
-    \node[box,below=0.55cm of app] (menu) {MainMenuScene};
-    \node[box,right=0.5cm of menu] (editor) {EditorScene};
-    \node[box,right=0.5cm of editor] (play) {PlayScene};
-    \node[box,below=0.55cm of editor] (game) {GameState};
-    \node[box,right=0.5cm of game] (level) {Level / LevelCatalog};
-    \draw[arrow] (app)--(scene);
-    \draw[arrow] (scene)--(menu);
-    \draw[arrow] (scene)--(editor);
-    \draw[arrow] (scene)--(play);
-    \draw[arrow] (editor)--(game);
-    \draw[arrow] (play)--(game);
-    \draw[arrow] (game)--(level);
+    \node[box] (level) {Nivel\\(catálogo/custom)};
+    \node[box,right=0.45cm of level] (build) {Build\\\texttt{BuildSession}};
+    \node[box,right=0.45cm of build] (play) {Play\\\texttt{PlaySession}};
+    \node[box,right=0.45cm of play] (result) {Meta, score\\y feedback};
+    \draw[arrow] (level)--(build);
+    \draw[arrow] (build)--node[above,font=\scriptsize]{ensamblar}(play);
+    \draw[arrow] (play)--(result);
+    \draw[arrow,bend left=28] (result.north) to node[above,font=\scriptsize]{iterar / reintentar} (build.north);
   \end{tikzpicture}
   \end{center}
 
-  \vspace{0.25cm}
+  \vspace{0.15cm}
   \begin{itemize}
-    \item \texttt{App} y \texttt{AppContext}: punto de entrada y contexto global.
-    \item \texttt{SceneManager}: gestor de escenas (\texttt{I\_Scene}).
-    \item Las escenas poseen el modo de interacción; los modelos poseen los
-      datos persistentes del juego.
-    \item \texttt{GoalWindowTracker} detecta la condición de victoria
-      (partes y pasajeros entregados dentro de una ventana de tiempo).
+    \item \textbf{Build:} el jugador edita un \texttt{BuildModel} sobre \texttt{EditorGrid}; la sesión guarda selección, orientación y reposicionamiento.
+    \item \textbf{Transición a Play:} \texttt{PlaySession} clona el modelo (\emph{runtime model}), crea el mundo físico/terreno y \texttt{PhysicsAssembler} materializa rigid bodies y joints.
+    \item \textbf{Simulación:} cada frame actualiza activaciones, avanza la física, procesa impactos/eventos (roturas, eyecciones, consumo) y evalúa la meta.
+    \item \textbf{Resultado:} se calcula el score del intento y el jugador puede volver a construcción para mejorar el diseño.
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Modo construcción: EditorGrid y BuildSession}
+\begin{frame}{Condición de victoria: ventana de meta}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{block}{\texttt{GoalWindowTracker}}
+      \begin{itemize}
+        \item La ventana inicia cuando el \emph{Conductor} entra/toca el área de meta (considerando cruce entre frames).
+        \item Una vez iniciada, la ventana no se cancela si el Conductor sale.
+        \item Se registran partes iniciales y pasajeros entregados según las reglas del objetivo.
+        \item La victoria se completa tras sostener la condición por la ventana requerida ($\approx 3\,\mathrm{s}$).
+      \end{itemize}
+    \end{block}
+    \column{0.46\textwidth}
+    \begin{block}{Lectura de juego}
+      No basta con ``rozar'' la meta: el diseño debe llegar y mantenerse funcional.
+      \vspace{0.15cm}
+      \begin{itemize}
+        \item Roturas estructurales pueden impedir la entrega.
+        \item Explosiones o impactos cambian el resultado.
+        \item La ruta y el tiempo influyen en el score.
+      \end{itemize}
+    \end{block}
+  \end{columns}
+\end{frame}
+
+\section{Construcción y contenido}
+
+\begin{frame}{Construcción del vehículo: grilla y sesiones}
   \begin{columns}[T]
     \column{0.53\textwidth}
     \begin{tikzpicture}[scale=0.65]
@@ -139,758 +157,428 @@
         node[below,font=\scriptsize] {mundo a celda};
       \node[font=\scriptsize] at (3.5,3.55) {EditorGrid};
       \node[font=\scriptsize,align=center] at (5.5,1.0)
-        {ocupación de celdas\\y partes activas};
+        {ocupación\\y partes activas};
     \end{tikzpicture}
-    \column{0.47\textwidth}
-    \begin{block}{EditorGrid}
-      Convierte mundo a \texttt{GridCoord}; valida límites y ocupación;
-      coloca, elimina, rota, limpia y desplaza contenidos; mantiene caché de
-      partes activas.
-    \end{block}
-
-    \vspace{0.15cm}
-    \begin{block}{BuildSession}
-      Almacena tipo y orientación seleccionados; soporta recogida,
-      reposicionamiento, rotación y colocación sin acoplar UI a la cuadrícula.
+    \column{0.43\textwidth}
+    \begin{block}{\texttt{EditorGrid} / \texttt{BuildSession}}
+      \begin{itemize}
+        \item Conversión mundo$\leftrightarrow$celda, límites y ocupación.
+        \item Colocar, quitar, rotar, limpiar y desplazar contenidos.
+        \item Selección, pickup y reposicionamiento desacoplados de la UI.
+      \end{itemize}
     \end{block}
   \end{columns}
 
-  \vspace{0.15cm}
-  \begin{block}{Conversión de coordenadas}
+  \vspace{0.1cm}
+  \begin{block}{Coordenadas discretas}
     \[
-      \mathbf{c}_{\text{grid}} =
-      \left\lfloor
-      \frac{\mathbf{p}_{\text{mundo}} - \mathbf{p}_{\text{origen}}}
-           {\text{tamaño de celda}}
+      \mathbf{c} = \left\lfloor
+      \frac{\mathbf{p}_{world} - \mathbf{o}}{s}
       \right\rfloor,
       \qquad
-      \mathbf{p}_{\text{mundo}} =
-      \mathbf{p}_{\text{origen}} +
-      \mathbf{c}_{\text{grid}} \cdot \text{tamaño de celda}.
+      \mathbf{p}_{world} = \mathbf{o} + s\,\mathbf{c}, \quad s=\texttt{cellSize}.
     \]
   \end{block}
 \end{frame}
 
-\begin{frame}{Partes, definiciones y compatibilidad}
+\begin{frame}{Partes, conectores y reglas de build}
   \begin{columns}[T]
-    \column{0.49\textwidth}
-    \begin{block}{Instancia \texttt{Part}}
+    \column{0.5\textwidth}
+    \begin{block}{Modelo de partes}
       \begin{itemize}
-        \item Coordenada de cuadrícula e identificador único.
-        \item Orientación y parte contenida opcional.
-        \item Cuerpo físico y de anclaje (\texttt{I\_RigidBody}).
+        \item \texttt{Part}: celda, id, orientación, rol/contenido y cuerpo físico.
+        \item \texttt{PartDefinition}: masa, forma, conectores, comportamiento y offsets.
+        \item \texttt{BuildModel}: placements, conexiones y reglas de colocación.
       \end{itemize}
     \end{block}
-    \column{0.49\textwidth}
-    \begin{block}{Definición \texttt{PartDefinition}}
+    \column{0.46\textwidth}
+    \begin{block}{Partes (nombres in-game)}
       \begin{itemize}
-        \item Masa, forma, escala de radio y offset de anclaje.
-        \item Comportamiento pasivo o explosivo (\texttt{PartBehavior}).
-        \item Rol: normal, contenedor o contenible (\texttt{PartRole}).
+        \item \textbf{Cabina del chofer} (\emph{Driver Box}) y \textbf{Conductor} (contenido).
+        \item \textbf{Cabina de pasajero} (\emph{Square Block}).
+        \item \textbf{Llanta} (\emph{Wheel}), \textbf{Ventilador} (\emph{Fan}).
+        \item \textbf{Inflador de globos} (\emph{Wind Sail}).
+        \item \textbf{Tanque SOLGAS} (\emph{TNT}).
+      \end{itemize}
+    \end{block}
+  \end{columns}
+
+  \vspace{0.1cm}
+  \begin{itemize}
+    \item El Conductor no se coloca suelto: va dentro de la Cabina del chofer (una por build).
+    \item Las conexiones válidas dependen de compatibilidad y máscaras de conectores; piezas acoplables pueden auto-orientarse al construir.
+    \item Inercia de caja homogénea (aprox. para rigid body rectangular): \(
+      I = \frac{1}{12}m(w^2+h^2).
+    \)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Editor de niveles (contenido custom)}
+  \begin{columns}[T]
+    \column{0.52\textwidth}
+    \begin{block}{\texttt{CustomLevelEditorScene}}
+      Herramientas de authoring observadas:
+      \begin{itemize}
+        \item \textbf{Terrain}: editar geometría del terreno.
+        \item \textbf{Grid}: definir zona/soporte de construcción.
+        \item \textbf{Goal}: ubicar el área objetivo.
+        \item \textbf{Passenger}: colocar pasajeros del nivel.
+        \item \textbf{Eraser}: borrar elementos del diseño.
+      \end{itemize}
+    \end{block}
+    \column{0.44\textwidth}
+    \begin{block}{Datos y alcance}
+      \begin{itemize}
+        \item Persistencia/catálogo: \texttt{CustomLevelCatalog}, \texttt{CustomLevelData}.
+        \item Configuración adicional del nivel (p. ej. selección de música).
+        \item Define el reto/escenario; es distinto del editor de vehículo.
+        \item El nivel custom se juega con el mismo pipeline build $\rightarrow$ play $\rightarrow$ score.
+      \end{itemize}
+    \end{block}
+  \end{columns}
+\end{frame}
+
+\section{Puntuación y ranking}
+
+\begin{frame}{Cómo se consiguen puntos y cómo se rankea}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{block}{Puntaje (alto nivel, \texttt{score-v2})}
+      \begin{itemize}
+        \item \textbf{Pickup/delivery de pasajeros:} recompensan rescatar y entregar.
+        \item \textbf{Entrega de partes:} premia conservar/entregar el vehículo inicial.
+        \item \textbf{Velocidad:} bono por completar rápido (acotado por tiempo límite).
+        \item \textbf{Construction penalty:} usar muchas piezas extra reduce el total efectivo (incentiva eficiencia).
+        \item \textbf{Validez:} intentos con estadísticas inconsistentes no puntúan como válidos.
+      \end{itemize}
+    \end{block}
+    \column{0.46\textwidth}
+    \begin{block}{Ranking}
+      \begin{itemize}
+        \item Se registra el intento (\texttt{RunStatistics}, breakdown, \texttt{RunCapture}).
+        \item El ranking prioriza el \textbf{total} de score.
+        \item En empates se usan criterios secundarios (p. ej. menor tiempo del Conductor en el flujo de leaderboard).
+        \item Existe comparación local/reglas y envío/consulta remota de leaderboard cuando aplica.
       \end{itemize}
     \end{block}
   \end{columns}
 
   \vspace{0.1cm}
   \begin{center}
-  \begin{tikzpicture}[
-    node distance=0.45cm,
-    box/.style={draw=utecblue,rounded corners,fill=utecblue!9,
-      minimum width=2.3cm,minimum height=0.7cm,align=center,font=\scriptsize},
-    arrow/.style={-{Latex[length=2mm]},thick,utecblue}
-  ]
-    \node[box] (grid) {celda};
-    \node[box,right=of grid] (part) {\texttt{Part}};
-    \node[box,right=of part] (def) {\texttt{PartDefinition}};
-    \node[box,right=of def] (joint) {conectores};
-    \draw[arrow] (grid)--(part);
-    \draw[arrow] (part)--(def);
-    \draw[arrow] (def)--(joint);
-  \end{tikzpicture}
+    \small \textit{acciones del run} $\rightarrow$ \textit{breakdown} $\rightarrow$ \textit{total} $\rightarrow$ \textit{posición}.
   \end{center}
-
-  \vspace{0.1cm}
-  \begin{itemize}
-    \item Tipos: bloque, rueda, TNT, ventilador, vela, driver y caja de
-      driver.
-    \item \texttt{DriverBox} solo admite un \texttt{Driver}.
-  \end{itemize}
-
-  \vspace{0.15cm}
-  \begin{block}{Inercia de una caja homogénea}
-    \[
-      I = \frac{1}{12} m \left( w^2 + h^2 \right).
-    \]
-  \end{block}
 \end{frame}
 
-\section{De la construcción a la física}
+\section{Motor de física y pipeline}
 
-\begin{frame}{Transición de construcción a simulación}
+\begin{frame}{Del build a la simulación (rigid bodies)}
   \begin{center}
   \begin{tikzpicture}[
     box/.style={draw=utecblue,rounded corners,fill=utecblue!9,
       minimum width=2.7cm,minimum height=0.82cm,align=center,font=\small},
     arrow/.style={-{Latex[length=2mm]},thick,utecblue}
   ]
-    \node[box] (placements) {\texttt{BuildModel}\\
-      colocaciones};
-    \node[box,right=0.65cm of placements] (assembly) {\texttt{PhysicsAssembler}\\
-      cuerpos y juntas};
-    \node[box,right=0.65cm of assembly] (world) {\texttt{I\_PhysicsWorld}\\
-      simulación};
-    \node[box,below=0.65cm of assembly] (terrain) {definición de terreno\\y gravedad};
+    \node[box] (placements) {\texttt{BuildModel}\\placements/connections};
+    \node[box,right=0.6cm of placements] (assembly) {\texttt{PhysicsAssembler}\\bodies + joints};
+    \node[box,right=0.6cm of assembly] (world) {\texttt{I\_PhysicsWorld}\\step};
+    \node[box,below=0.55cm of assembly] (terrain) {terrain + gravity};
     \draw[arrow] (placements)--(assembly);
     \draw[arrow] (assembly)--(world);
     \draw[arrow] (terrain)--(world);
   \end{tikzpicture}
   \end{center}
 
-  \vspace{0.25cm}
-  \begin{itemize}
-    \item \texttt{BuildModel::GetPlacements()} ofrece una descripción estable
-      de lo que el jugador construyó.
-    \item \texttt{BuildModel::GetConnections()} expone los anclajes de
-      conectores entre piezas.
-    \item \texttt{PhysicsAssembler} convierte esas descripciones en cuerpos
-      rígidos y objetos de junta.
-    \item \texttt{PlaySession} posee gravedad, terreno, eventos de activación
-      y actualizaciones de física por frame.
-  \end{itemize}
-
-  \vspace{0.15cm}
-  \begin{block}{De pieza a cuerpo rígido}
-    Cada parte genera un cuerpo con masa \texttt{def.mass}, forma según
-    \texttt{PartShape} (caja, círculo, cápsula o triángulo), y posición
-    derivada de su celda y orientación.
+  \begin{block}{Motor custom}
+    Evolución de Box2D a un motor propio de rigid bodies e impulsos:
+    \texttt{World}, \texttt{RigidBody}, \texttt{Joint}, pipeline de step
+    (broad/narrow, velocity, position, cleanup) y análisis estructural.
   \end{block}
 \end{frame}
 
-\begin{frame}{Motor de física propio: de Box2D a rigid bodies custom}
-  \begin{block}{Evolución técnica}
-    La primera versión usaba \textbf{Box2D}. Esa dependencia se eliminó y se
-    migró a un motor de rigid bodies e impulsos desarrollado internamente.
-  \end{block}
-
-  \vspace{0.1cm}
-  \begin{columns}[T]
-    \column{0.49\textwidth}
-    \textbf{Abstracción \texttt{I\_Physics}}
-    \begin{itemize}
-      \item \texttt{I\_RigidBody}: posición, rotación, masa, fuerza e
-        impulso lineal.
-      \item \texttt{I\_PhysicsWorld}: paso (\texttt{Step}), creación de cuerpos,
-        terreno, juntas y explosiones (\texttt{ApplyExplosion}).
-    \end{itemize}
-    \column{0.49\textwidth}
-    \textbf{Motor en \texttt{src/physics/engine/}}
-    \begin{itemize}
-      \item \texttt{World}, \texttt{RigidBodies}, \texttt{Joint},
-        \texttt{StructuralAnalysis}.
-      \item \texttt{step-pipeline/}: broad, narrow, velocidades, posiciones y
-        limpieza de juntas rotas.
-    \end{itemize}
-  \end{columns}
-
-  \vspace{0.1cm}
-  \begin{alertblock}{Nota de alcance}
-    Box2D es contexto histórico; se describe el motor custom actual.
-  \end{alertblock}
-\end{frame}
-
-\section{Pipeline de simulación}
-
-\begin{frame}{Frame de simulación: de la entrada al renderizado}
-  \begin{center}
-  \begin{tikzpicture}[
-    box/.style={draw=utecblue,rounded corners,fill=utecblue!9,
-      minimum width=2.15cm,minimum height=0.82cm,align=center,font=\small},
-    arrow/.style={-{Latex[length=2mm]},thick,utecblue}
-  ]
-    \node[box] (input) {entrada\\y acciones};
-    \node[box,right=0.28cm of input] (integrate) {integrar\\gravedad};
-    \node[box,right=0.28cm of integrate] (broad) {broad\\phase};
-    \node[box,right=0.28cm of broad] (narrow) {narrow\\phase};
-    \node[box,right=0.28cm of narrow] (solve) {resolver\\restricciones};
-    \node[box,right=0.28cm of solve] (draw) {renderizar\\mundo};
-    \foreach \a/\b in {input/integrate,integrate/broad,broad/narrow,
-      narrow/solve,solve/draw} {\draw[arrow] (\a)--(\b);}
-  \end{tikzpicture}
-  \end{center}
-
-  \vspace{0.2cm}
-  \begin{block}{Ecuaciones del movimiento por frame}
+\begin{frame}{Paso de simulación: integración y solver iterativo}
+  \begin{block}{Integración (semi-implícita, por substep)}
+    Para cada cuerpo dinámico con masa $m$ e inversa $m^{-1}$:
     \[
-      \mathbf{v}_{t+\Delta t} = \mathbf{v}_t + \Delta t\,(\mathbf{g} +
-      \mathbf{F}_{\text{ext}}/m),
+      \mathbf{v} \leftarrow \mathbf{v} + \Delta t\left(\mathbf{g} + m^{-1}\mathbf{F}_{ext}\right),
       \qquad
-      \mathbf{x}_{t+\Delta t} = \mathbf{x}_t + \Delta t\,\mathbf{v}_{t+\Delta t}.
+      \mathbf{x} \leftarrow \mathbf{x} + \Delta t\,\mathbf{v},
+      \qquad
+      \theta \leftarrow \theta + \Delta t\,\omega.
     \]
-    Luego se aplican impulsos de contacto y de juntas sobre la velocidad.
+    (Con damping aplicado en el step para estabilidad numérica.)
+  \end{block}
+
+  \vspace{0.05cm}
+  \begin{block}{Resolución de constraints por iteraciones}
+    En cada substep:
+    \[
+      \underbrace{\text{integrate}}_{\mathbf{v},\mathbf{x},\theta}
+      \rightarrow \text{broad/narrow}
+      \rightarrow \underbrace{\text{velocity solver}}_{\text{impulses}}
+      \rightarrow \underbrace{\text{position correction}}_{\text{drift/penetration}}.
+    \]
+    Esto aproxima la solución global resolviendo contactos y joints repetidamente.
   \end{block}
 \end{frame}
 
-\begin{frame}{Broad phase: descarte con AABB}
+\begin{frame}{Velocity constraints: joints y contactos}
+  \begin{block}{Revolute joint (anclajes coincidentes)}
+    Error de velocidad relativa en el ancla $\mathbf{r}$:
+    \[
+      \mathbf{v}_{rel} = (\mathbf{v}_B + \boldsymbol{\omega}_B \times \mathbf{r}_B) -
+      (\mathbf{v}_A + \boldsymbol{\omega}_A \times \mathbf{r}_A), \qquad
+      \mathbf{C} = \mathbf{p}_B - \mathbf{p}_A.
+    \]
+    Impulso lineal con \emph{Baumgarte bias}:
+    \[
+      \boldsymbol{\lambda} = -\mathbf{K}^{-1}\left(\mathbf{v}_{rel} + \frac{\beta}{\Delta t}\mathbf{C}\right),
+      \qquad
+      \Delta\mathbf{v} = \pm m^{-1}\boldsymbol{\lambda},\;
+      \Delta\omega = \pm I^{-1}(\mathbf{r}\times\boldsymbol{\lambda}).
+    \]
+  \end{block}
+
+  \begin{block}{Weld joint y contacto}
+    \textbf{Weld}: añade constraint angular
+    \(
+      C_\theta = (\theta_B-\theta_A)-\theta_{ref},\;
+      \lambda_\theta \approx -\frac{\omega_{rel} + \frac{\beta}{\Delta t}C_\theta}{I_A^{-1}+I_B^{-1}}
+    \).
+    \textbf{Contacto}: impulso normal (no-penetración/restitución) y fricción tangencial acotada
+    \( |j_t| \le \mu j_n \), con acumulación/clamping por punto de contacto.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Position correction (estabilización)}
   \begin{columns}[T]
-    \column{0.53\textwidth}
-    \begin{tikzpicture}[scale=0.78]
-      \draw[thick,utecblue] (0,0) rectangle (7,4.5);
-      \fill[utecorange!35,rotate around={18:(3.0,2.4)}]
-        (2.0,1.6)--(3.2,1.0)--(4.2,2.4)--(3.4,3.4)--(2.2,3.0)--cycle;
-      \draw[dashed,utecorange,thick] (1.75,0.85) rectangle (4.45,3.75);
-      \node[utecorange,font=\scriptsize] at (3.1,4.05) {AABB};
-      \node[font=\scriptsize,align=center] at (5.7,2.2)
-        {polígono convexo\\dentro de su cota};
-      \draw[-{Latex[length=2mm]},utecblue] (5.0,1.5)--(4.35,1.7);
-    \end{tikzpicture}
-    \column{0.43\textwidth}
-    \begin{block}{Prueba AABB}
+    \column{0.5\textwidth}
+    \begin{block}{Corrección posicional de joints}
+      Para reducir drift de anclajes:
       \[
-      [x_{\min}^{A},x_{\max}^{A}]\cap[x_{\min}^{B},x_{\max}^{B}]\neq\varnothing
-      \quad\text{y}\quad
-      [y_{\min}^{A},y_{\max}^{A}]\cap[y_{\min}^{B},y_{\max}^{B}]\neq\varnothing.
+        \Delta \mathbf{p} \propto -\beta\,\mathbf{K}^{-1}\mathbf{C}, \qquad
+        \mathbf{C}=\mathbf{p}_B-\mathbf{p}_A.
       \]
+      \textbf{Weld joint}: además corrige error angular
+      \(
+        C_\theta = \operatorname{wrap}((\theta_B-\theta_A)-\theta_{ref})
+      \)
+      distribuyendo rotación según inercias inversas.
     \end{block}
-    \begin{itemize}
-      \item Rechaza pares distantes usando comparaciones de intervalos
-        escalares.
-      \item Remite solo candidatos a las rutinas exactas de colisión.
-      \item Refresca las cotas tras los cambios de transformación.
-    \end{itemize}
-  \end{columns}
-\end{frame}
-
-\begin{frame}{Broad phase: alcance actual y trabajo futuro}
-  \begin{table}
-    \centering
-    \begin{tabular}{p{0.24\textwidth}p{0.30\textwidth}p{0.31\textwidth}}
-      \toprule
-      \textbf{Enfoque} & \textbf{Beneficio} & \textbf{Estado} \\
-      \midrule
-      Pares AABB & Simple, barato, fácil de depurar & Implementado \\
-      Grid uniforme & Buena localidad para objetos distribuidos & Opción futura \\
-      BVH / árbol dinámico & Poda jerárquica para escenas más grandes & Opción futura \\
-      \bottomrule
-    \end{tabular}
-  \end{table}
-
-  \vspace{0.2cm}
-  \begin{alertblock}{Decisión de ingeniería defendible}
-    El descarte AABB no es el punto final asintótico, pero el juego actual
-    limita el número de objetos simultáneos. El comportamiento de frame es
-    estable, así que un BVH o un grid añadiría complejidad antes de crear
-    valor visible para el usuario.
-  \end{alertblock}
-\end{frame}
-
-\begin{frame}{Narrow phase: SAT y manifoldes de contacto}
-  \begin{block}{Teorema del eje separador (SAT)}
-    Dos formas convexas están separadas si existe un eje cuyas proyecciones
-    no se solapan:
-    \[
-    \begin{split}
-      \exists \mathbf{a}:\;&
-      \left[\min_{\mathbf{p}\in A}\mathbf{p}\cdot\mathbf{a},
-      \max_{\mathbf{p}\in A}\mathbf{p}\cdot\mathbf{a}\right]\\
-      &\cap
-      \left[\min_{\mathbf{q}\in B}\mathbf{q}\cdot\mathbf{a},
-      \max_{\mathbf{q}\in B}\mathbf{q}\cdot\mathbf{a}\right]
-      = \varnothing.
-    \end{split}
-    \]
-    Si no hay tal eje, el solapamiento mínimo da la normal $\mathbf{n}$ y la
-    penetración $\delta$.
-  \end{block}
-
-  \vspace{0.1cm}
-  \begin{columns}[T]
-    \column{0.48\textwidth}
-    \begin{itemize}
-      \item Despacho por tipo: rutinas especializadas por par de formas.
-      \item Clipping de bordes: uno o dos puntos de contacto.
-      \item Manifold: borde de soporte estable, no un único pivote.
-    \end{itemize}
-    \column{0.48\textwidth}
-    \begin{block}{Datos persistentes del manifold}
-      $\mathbf{p}$: posición de contacto\\
-      $\mathbf{n}$: normal de separación\\
-      $\delta$: profundidad de solapamiento\\
-      $j_n, j_t$: impulsos en caché
+    \column{0.46\textwidth}
+    \begin{block}{Contactos y estabilidad}
+      \begin{itemize}
+        \item Proyección/corrección para resolver penetraciones residuales tras el velocity solve.
+        \item Actualización de AABB tras mover cuerpos.
+        \item Iteraciones de posición mejoran stacking y rigidez aparente sin volver el solver global.
+      \end{itemize}
+      \vspace{0.1cm}
+      \small (El detalle numérico exacto depende del caso de colisión/manifold, pero el objetivo es el mismo: consistencia geométrica estable.)
     \end{block}
   \end{columns}
 \end{frame}
 
-\begin{frame}{Respuesta por impulso: del contacto a la velocidad}
-  \begin{center}
-  \begin{tikzpicture}[scale=0.78]
-    \fill[utecblue!25] (0,0) rectangle (3.2,2.0);
-    \draw[thick,utecblue] (0,0) rectangle (3.2,2.0);
-    \fill[utecorange!25] (5.0,0.7) circle (1.0);
-    \draw[thick,utecorange] (5.0,0.7) circle (1.0);
-    \fill (3.2,1.0) circle (2pt);
-    \draw[-{Latex[length=2.5mm]},very thick,utecorange]
-      (3.2,1.0)--(4.65,1.25) node[midway,above] {$\mathbf{P}$};
-    \draw[-{Latex[length=2mm]},thick,utecblue]
-      (1.6,2.0)--(1.6,2.85) node[above] {$\Delta\mathbf{v}_A$};
-    \draw[-{Latex[length=2mm]},thick,utecorange]
-      (5.0,0.7)--(6.25,1.1) node[midway,above] {$\Delta\mathbf{v}_B$};
-    \draw[-{Latex[length=2mm]},thick,utecgreen]
-      (2.5,1.0)--(2.3,1.75) node[left] {$\Delta\omega_A$};
-    \node[font=\scriptsize] at (1.6,-0.35) {cuerpo A};
-    \node[font=\scriptsize] at (5.0,-0.55) {cuerpo B};
-  \end{tikzpicture}
-  \end{center}
+\section{Colisiones y respuesta}
 
-  \begin{block}{Impulso y cambio de velocidad}
-    \[
-      \Delta\mathbf{v} = \inv{m}\,\mathbf{P},
-      \qquad
-      \Delta\omega = \inv{I}\,\cross(\mathbf{r},\mathbf{P}).
-    \]
-    Un contacto transfiere momento lineal y, si es descentrado, angular.
-  \end{block}
-
-  \vspace{0.1cm}
-  \begin{block}{Masa efectiva en el punto de contacto}
-    \[
-      m_{\text{eff}}^{-1} =
-      \inv{m}_A + \inv{m}_B +
-      \frac{(\mathbf{r}_A\cross\mathbf{n})^2}{I_A} +
-      \frac{(\mathbf{r}_B\cross\mathbf{n})^2}{I_B}.
-    \]
-  \end{block}
-\end{frame}
-
-\begin{frame}{Normal, restitución y fricción de Coulomb}
-  \begin{block}{Velocidad relativa y separación}
-    \[
-      \mathbf{v}_{\mathrm{rel}} =
-      (\mathbf{v}_B + \omega_B\,\mathbf{r}_B^\perp)
-      - (\mathbf{v}_A + \omega_A\,\mathbf{r}_A^\perp),
-      \qquad
-      v_{\mathrm{sep}} = \mathbf{v}_{\mathrm{rel}}\cdot\mathbf{n}.
-    \]
-  \end{block}
-
+\begin{frame}{Broad/Narrow phase y manifold}
   \begin{columns}[T]
-    \column{0.49\textwidth}
-    \begin{block}{Impulso normal con restitución}
+    \column{0.5\textwidth}
+    \begin{block}{Broad phase (AABB)}
+      Descarte por solapamiento de intervalos:
       \[
-        j_n =
-        \frac{-(1+e)\,v_{\mathrm{sep}} + \text{bias}}
-        {\inv{m}_A + \inv{m}_B +
-         \inv{I}_A\cross(\mathbf{r}_A,\mathbf{n})^2 +
-         \inv{I}_B\cross(\mathbf{r}_B,\mathbf{n})^2},
+        [x_{min}^A,x_{max}^A]\cap[x_{min}^B,x_{max}^B]\neq\varnothing,\;
+        [y_{min}^A,y_{max}^A]\cap[y_{min}^B,y_{max}^B]\neq\varnothing.
       \]
-      donde $e$ es el coeficiente de restitución.
+      Suficiente para la escala actual; estructuras como BVH/grid quedan como optimización futura.
     \end{block}
-    \column{0.49\textwidth}
+    \column{0.46\textwidth}
+    \begin{block}{Narrow phase (SAT / dispatch)}
+      \begin{itemize}
+        \item SAT para convexos: eje separador o solapamiento mínimo $\Rightarrow (\mathbf{n},\delta)$.
+        \item Rutinas especializadas por par de formas.
+        \item Manifold con uno o más puntos: $\mathbf{p},\mathbf{n},\delta$ e impulsos acumulados (warm starting).
+      \end{itemize}
+    \end{block}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Impulso de contacto: normal y fricción}
+  \begin{block}{Velocidad relativa y masa efectiva}
+    \[
+      \mathbf{v}_{rel}=(\mathbf{v}_B+\omega_B\mathbf{r}_B^\perp)-(\mathbf{v}_A+\omega_A\mathbf{r}_A^\perp), \qquad
+      m_{eff,n}^{-1}=m_A^{-1}+m_B^{-1}+\frac{(\mathbf{r}_A\times\mathbf{n})^2}{I_A}+\frac{(\mathbf{r}_B\times\mathbf{n})^2}{I_B}.
+    \]
+  \end{block}
+
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{block}{Normal (restitución)}
+      \[
+        j_n = \frac{-(1+e)\,\min(\mathbf{v}_{rel}\cdot\mathbf{n},0)}{m_{eff,n}^{-1}}, \qquad j_n \ge 0.
+      \]
+      (La restitución se aplica en impactos significativos; el impulso se acumula/clampa.)
+    \end{block}
+    \column{0.46\textwidth}
     \begin{block}{Fricción de Coulomb}
       \[
-        \lvert j_t \rvert \leq \mu \, j_n.
+        j_t = \frac{-(\mathbf{v}_{rel}\cdot\mathbf{t})}{m_{eff,t}^{-1}}, \qquad |j_t| \le \mu j_n.
       \]
-      El impulso tangencial se clampa por la fricción estática/dinámica.
+      Con $\mathbf{t}\perp\mathbf{n}$ y acumulación para estabilidad de contacto.
     \end{block}
   \end{columns}
-
-  \vspace{0.1cm}
-  \begin{itemize}
-    \item La restitución solo se activa para impactos suficientemente rápidos.
-    \item Warm starting reusa impulsos acumulados para estabilizar pilas.
-  \end{itemize}
 \end{frame}
 
-\section{Fuerzas, impulsos y activación}
+\section{Activaciones y eventos importantes}
 
-\begin{frame}{Fuerza constante vs impulso: ventilador, vela y TNT}
+\begin{frame}{Activaciones: fuerzas, impulsos y eventos}
   \begin{columns}[T]
-    \column{0.32\textwidth}
-    \begin{block}{Ventilador (\texttt{Fan})}
+    \column{0.33\textwidth}
+    \begin{block}{Ventilador (\emph{Fan})}
       \begin{itemize}
-        \item Activación persistente.
-        \item Fuerza constante mientras está activo:
-          \texttt{FanForce} $=750\ \mathrm{N}$.
-        \item Sin cooldown.
+        \item Propulsión persistente mientras está activo.
+        \item Aplica \textbf{fuerza continua} al cuerpo (aceleración dependiente de $m$): $\Delta\mathbf{v}\approx \Delta t\,\mathbf{F}/m$.
       \end{itemize}
     \end{block}
-
-    \column{0.34\textwidth}
-    \begin{block}{Vela de viento (\texttt{WindSail})}
+    \column{0.33\textwidth}
+    \begin{block}{Inflador de globos (\emph{Wind Sail})}
       \begin{itemize}
-        \item Activación puntual (no continua).
-        \item Fuerza constante durante ventana activa; no un impulso de frame.
-        \item Fuerza más intensa: \texttt{WindSailForce} $=1750\ \mathrm{N}$.
-        \item Cooldown posterior; no se reactiva hasta terminar.
+        \item Propulsión direccional activable por el jugador.
+        \item Modelada como \textbf{fuerza aplicada} durante su estado activo (no un impulso instantáneo único).
       \end{itemize}
     \end{block}
-
-    \column{0.34\textwidth}
-    \begin{block}{TNT (\texttt{TNTBarrel})}
+    \column{0.33\textwidth}
+    \begin{block}{Tanque SOLGAS (\emph{TNT})}
       \begin{itemize}
-        \item Impulso radial en explosión.
-        \item \texttt{TntExplosionForce} $=1000$, radio $=750$.
-        \item Contenido: multiplicador $1.75$.
-        \item Se elimina tras la explosión.
+        \item Evento explosivo: impulso radial atenuado por distancia.
+        \item Puede afectar cuerpos/joints cercanos, activar cadenas y remover la pieza tras detonación.
+        \item Impactos fuertes y contexto (contenedor/contenido) alteran el resultado.
       \end{itemize}
     \end{block}
   \end{columns}
 
   \vspace{0.1cm}
-  \begin{block}{Aplicación de fuerza vs impulso}
-    \[
-      \text{Fuerza:}\quad \Delta\mathbf{v} \approx \Delta t\,\frac{\mathbf{F}}{m},
-      \qquad
-      \text{Impulso:}\quad \Delta\mathbf{v} = \frac{\mathbf{J}}{m}.
-    \]
-    La fuerza actúa continuamente; el impulso cambia la velocidad al instante.
-  \end{block}
-
-  \vspace{0.1cm}
-  \begin{alertblock}{Concepto clave}
-    La vela aplica fuerza sostenida en su ventana activa; nunca un impulso de
-    un solo frame.
+  \begin{alertblock}{Foco}
+    Se prioriza modelar correctamente la diferencia \emph{fuerza sostenida} vs \emph{impulso/evento discreto}; detalles de timers secundarios no son centrales para la física del sistema.
   \end{alertblock}
 \end{frame}
 
-\begin{frame}{Ciclo de activación de la vela de viento}
-  \begin{center}
-  \begin{tikzpicture}[scale=0.9]
-    \draw[thick,utecblue] (0,0)--(7,0) node[right] {tiempo (s)};
-    \draw[-{Latex[length=2mm]},thick,utecblue] (0,-0.4)--(0,0.4)
-      node[above,font=\scriptsize] {activación};
-    \draw[thick,utecorange] (0.1,0.6)--(5.4,0.6)
-      node[midway,above,font=\scriptsize] {fuerza constante};
-    \draw[thick,utecgray] (5.4,0.6)--(7.0,0.6)
-      node[midway,above,font=\scriptsize] {sin fuerza (cooldown)};
-    \node[font=\scriptsize] at (0.0,-0.7) {$0$};
-    \node[font=\scriptsize] at (2.75,-0.7) {$0.75\ \mathrm{s}$};
-    \node[font=\scriptsize] at (7.0,-0.7) {$1.25\ \mathrm{s}$};
-    \draw[dashed] (2.75,0)--(2.75,-0.2);
-    \draw[dashed] (7.0,0)--(7.0,-0.2);
-    \node[font=\scriptsize,align=center] at (3.5,-1.4)
-      {ventana activa $\approx 0.75\ \mathrm{s}$\\[-0.1cm]
-       cooldown total $\approx 1.25\ \mathrm{s}$};
-  \end{tikzpicture}
-  \end{center}
+\section{Joints y estrés estructural}
 
-  \vspace{0.1cm}
-  \begin{block}{Temporizadores independientes}
-    \[
-      \dot{t}_{\text{active}} = -1 \;\; \text{mientras } t_{\text{active}} > 0,
-      \qquad
-      \dot{t}_{\text{cooldown}} = -1 \;\; \text{mientras } t_{\text{cooldown}} > 0.
-    \]
-    Cuando $t_{\text{active}}$ llega a cero, cesa la fuerza. Cuando
-    $t_{\text{cooldown}}$ llega a cero, la vela vuelve a estar disponible.
-  \end{block}
-
-  \vspace{0.1cm}
-  \begin{itemize}
-    \item \texttt{Part::Activate()}: inicia el estado, establece
-      \texttt{m\_activeTimeRemaining} y \texttt{m\_cooldownRemaining}.
-    \item \texttt{Part::UpdateActivation(deltaTime)}: reduce ambos temporizadores
-      y aplica \texttt{ApplyForce} mientras la vela está activa.
-    \item Al terminar el cooldown, la vela puede activarse de nuevo.
-  \end{itemize}
-
-  \vspace{0.1cm}
-  \small Los valores son parámetros de diseño y no valores finales.
-\end{frame}
-
-\begin{frame}{Implementación de la activación en \texttt{Part}: Activate()}
-  \begin{itemize}
-    \item \texttt{Part::Activate()} inicia el estado activo y establece los
-      temporizadores:
-    \begin{itemize}
-      \item Ventilador: alterna estado activo/inactivo y establece
-        \texttt{m\_propulsionActive}.
-      \item Vela: si el cooldown aún no terminó, no hace nada. De lo contrario,
-        activa \texttt{m\_activationActive}, establece
-        \texttt{m\_activeTimeRemaining} y \texttt{m\_cooldownRemaining}.
-    \end{itemize}
-  \end{itemize}
-\end{frame}
-
-\begin{frame}{Implementación de la activación en \texttt{Part}: UpdateActivation()}
-  \begin{itemize}
-    \item \texttt{Part::UpdateActivation(deltaTime)} reduce ambos temporizadores:
-    \begin{itemize}
-      \item Reduce \texttt{m\_cooldownRemaining} mientras sea mayor a cero.
-      \item Reduce \texttt{m\_activeTimeRemaining}; al llegar a cero, desactiva
-        \texttt{m\_activationActive}.
-      \item Mientras la parte esté activa, aplica \texttt{ApplyForce} (fuerza
-        constante, no \texttt{ApplyLinearImpulse}).
-    \end{itemize}
-    \item Al terminar el temporizador activo, la vela deja de aplicar fuerza.
-      Al terminar el cooldown, vuelve a estar disponible.
-  \end{itemize}
-
-  \vspace{0.2cm}
-  \begin{alertblock}{Arquitectura}
-    Se reutiliza el sistema de activación existente
-    (\texttt{ActivationRegistry} con acciones como
-    \texttt{FanUp/Right/Down/Left}, \texttt{WindSail*}, \texttt{TNT},
-    \texttt{DriverHonk}). No se crea un sistema paralelo innecesario.
-  \end{alertblock}
-\end{frame}
-
-\section{Juntas y estabilización}
-
-\begin{frame}{Ensamblado de física: las conexiones se vuelven juntas}
-  \begin{center}
-  \begin{tikzpicture}[
-    part/.style={draw=utecblue,fill=utecblue!12,minimum width=1.6cm,
-      minimum height=0.8cm,align=center},
-    arrow/.style={-{Latex[length=2mm]},thick,utecblue}
-  ]
-    \node[part] (a) {parte\\rueda};
-    \node[part,right=2.0cm of a] (b) {parte\\chasis};
-    \node[part,right=2.0cm of b] (c) {parte\\motor};
-    \draw[utecorange,very thick] (a.east)--(b.west)
-      node[midway,above,font=\scriptsize] {conector};
-    \draw[utecorange,very thick] (b.east)--(c.west)
-      node[midway,above,font=\scriptsize] {conector};
-    \node[draw=utecgreen,rounded corners,fit=(a)(b)(c),
-      inner sep=0.45cm,label={[font=\scriptsize]below:sistema físico ensamblado}] {};
-    \draw[arrow] (b.south) ++(0,-0.65)--++(0,-0.75)
-      node[below,font=\scriptsize] {\texttt{PhysicsAssembler} crea cuerpos y juntas};
-  \end{tikzpicture}
-  \end{center}
-
-  \begin{itemize}
-    \item \texttt{BuildModel::GetConnections()} suministra identidad de
-      conector, direcciones y anclajes.
-    \item \texttt{PhysicsAssembler} posee la colección de juntas generada.
-    \item Esto mantiene la semántica de construcción independiente de la API de
-      física.
-  \end{itemize}
-\end{frame}
-
-\begin{frame}{Restricciones revolute y weld}
+\begin{frame}{Ensamblado de joints: revolute y weld}
   \begin{columns}[T]
-    \column{0.48\textwidth}
-    \begin{block}{Revolute}
-      Bloquea los dos puntos de anclaje:
+    \column{0.5\textwidth}
+    \begin{block}{\texttt{revolute joint}}
+      Restringe traslación relativa en el ancla (2 DoF lineales):
       \[
-        \mathbf{C}_{\mathrm{linear}}
-        =\mathbf{p}_B-\mathbf{p}_A = \mathbf{0}.
+        \mathbf{C}_{lin} = \mathbf{p}_B - \mathbf{p}_A = \mathbf{0},
       \]
-      La traducción está restringida en $x$ e $y$, mientras que la rotación
-      relativa permanece libre.
+      permitiendo rotación relativa.
     \end{block}
-    \column{0.48\textwidth}
-    \begin{block}{Weld}
-      Añade un bloqueo angular:
+    \column{0.46\textwidth}
+    \begin{block}{\texttt{weld joint}}
+      Añade restricción angular (rigidez):
       \[
-        C_{\mathrm{angular}}
-        =(\theta_B-\theta_A)-\theta_{\mathrm{target}} = 0.
+        C_{ang} = (\theta_B - \theta_A) - \theta_{ref} = 0.
       \]
-      Modela un soldado rígido entre partes conectadas.
+      Útil para uniones rígidas del chasis/estructura.
     \end{block}
   \end{columns}
-
-  \vspace{0.2cm}
-  \begin{alertblock}{Guarda numérico}
-    Las matrices de masa efectiva se invierten mediante rutinas seguras; las
-    configuraciones degeneradas no deben convertir un caso límite de
-    jugabilidad en un cierre inesperado.
-  \end{alertblock}
-\end{frame}
-
-\begin{frame}{Corrección posicional y estabilización de juntas}
-  \begin{block}{Corrección al estilo Baumgarte}
-    \[
-      \mathbf{v}_{\mathrm{bias}}
-      =\frac{\beta}{\Delta t}\mathbf{C},
-      \qquad
-      \boldsymbol{\lambda}
-      =-K^{-1}\left(\mathbf{v}_{\mathrm{rel}}+\mathbf{v}_{\mathrm{bias}}\right).
-    \]
-  \end{block}
-
-  \begin{itemize}
-    \item Error de colisión: penetración más allá de un pequeño slop.
-    \item Error de revolute: distancia entre los dos anclajes en el mundo.
-    \item Error de weld: distancia de anclaje más deriva del ángulo relativo.
-    \item Tras la corrección directa de la transformación, se actualiza el AABB
-      del cuerpo.
-  \end{itemize}
 
   \vspace{0.15cm}
+  \begin{itemize}
+    \item \texttt{BuildModel::GetConnections()} define pares/anclas; \texttt{PhysicsAssembler} crea los joints físicos.
+    \item El solver usa impulsos iterativos + corrección posicional (Baumgarte) para mantener las constraints estables.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Sistema de grafo para estrés local}
+  \begin{block}{Motivación}
+    La rotura de un joint debe depender de la \textbf{carga local} que soporta según la topología del vehículo, no de una magnitud global uniforme.
+  \end{block}
+
+  \begin{itemize}
+    \item \textbf{Rebuild por step:} \texttt{Structural::Graph} se reconstruye con cuerpos y joints activos.
+    \item \textbf{Prueba de puente:} para evaluar un joint se excluye temporalmente y se exploran componentes conectados (BFS) desde cada cuerpo.
+    \item \textbf{Componente dependiente:} si separa el grafo (\emph{bridge}), se selecciona el lado dependiente usando la gravedad (COM a lo largo de $\mathbf{g}$, con desempate por masa); si hay redundancia, la carga efectiva se atenúa.
+    \item \textbf{Carga local:} masa dependiente, \emph{lever arm} $\mathbf{r}=\mathbf{COM}_{dep}-\mathbf{anchor}$, redundancia y factores de damping (masa, palanca, tipo de joint).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Estrés local y criterio de rotura}
+  \begin{block}{Acumulación y damping}
+    Durante el velocity solve se registra un esfuerzo instantáneo por joint (derivado del impulso aplicado, $s_{inst}$) y se conserva el pico del step:
+    \[
+      s_{peak} \leftarrow \max(s_{peak}, s_{inst}), \qquad
+      s_{local} = \frac{s_{peak}}{d_{mass}\, d_{lever}\, d_{joint}\, d_{red}}.
+    \]
+    Los factores $d_{\cdot}$ provienen de la carga topológica local (masa, brazo de palanca, redundancia, y ajuste para \texttt{revolute joint}).
+  \end{block}
+
+  \begin{block}{Rotura}
+    \[
+      \text{break if}\quad s_{local} \ge \tau \cdot R_{joint},
+    \]
+    donde $\tau$ es el umbral global y $R_{joint}$ la resistencia del joint (p. ej. configurable en \texttt{weld joint}).
+    Joints rotos se limpian del mundo, generando cambios estructurales reales en la simulación.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Localidad del grafo vs sensibilidad global}
+  \begin{columns}[T]
+    \column{0.5\textwidth}
+    \begin{block}{Con grafo (local)}
+      \begin{itemize}
+        \item Cada joint ``siente'' principalmente el subgrafo que depende de él.
+        \item Bridges concentran carga; ciclos/redundancias la reparten.
+        \item Diseños grandes pero bien soportados no fuerzan roturas irreales en joints alejados.
+        \item Mejor sensación de integridad estructural por zona del vehículo.
+      \end{itemize}
+    \end{block}
+    \column{0.46\textwidth}
+    \begin{block}{Sin grafo (global/ingenuo)}
+      \begin{itemize}
+        \item Umbrales ligados a masa total o respuestas uniformes escalan mal con el tamaño.
+        \item En vehículos grandes, impactos moderados pueden sobreatensionar joints no relacionados.
+        \item Roturas en cadena poco plausibles y difícil \emph{tuning}.
+        \item Se pierde la localidad: el mismo joint se vuelve más frágil solo por añadir masa distante.
+      \end{itemize}
+    \end{block}
+  \end{columns}
+
+  \vspace{0.1cm}
   \begin{center}
-    \textbf{Objetivo:} reducir el hundimiento visible y la deriva de juntas
-    sin un sistema especializado por tipo de parte.
+    \small El coste extra es análisis topológico acotado al tamaño del vehículo, apropiado para el alcance del juego.
   \end{center}
 \end{frame}
 
-\section{Jugabilidad, puntuación y aplicación}
+\section{Detalles relevantes y cierre}
 
-\begin{frame}{Condición de victoria y puntuación}
-  \begin{columns}[T]
-    \column{0.49\textwidth}
-    \begin{block}{\texttt{GoalWindowTracker}}
-      \begin{itemize}
-        \item Rastrea partes entregadas y pasajeros entregados.
-        \item Detecta si la condición de victoria se cumple dentro de una
-          ventana de tiempo.
-        \item Devuelve \texttt{GoalWindowUpdate}: activo, completado y tiempo de
-          inicio.
-      \end{itemize}
-    \end{block}
-    \column{0.49\textwidth}
-    \begin{block}{\texttt{ScoreRules}, \texttt{RunCapture} y \texttt{LeaderboardClient}}
-      \begin{itemize}
-        \item \texttt{ScoreRules}: reglas de puntuación,
-          \texttt{RunStatistics} y \texttt{ScoreBreakdown}.
-        \item \texttt{RunCapture}: graba intentos de ejecución en JSON
-          (identificador de intento, frames, recogidas, desprendimientos).
-        \item \texttt{LeaderboardClient}: envía puntuaciones a la tabla de
-          líderes.
-      \end{itemize}
-    \end{block}
-  \end{columns}
-
-  \vspace{0.2cm}
-  \begin{alertblock}{El juego no es solo una demo de física}
-    La construcción, la simulación, la condición de victoria y la puntuación
-    forman un sistema de progresión completo, no solo un entorno de pruebas
-    de física.
-  \end{alertblock}
-\end{frame}
-
-\begin{frame}{Entrada y interfaz de usuario}
-  \begin{columns}[T]
-    \column{0.49\textwidth}
-    \begin{block}{Input}
-      \begin{itemize}
-        \item \texttt{EditorInput}: manejo de entrada en el modo editor.
-        \item \texttt{GameInput}: manejo de entrada durante la simulación.
-      \end{itemize}
-    \end{block}
-    \column{0.49\textwidth}
-    \begin{block}{UI}
-      \begin{itemize}
-        \item \texttt{UiLayout}: diseño de la interfaz.
-        \item \texttt{UiControl} y \texttt{UiButton}: controles y botones.
-      \end{itemize}
-    \end{block}
-  \end{columns}
-
-  \vspace{0.2cm}
-  \begin{block}{\texttt{ActivationRegistry}}
-    \begin{itemize}
-      \item Registra qué acciones activan qué partes.
-      \item Publica acciones a los suscriptores y actualiza las partes activas
-        cada frame (\texttt{Update(deltaTime)}).
-      \item Acciones visibles: \texttt{Fan*}, \texttt{WindSail*}, \texttt{TNT},
-        \texttt{DriverHonk}.
-    \end{itemize}
-  \end{block}
-\end{frame}
-
-\begin{frame}{Renderizado y mundo}
-  \begin{columns}[T]
-    \column{0.49\textwidth}
-    \begin{block}{Renderizado}
-      \begin{itemize}
-        \item \texttt{WorldRenderer}: terreno y mundo físico.
-        \item \texttt{GameUiRenderer}: interfaz y acciones disponibles.
-        \item \texttt{PartRenderer}: renderizado de piezas.
-        \item \texttt{Background}: fondo del escenario.
-        \item \texttt{TextureLibrary}: gestión de texturas.
-      \end{itemize}
-    \end{block}
-    \column{0.49\textwidth}
-    \begin{block}{Matemáticas y terreno}
-      \begin{itemize}
-        \item \texttt{Terrain}: representación del terreno.
-        \item \texttt{AABB}, \texttt{Vector2D}, \texttt{Matrix2x2},
-          \texttt{GridCoord}, \texttt{Interval}, \texttt{SafeReal}, \texttt{Spline}.
-      \end{itemize}
-    \end{block}
-  \end{columns}
-
-  \vspace{0.2cm}
+\begin{frame}{Otros aspectos técnicos y de producto destacables}
   \begin{itemize}
-    \item El renderizado lee el estado pero no decide la colocación ni el
-      comportamiento de la física.
-    \item Cada tipo de parte (\texttt{PartType}) tiene una forma de renderizado
-      asociada (\texttt{PartRenderState} con tipo, posición, rotación,
-      estado de propulsión activa, etc.).
+    \item \textbf{Eventos en runtime:} impactos, eyección de contenidos, consumo de Tanque SOLGAS, limpieza de joints rotos y protección breve en el primer aterrizaje para evitar fallos espurios.
+    \item \textbf{Separación de responsabilidades:} modelo de build, ensamblado físico, simulación y render desacoplados (el render lee estado, no decide física).
+    \item \textbf{Pipeline de step explícito:} integración $\rightarrow$ broad/narrow $\rightarrow$ velocity iterations $\rightarrow$ position iterations $\rightarrow$ cleanup.
+    \item \textbf{Progresión completa:} además de física, el proyecto integra meta, scoring versionado, captura de intentos y soporte de leaderboard/ranking.
+    \item \textbf{Contenido y rejugabilidad:} niveles de catálogo y editor de niveles custom amplían el espacio de diseño/prueba.
   \end{itemize}
 \end{frame}
 
-\section{Validación y defensa}
-
-\begin{frame}{Plan de validación}
-  \begin{table}
-    \centering
-    \begin{tabular}{p{0.27\textwidth}p{0.57\textwidth}}
-      \toprule
-      \textbf{Escenario} & \textbf{Qué valida} \\
-      \midrule
-      Colocación en cuadrícula & Límites, ocupación, rotación y compatibilidad de partes \\
-      Obstáculo estático & Masa inversa nula impide el movimiento \\
-      Vehículo en reposo & Manifold de contacto y estabilización posicional \\
-      Conexión de rueda & Anclaje de junta revolute y rotación libre \\
-      Ensamblado rígido & Corrección angular y lineal de junta weld \\
-      Prueba de impacto & Umbral de restitución y respuesta por fricción \\
-      Explosión de TNT & Impulso radial y eliminación de parte \\
-      Estrés de objetos grandes & Estabilidad de la generación de candidatos AABB \\
-      \bottomrule
-    \end{tabular}
-  \end{table}
-
-  \vspace{0.15cm}
-  \textbf{Diagnósticos útiles:} número de partes, número de juntas, pares
-  candidatos, contactos, penetración máxima, iteraciones del solucionador y
-  tiempo de frame.
-\end{frame}
-
-\begin{frame}{Por qué estas implementaciones son apropiadas}
-  \begin{itemize}
-    \item \textbf{Editor de cuadrícula:} discretiza la colocación, haciendo
-      la construcción legible y evitando superposiciones ambiguas.
-    \item \textbf{Partes basadas en datos:} las definiciones centralizan masa,
-      forma, comportamiento y reglas de conector.
-    \item \textbf{Ensamblado de física:} traduce conceptos de juego en cuerpos y
-      restricciones solo cuando comienza la partida.
-    \item \textbf{Descarte AABB:} es fácil de razonar y suficiente para la escala
-      actual de las escenas.
-    \item \textbf{Solucionador iterativo:} ofrece comportamiento creíble en
-      tiempo real sin resolver toda la escena de forma simbólica.
-  \end{itemize}
-
-  \vspace{0.2cm}
-  \begin{alertblock}{Límite de alcance}
-    BVHs, grids uniformes y técnicas más avanzadas de colisión continua son
-    mejoras válidas a futuro, no requisitos faltantes para el prototipo
-    actual.
-  \end{alertblock}
-\end{frame}
-
-\begin{frame}{Conclusiones y pasos siguientes}
-  \begin{block}{Mensaje principal}
-    Tunea Tu Combi está organizado como un juego de construcción cuya
-    interacción visual, modelo de datos, ensamblado de física y solucionador
-    se explican como un solo pipeline:
+\begin{frame}{Conclusión}
+  \begin{block}{Pipeline unificado}
     \[
-      \text{diseño en cuadrícula}
-      \rightarrow
-      \text{grafo de partes}
-      \rightarrow
-      \text{cuerpos rígidos y juntas}
-      \rightarrow
-      \text{simulación estable}.
+      \text{diseño en grilla}
+      \rightarrow \text{grafo de partes/conexiones}
+      \rightarrow \text{rigid bodies + joints}
+      \rightarrow \text{simulación + estrés local}
+      \rightarrow \text{meta/score}.
     \]
   \end{block}
 
-  \begin{enumerate}
-    \item Medir el tiempo de frame a medida que crece el número de objetos.
-    \item Añadir escenas de regresión automatizadas para contactos y juntas.
-    \item Evaluar un grid uniforme o un BVH cuando las escenas sean más densas.
-    \item Mejorar la retroalimentación al jugador para ensamblados fallidos.
-  \end{enumerate}
+  \vspace{0.2cm}
+  \begin{itemize}
+    \item El juego combina authoring, iteración de diseño y física de rigid bodies con constraints.
+    \item El grafo estructural aporta localidad y credibilidad a las roturas en vehículos complejos.
+    \item Las fórmulas de integración, impulsos y corrección posicional sustentan la estabilidad observada en juego.
+  \end{itemize}
 
   \vspace{0.25cm}
   \begin{center}

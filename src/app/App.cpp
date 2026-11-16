@@ -9,10 +9,26 @@
 #include <raylib.h>
 #include <utility>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 namespace {
 
 constexpr const char* StartupLevelPath = "assets/levels/default.json";
 constexpr SceneId StartupScene = SceneId::MainMenu;
+
+void ShowLoadingScreen(int width, int height) {
+    constexpr const char* text = "Cargando...";
+    constexpr int fontSize = 40;
+    BeginDrawing();
+    ClearBackground(BLACK);
+    DrawText(text, (width - MeasureText(text, fontSize)) / 2, (height - fontSize) / 2, fontSize, RAYWHITE);
+    EndDrawing();
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(0);  // lets the browser show it before the loading starts
+#endif
+}
 
 }
 
@@ -20,6 +36,7 @@ App::App(int width, int height, const std::string& title):
     m_sceneRequester(&m_sceneManager)
 {
     InitWindow(width, height, title.c_str());
+    ShowLoadingScreen(width, height);
     m_audioController.Initialize();
     m_textureLibrary.Initialize();
     SetExitKey(KEY_NULL);

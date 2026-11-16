@@ -38,6 +38,10 @@ private:
     Camera2D m_camera;
     Vector2 m_editorCameraTarget;
     float m_editorCameraZoom = 1.0f;
+    Vector2 m_routePreviewStart{};
+    float m_routePreviewElapsed = 0.0f;
+    float m_routePreviewDuration = 0.0f;
+    bool m_routePreviewActive = false;
     float m_gravity;
     GameStateMachine m_stateMachine;
     bool m_isEditableDraft = false;
@@ -78,6 +82,8 @@ private:
 
     void ResetToBuildMode();
     void ResetEditorCamera();
+    void FinishRoutePreview();
+    void ReturnToLevelSelector();
     void TransitionToPlayMode();
     void UpdateGoalWindow(double frameMs);
     void CompleteRun();

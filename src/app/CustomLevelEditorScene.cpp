@@ -22,6 +22,177 @@ float PassengerEditorScale(float zoom) {
     return std::clamp(1.5f / zoom, 0.9f, 3.0f);
 }
 
+float GoalCenterY(float surfaceY) {
+    return surfaceY - static_cast<float>(GoalSize.y) / 2.0f;
+}
+
+constexpr int MaxGridColumns = 10;
+constexpr int MaxGridRows = 8;
+
+GridDefinition PreviewGrid(
+    const Math::Vector2D& anchor,
+    const Math::Vector2D& cursor,
+    float cellSize
+) {
+    const int columnOffset = std::clamp(
+        static_cast<int>(std::floor((cursor.x - anchor.x) / cellSize)),
+        1 - MaxGridColumns, MaxGridColumns - 1
+    );
+    const int rowOffset = std::clamp(
+        static_cast<int>(std::floor((cursor.y - anchor.y) / cellSize)),
+        1 - MaxGridRows, MaxGridRows - 1
+    );
+    const int columns = std::abs(columnOffset) + 1;
+    const int rows = std::abs(rowOffset) + 1;
+    const double left = anchor.x + std::min(0, columnOffset) * cellSize;
+    const double top = anchor.y + std::min(0, rowOffset) * cellSize;
+    return GridDefinition{
+        .dims = {columns, rows},
+        .worldPos = {
+            left + columns * cellSize / 2.0,
+            top + rows * cellSize
+        },
+        .cellSize = cellSize
+    };
+}
+
+Rectangle EditorCombiButton(int width, int height) {
+    return Rectangle{
+        static_cast<float>(width - 190),
+        (height - 90.0f) / 2.0f,
+        170.0f,
+        90.0f
+    };
+}
+
+Rectangle EditorToolbarButton(int index) {
+    return Rectangle{20.0f + index * 118.0f, 14.0f, 110.0f, 78.0f};
+}
+
+Rectangle LevelEditorMenuButton(int width) {
+    return Rectangle{static_cast<float>(width - 210), 20.0f,
+        190.0f, 66.0f};
+}
+
+void DrawEditorToolButton(
+    Rectangle bounds,
+    int icon,
+    bool selected,
+    bool missing,
+    bool completed,
+    const TextureLibrary& textures
+) {
+    const UiTextures& ui = textures.GetUi();
+    UiButton::DrawTextured(bounds, ui.game.toolbarSlot);
+    const bool mandatory = icon == 1 || icon == 2;
+    if (missing) {
+        DrawRectangleRec(Rectangle{bounds.x + 4, bounds.y + 4,
+            bounds.width - 8, bounds.height - 8}, Fade(RED, 0.22f));
+    }
+    if (mandatory) DrawRectangleLinesEx(bounds, missing ? 3.0f : 2.0f, RED);
+    if (selected) DrawRectangleRec(Rectangle{
+        bounds.x + 4, bounds.y + 4,
+        bounds.width - 8, bounds.height - 8
+    }, Fade(WHITE, 0.18f));
+
+    const float cx = bounds.x + bounds.width / 2.0f;
+    const float top = bounds.y + 6.0f;
+    switch (icon) {
+        case 0: {
+            const Texture2D& dirt = textures.GetTerrainTexture();
+            DrawTexturePro(dirt,
+                Rectangle{0, 0, static_cast<float>(dirt.width),
+                    static_cast<float>(dirt.height)},
+                Rectangle{cx - 26, top + 4, 52, 42},
+                Vector2{}, 0, WHITE);
+            DrawRectangleLinesEx(Rectangle{cx - 26, top + 4, 52, 42},
+                2, Fade(WHITE, 0.85f));
+            break;
+        }
+        case 1: {
+            const Color color = RED;
+            DrawRectangleRec(Rectangle{cx - 22, top + 2, 44, 44},
+                Fade(color, 0.26f));
+            for (int line = 0; line <= 4; ++line) {
+                const float offset = line * 11.0f;
+                DrawLineEx({cx - 22 + offset, top + 2},
+                    {cx - 22 + offset, top + 46}, 2, color);
+                DrawLineEx({cx - 22, top + 2 + offset},
+                    {cx + 22, top + 2 + offset}, 2, color);
+            }
+            break;
+        }
+        case 2: {
+            const Texture2D& goal = textures.GetLevelGoalTexture();
+            DrawCircleV({cx, top + 25}, 25, Fade(RED, 0.25f));
+            DrawTexturePro(goal,
+                Rectangle{0, 0, static_cast<float>(goal.width),
+                    static_cast<float>(goal.height)},
+                Rectangle{cx - 10, top, 20, 49},
+                Vector2{}, 0, WHITE);
+            break;
+        }
+        case 3:
+            DrawLineEx({cx + 12, top + 5}, {cx + 12, top + 34},
+                5, SKYBLUE);
+            DrawLineEx({cx - 5, top + 10}, {cx - 5, top + 40},
+                5, SKYBLUE);
+            DrawLineEx({cx - 5, top + 10}, {cx + 12, top + 5},
+                5, SKYBLUE);
+            DrawEllipse(static_cast<int>(cx - 11), static_cast<int>(top + 39),
+                9, 6, GOLD);
+            DrawEllipse(static_cast<int>(cx + 6), static_cast<int>(top + 33),
+                9, 6, GOLD);
+            break;
+        case 4:
+            DrawRectanglePro(Rectangle{cx, top + 24, 30, 38},
+                Vector2{15, 19}, 28, Color{237, 18, 121, 255});
+            DrawLineEx({cx - 23, top + 43}, {cx + 24, top + 43},
+                3, WHITE);
+            break;
+        case 5:
+            DrawCircleV({cx - 12, top + 13}, 8, RAYWHITE);
+            DrawCircleV({cx + 13, top + 13}, 8, SKYBLUE);
+            DrawLineEx({cx - 12, top + 22}, {cx - 12, top + 39},
+                6, RAYWHITE);
+            DrawLineEx({cx + 13, top + 22}, {cx + 13, top + 33},
+                6, SKYBLUE);
+            DrawTriangle({cx + 13, top + 27},
+                {cx + 1, top + 43}, {cx + 25, top + 43},
+                Color{237, 18, 121, 255});
+            DrawLineEx({cx - 20, top + 42}, {cx - 4, top + 42},
+                3, WHITE);
+            break;
+    }
+    static constexpr const char* labels[]{
+        "Terreno", "Cuadrícula", "Meta", "Música", "Borrador", "Pasajero"
+    };
+    const char* label = labels[icon];
+    const int fontSize = icon == 1 ? 12 : 13;
+    DrawTextFont(label,
+        static_cast<int>(cx - MeasureTextFont(label, fontSize) / 2.0f),
+        static_cast<int>(bounds.y + bounds.height - 18),
+        fontSize, WHITE);
+    if (completed) DrawRectangleRec(Rectangle{
+        bounds.x + 4, bounds.y + 4,
+        bounds.width - 8, bounds.height - 8
+    }, Fade(BLACK, 0.38f));
+}
+
+void DrawEditorTextButton(Rectangle bounds, const char* label,
+    const UiButtonSkin& skin, bool selected = false) {
+    UiButton::DrawTextured(bounds, skin);
+    if (selected) DrawRectangleRec(Rectangle{
+        bounds.x + 4, bounds.y + 4,
+        bounds.width - 8, bounds.height - 8
+    }, Fade(WHITE, 0.18f));
+    const int fontSize = 14;
+    DrawTextFont(label,
+        static_cast<int>(bounds.x + (bounds.width - MeasureTextFont(label, fontSize)) / 2.0f),
+        static_cast<int>(bounds.y + (bounds.height - fontSize) / 2.0f),
+        fontSize, WHITE);
+}
+
 void LocateMusic(const std::string& path, int& categoryIndex, int& trackIndex) {
     const auto& categories = GetCustomMusicCategories();
     for (std::size_t category = 0; category < categories.size(); ++category) {
@@ -98,38 +269,105 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
     CustomLevelData& custom = m_context->customLevels->GetLevels()[m_context->activeCustomLevel];
+    if (m_gridAnchor.has_value() &&
+        m_gridAnchorLevel != m_context->activeCustomLevel) {
+        m_gridAnchor.reset();
+    }
+    const auto finishGrid = [&] {
+        custom.definition.grid = PreviewGrid(
+            *m_gridAnchor, m_gridPreviewCursor,
+            custom.definition.grid.cellSize
+        );
+        custom.definition.initialCamera.reset();
+        custom.hasGrid = true;
+        m_gridAnchor.reset();
+        m_gridAnchorLevel = -1;
+        m_context->customLevels->Save();
+    };
+    const auto selectTool = [&](DesignTool tool) {
+        if (m_designTool == DesignTool::Terrain &&
+            tool != DesignTool::Terrain) {
+            m_terrainWorkPoints.clear();
+        }
+        m_gridAnchor.reset();
+        m_designTool = tool;
+    };
+    if (custom.hasGoal) {
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(custom.definition.goal.position.x),
+            static_cast<float>(custom.definition.goal.position.y)
+        );
+        if (surfaceY.has_value() &&
+            std::abs(static_cast<float>(custom.definition.goal.position.y) - *surfaceY) < 0.5f) {
+            custom.definition.goal.position.y = GoalCenterY(*surfaceY);
+            m_context->customLevels->Save();
+        }
+    }
     if (m_context->openCustomMusicPicker) {
         m_context->openCustomMusicPicker = false;
         m_musicPickerOpen = true;
         LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
     }
 
-    const Rectangle terrainButton{20.0f, 16.0f, 120.0f, 36.0f};
-    const Rectangle gridButton{146.0f, 16.0f, 120.0f, 36.0f};
-    const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
-    const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
-    const Rectangle eraserButton{504.0f, 16.0f, 120.0f, 36.0f};
-    const Rectangle passengerButton{632.0f, 16.0f, 112.0f, 36.0f};
-    const Rectangle menuButton{
-        static_cast<float>(m_context->windowWidth - 128), 16.0f, 110.0f, 38.0f
-    };
-    const Rectangle editButton = UiButton::PlaySideButton(
+    const Vector2 screenMouse = GetMousePosition();
+    bool finishTerrainClick = false;
+    if (m_musicPickerOpen) {
+        m_rightDragStart.reset();
+    } else {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+            m_rightDragStart = screenMouse;
+            m_rightDragged = false;
+            m_rightPressOnCanvas = screenMouse.y >= 130.0f &&
+                screenMouse.y <= m_context->windowHeight - 58.0f;
+        }
+        if (m_rightDragStart.has_value() &&
+            (IsMouseButtonDown(MOUSE_BUTTON_RIGHT) ||
+             IsMouseButtonReleased(MOUSE_BUTTON_RIGHT))) {
+            if (std::hypot(screenMouse.x - m_rightDragStart->x,
+                    screenMouse.y - m_rightDragStart->y) > 5.0f) {
+                m_rightDragged = true;
+            }
+            if (m_rightDragged) {
+                const Vector2 delta = GetMouseDelta();
+                m_designCamera.target.x -= delta.x / m_designCamera.zoom;
+                m_designCamera.target.y -= delta.y / m_designCamera.zoom;
+            }
+        }
+        if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT)) {
+            finishTerrainClick = m_rightDragStart.has_value() &&
+                !m_rightDragged && m_rightPressOnCanvas;
+            m_rightDragStart.reset();
+        }
+    }
+
+    const Rectangle terrainButton = EditorToolbarButton(0);
+    const Rectangle gridButton = EditorToolbarButton(1);
+    const Rectangle goalButton = EditorToolbarButton(2);
+    const Rectangle musicButton = EditorToolbarButton(3);
+    const Rectangle eraserButton = EditorToolbarButton(4);
+    const Rectangle passengerButton = EditorToolbarButton(5);
+    const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
+    const Rectangle editButton = EditorCombiButton(
         m_context->windowWidth, m_context->windowHeight
     );
 
     if (!m_musicPickerOpen && UiButton::WasClicked(terrainButton)) {
-        m_designTool = DesignTool::Terrain;
+        selectTool(DesignTool::Terrain);
         return;
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(gridButton)) {
-        m_designTool = DesignTool::Grid;
+        if (m_gridAnchor.has_value()) finishGrid();
+        selectTool(DesignTool::Grid);
         return;
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(goalButton)) {
-        m_designTool = DesignTool::Goal;
+        selectTool(DesignTool::Goal);
         return;
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(musicButton)) {
+        m_gridAnchor.reset();
+        m_terrainWorkPoints.clear();
         m_musicCategory = 0;
         m_musicTrack = 0;
         LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
@@ -139,11 +377,11 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(eraserButton)) {
-        m_designTool = DesignTool::Eraser;
+        selectTool(DesignTool::Eraser);
         return;
     }
     if (!m_musicPickerOpen && UiButton::WasClicked(passengerButton)) {
-        m_designTool = DesignTool::Passenger;
+        selectTool(DesignTool::Passenger);
         return;
     }
     if (m_musicPickerOpen) {
@@ -197,6 +435,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
     if (UiButton::WasClicked(menuButton)) {
+        m_gridAnchor.reset();
         m_context->audioController->PlayUiClick();
         m_context->audioController->ReturnToSelector();
         m_context->sceneRequester->RequestSceneChange({SceneId::MainMenu});
@@ -205,6 +444,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
     }
     if (UiButton::WasClicked(editButton)) {
         if (!custom.hasTerrain || !custom.hasGrid || !custom.hasGoal) return;
+        m_gridAnchor.reset();
         m_context->audioController->PlayUiClick();
         m_context->customLevels->Save();
         LevelDefinition definition = custom.definition;
@@ -213,6 +453,12 @@ void CustomLevelEditorScene::ProcessInput(float) {
         auto scenario = m_context->audioController->GetCurrentScenario();
         m_context->audioController->StartLevel(-1, scenario.levelEditorTrackName);
         m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
+        return;
+    }
+
+    if (m_gridAnchor.has_value() && IsKeyPressed(KEY_ESCAPE)) {
+        m_gridAnchor.reset();
+        m_gridAnchorLevel = -1;
         return;
     }
 
@@ -226,17 +472,19 @@ void CustomLevelEditorScene::ProcessInput(float) {
         2.0f
     );
 
-    const Vector2 screenMouse = GetMousePosition();
     if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT) ||
         m_designTool != DesignTool::Eraser) {
         m_lastEraserMouseScreen.reset();
         m_erasedPassengerPositions.clear();
     }
-    if (screenMouse.y < 65.0f || screenMouse.y > m_context->windowHeight - 58.0f) {
+    if (screenMouse.y < 130.0f || screenMouse.y > m_context->windowHeight - 58.0f) {
         return;
     }
     const Vector2 worldMouse = GetScreenToWorld2D(screenMouse, m_designCamera);
     const Math::Vector2D point{worldMouse.x, worldMouse.y};
+    if (m_designTool == DesignTool::Grid && m_gridAnchor.has_value()) {
+        m_gridPreviewCursor = point;
+    }
 
     if (m_designTool == DesignTool::Eraser && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
         const Vector2 start = m_lastEraserMouseScreen.value_or(screenMouse);
@@ -251,7 +499,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
                 start.x + (screenMouse.x - start.x) * t,
                 start.y + (screenMouse.y - start.y) * t
             };
-            if (sampleScreen.y < 65.0f ||
+            if (sampleScreen.y < 130.0f ||
                 sampleScreen.y > m_context->windowHeight - 58.0f) continue;
             const Vector2 sampleWorld = GetScreenToWorld2D(sampleScreen, m_designCamera);
             const Math::Vector2D samplePoint{sampleWorld.x, sampleWorld.y};
@@ -302,7 +550,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
                     static_cast<float>(custom.definition.goal.position.y)
                 );
                 if (surfaceY.has_value()) {
-                    custom.definition.goal.position.y = surfaceY.value();
+                    custom.definition.goal.position.y = GoalCenterY(surfaceY.value());
                 } else {
                     custom.hasGoal = false;
                 }
@@ -335,7 +583,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         m_terrainWorkPoints.push_back(point);
     } else if (m_designTool == DesignTool::Terrain &&
-               IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) &&
+               finishTerrainClick &&
                m_terrainWorkPoints.size() >= 3) {
         Math::TerrainPolygon polygon;
         std::vector<Math::Vector2D> points = m_terrainWorkPoints;
@@ -355,23 +603,19 @@ void CustomLevelEditorScene::ProcessInput(float) {
                 static_cast<float>(custom.definition.goal.position.y)
             );
             if (surfaceY.has_value()) {
-                custom.definition.goal.position.y = surfaceY.value();
+                custom.definition.goal.position.y = GoalCenterY(surfaceY.value());
             }
         }
         m_context->customLevels->Save();
     } else if (m_designTool == DesignTool::Grid &&
                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        const float gridWidth = custom.definition.grid.dims.x *
-            custom.definition.grid.cellSize;
-        const float gridHeight = custom.definition.grid.dims.y *
-            custom.definition.grid.cellSize;
-        custom.definition.grid.worldPos = {
-            point.x + gridWidth / 2.0f,
-            point.y + gridHeight
-        };
-        custom.definition.initialCamera.reset();
-        custom.hasGrid = true;
-        m_context->customLevels->Save();
+        if (m_gridAnchor.has_value()) {
+            finishGrid();
+        } else {
+            m_gridAnchor = point;
+            m_gridPreviewCursor = point;
+            m_gridAnchorLevel = m_context->activeCustomLevel;
+        }
     } else if (m_designTool == DesignTool::Goal &&
                IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         const auto surfaceY = FindTerrainSurfaceY(
@@ -380,7 +624,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
             static_cast<float>(point.y)
         );
         if (surfaceY.has_value()) {
-            custom.definition.goal.position = {point.x, surfaceY.value()};
+            custom.definition.goal.position = {point.x, GoalCenterY(surfaceY.value())};
             custom.hasGoal = true;
             m_context->customLevels->Save();
         }
@@ -394,6 +638,19 @@ void CustomLevelEditorScene::Render() const {
 
     BeginDrawing();
     ClearBackground(RAYWHITE);
+    const Texture2D& background = m_context->textureLibrary->GetBackground(
+        BackgroundId::Miraflores
+    );
+    DrawTexturePro(background,
+        Rectangle{0.0f, 0.0f,
+            static_cast<float>(background.width),
+            static_cast<float>(background.height)},
+        Rectangle{0.0f, 0.0f,
+            static_cast<float>(m_context->windowWidth),
+            static_cast<float>(m_context->windowHeight)},
+        Vector2{}, 0.0f, WHITE);
+    DrawRectangle(0, 0, m_context->windowWidth,
+        m_context->windowHeight, Fade(WHITE, 0.22f));
     BeginMode2D(m_designCamera);
     const Color terrainFill{116, 78, 48, 255};
     const Color terrainOutline{70, 45, 28, 255};
@@ -439,43 +696,58 @@ void CustomLevelEditorScene::Render() const {
         }
     }
 
-    if (custom.hasGrid || m_designTool == DesignTool::Grid) {
-        const float width = custom.definition.grid.dims.x *
-            custom.definition.grid.cellSize;
-        const float height = custom.definition.grid.dims.y *
-            custom.definition.grid.cellSize;
-        Math::Vector2D position = custom.definition.grid.worldPos;
-        if (m_designTool == DesignTool::Grid && !custom.hasGrid) {
-            const Vector2 mouse = GetScreenToWorld2D(GetMousePosition(), m_designCamera);
-            position = {mouse.x + width / 2.0f, mouse.y + height};
-        }
-        const float left = static_cast<float>(position.x) - width / 2.0f;
-        const float top = static_cast<float>(position.y) - height;
+    std::optional<GridDefinition> visibleGrid;
+    const bool gridPreview = m_designTool == DesignTool::Grid &&
+        m_gridAnchor.has_value();
+    if (gridPreview) {
+        visibleGrid = PreviewGrid(*m_gridAnchor, m_gridPreviewCursor,
+            custom.definition.grid.cellSize);
+    } else if (custom.hasGrid) {
+        visibleGrid = custom.definition.grid;
+    } else if (m_designTool == DesignTool::Grid) {
+        const Vector2 mouse = GetScreenToWorld2D(GetMousePosition(), m_designCamera);
+        visibleGrid = PreviewGrid({mouse.x, mouse.y}, {mouse.x, mouse.y},
+            custom.definition.grid.cellSize);
+    }
+    if (visibleGrid.has_value()) {
+        const GridDefinition& grid = *visibleGrid;
+        const float width = grid.dims.x * grid.cellSize;
+        const float height = grid.dims.y * grid.cellSize;
+        const float left = static_cast<float>(grid.worldPos.x) - width / 2.0f;
+        const float top = static_cast<float>(grid.worldPos.y) - height;
         DrawRectangle(
             static_cast<int>(left),
             static_cast<int>(top),
             static_cast<int>(width),
             static_cast<int>(height),
-            Fade(SKYBLUE, 0.18f)
+            Fade(SKYBLUE, gridPreview ? 0.28f : 0.18f)
         );
-        DrawRectangleLinesEx(Rectangle{left, top, width, height}, 2.0f, BLUE);
-        for (int x = 1; x < custom.definition.grid.dims.x; ++x) {
+        DrawRectangleLinesEx(Rectangle{left, top, width, height},
+            gridPreview ? 3.0f : 2.0f, gridPreview ? GOLD : BLUE);
+        for (int x = 1; x < grid.dims.x; ++x) {
             DrawLine(
-                static_cast<int>(left + x * custom.definition.grid.cellSize),
+                static_cast<int>(left + x * grid.cellSize),
                 static_cast<int>(top),
-                static_cast<int>(left + x * custom.definition.grid.cellSize),
+                static_cast<int>(left + x * grid.cellSize),
                 static_cast<int>(top + height),
                 Fade(BLUE, 0.65f)
             );
         }
-        for (int y = 1; y < custom.definition.grid.dims.y; ++y) {
+        for (int y = 1; y < grid.dims.y; ++y) {
             DrawLine(
                 static_cast<int>(left),
-                static_cast<int>(top + y * custom.definition.grid.cellSize),
+                static_cast<int>(top + y * grid.cellSize),
                 static_cast<int>(left + width),
-                static_cast<int>(top + y * custom.definition.grid.cellSize),
+                static_cast<int>(top + y * grid.cellSize),
                 Fade(BLUE, 0.65f)
             );
+        }
+        if (gridPreview) {
+            DrawRectangleLinesEx(Rectangle{
+                static_cast<float>(m_gridAnchor->x),
+                static_cast<float>(m_gridAnchor->y),
+                grid.cellSize, grid.cellSize
+            }, 3.0f, WHITE);
         }
     }
 
@@ -483,7 +755,13 @@ void CustomLevelEditorScene::Render() const {
         GoalDefinition goalDef = custom.definition.goal;
         if (m_designTool == DesignTool::Goal && !custom.hasGoal) {
             const Vector2 mouse = GetScreenToWorld2D(GetMousePosition(), m_designCamera);
-            goalDef.position = {mouse.x, mouse.y};
+            const auto surfaceY = FindTerrainSurfaceY(
+                custom.definition.terrain, mouse.x, mouse.y
+            );
+            goalDef.position = {
+                mouse.x,
+                surfaceY.has_value() ? GoalCenterY(*surfaceY) : mouse.y
+            };
         }
         const Math::AABB goalArea = goalDef.GetAABB();
         const Rectangle goalRect{
@@ -507,101 +785,84 @@ void CustomLevelEditorScene::Render() const {
     }
     EndMode2D();
 
-    const Rectangle terrainButton{20.0f, 16.0f, 120.0f, 36.0f};
-    const Rectangle gridButton{146.0f, 16.0f, 120.0f, 36.0f};
-    const Rectangle goalButton{272.0f, 16.0f, 100.0f, 36.0f};
-    const Rectangle musicButton{382.0f, 16.0f, 112.0f, 36.0f};
-    const Rectangle eraserButton{504.0f, 16.0f, 120.0f, 36.0f};
-    const Rectangle passengerButton{632.0f, 16.0f, 112.0f, 36.0f};
-    const Rectangle menuButton{
-        static_cast<float>(m_context->windowWidth - 128), 16.0f, 110.0f, 38.0f
-    };
-    UiButton::Draw(
-        terrainButton,
-        "Terreno",
-        m_designTool == DesignTool::Terrain ? SKYBLUE : LIGHTGRAY
-    );
-    UiButton::Draw(
-        gridButton,
-        "Grid inicial",
-        custom.hasGrid ? LIGHTGRAY : RED
-    );
-    UiButton::Draw(
-        goalButton,
-        "Meta",
-        custom.hasGoal ? LIGHTGRAY : RED
-    );
-    if (!custom.hasGrid) {
-        const char* required = "¡Obligatorio!";
-        DrawTextFont(required,
-            static_cast<int>(gridButton.x + (gridButton.width - MeasureText(required, 12)) / 2),
-            static_cast<int>(gridButton.y + gridButton.height + 2.0f), 12, RED);
-    }
-    if (!custom.hasGoal) {
-        const char* required = "¡Obligatorio!";
-        DrawTextFont(required,
-            static_cast<int>(goalButton.x + (goalButton.width - MeasureText(required, 12)) / 2),
-            static_cast<int>(goalButton.y + goalButton.height + 2.0f), 12, RED);
-    }
-    UiButton::Draw(musicButton, "Música", SKYBLUE);
-    UiButton::Draw(passengerButton, "Pasajero",
-        m_designTool == DesignTool::Passenger ? SKYBLUE : LIGHTGRAY);
-    UiButton::Draw(
-        eraserButton,
-        "Borrador",
-        m_designTool == DesignTool::Eraser ? SKYBLUE : LIGHTGRAY
-    );
+    const Rectangle terrainButton = EditorToolbarButton(0);
+    const Rectangle gridButton = EditorToolbarButton(1);
+    const Rectangle goalButton = EditorToolbarButton(2);
+    const Rectangle musicButton = EditorToolbarButton(3);
+    const Rectangle eraserButton = EditorToolbarButton(4);
+    const Rectangle passengerButton = EditorToolbarButton(5);
+    const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
+    const UiTextures& ui = m_context->textureLibrary->GetUi();
+    DrawRectangle(0, 0, m_context->windowWidth, 129, Fade(BLACK, 0.88f));
+    DrawRectangle(0, 127, m_context->windowWidth, 3,
+        Color{237, 18, 121, 255});
+    DrawEditorToolButton(terrainButton, 0,
+        m_designTool == DesignTool::Terrain, false, false,
+        *m_context->textureLibrary);
+    DrawEditorToolButton(gridButton, 1,
+        m_designTool == DesignTool::Grid, !custom.hasGrid, custom.hasGrid,
+        *m_context->textureLibrary);
+    DrawEditorToolButton(goalButton, 2,
+        m_designTool == DesignTool::Goal, !custom.hasGoal, custom.hasGoal,
+        *m_context->textureLibrary);
+    DrawEditorToolButton(musicButton, 3, m_musicPickerOpen, false, false,
+        *m_context->textureLibrary);
+    DrawEditorToolButton(eraserButton, 4,
+        m_designTool == DesignTool::Eraser, false, false,
+        *m_context->textureLibrary);
+    DrawEditorToolButton(passengerButton, 5,
+        m_designTool == DesignTool::Passenger, false, false,
+        *m_context->textureLibrary);
     const bool ready = custom.hasTerrain && custom.hasGrid && custom.hasGoal;
-    UiButton::Draw(menuButton, "MENÚ", LIGHTGRAY);
-    const Rectangle editButton = UiButton::PlaySideButton(
+    UiButton::DrawTextured(menuButton,
+        ui.menuBack, true, "Menú");
+    const Rectangle editButton = EditorCombiButton(
         m_context->windowWidth, m_context->windowHeight
     );
-    DrawRectangleRec(editButton, ready ? DARKGREEN : GRAY);
-    DrawRectangleLinesEx(editButton, 1.0f, DARKGRAY);
-    const char* editLabel = "EDITAR";
-    const char* combiLabel = "COMBI";
-    DrawTextFont(
-        editLabel,
-        static_cast<int>(editButton.x + (editButton.width - MeasureText(editLabel, 20)) / 2),
-        static_cast<int>(editButton.y + 22),
-        20,
-        WHITE
-    );
-    DrawTextFont(
-        combiLabel,
-        static_cast<int>(editButton.x + (editButton.width - MeasureText(combiLabel, 16)) / 2),
-        static_cast<int>(editButton.y + 50),
-        16,
-        WHITE
-    );
-    const Rectangle enterBadge{
-        editButton.x + editButton.width - 42.0f,
-        editButton.y + 4.0f,
-        38.0f,
-        16.0f
-    };
-    DrawRectangleRec(enterBadge, Fade(BLACK, 0.65f));
-    DrawTextFont(
-        "ENTER",
-        static_cast<int>(enterBadge.x + 3.0f),
-        static_cast<int>(enterBadge.y + 2.0f),
-        11,
-        WHITE
-    );
+    UiButton::DrawTextured(editButton, ui.game.toolbarSlot, ready);
+    DrawTexturePro(ui.game.editHammer,
+        Rectangle{0, 0, static_cast<float>(ui.game.editHammer.width),
+            static_cast<float>(ui.game.editHammer.height)},
+        Rectangle{editButton.x + 55, editButton.y + 2, 60, 60},
+        Vector2{}, 0, ready ? WHITE : Fade(WHITE, 0.55f));
+    const char* editLabel = "Editar combi";
+    DrawTextFont(editLabel,
+        static_cast<int>(editButton.x +
+            (editButton.width - MeasureTextFont(editLabel, 17)) / 2.0f),
+        static_cast<int>(editButton.y + 66), 17,
+        ready ? WHITE : LIGHTGRAY);
+    DrawRectangle(0, m_context->windowHeight - 58,
+        m_context->windowWidth, 58, Fade(BLACK, 0.88f));
+    DrawRectangle(0, m_context->windowHeight - 58,
+        m_context->windowWidth, 3, Color{237, 18, 121, 255});
 
-    const char* instructions = m_designTool == DesignTool::Terrain
-        ? "Clic izquierdo: puntos del terreno | clic derecho: cerrar"
-        : m_designTool == DesignTool::Grid
-        ? "Haz clic donde comenzará la esquina superior izquierda del grid"
-        : m_designTool == DesignTool::Eraser
-        ? "Haz clic dentro de una forma de terreno para borrarla"
-        : m_designTool == DesignTool::Passenger
-        ? "Haz clic sobre el terreno para colocar un pasajero"
-        : "Haz clic sobre el terreno para colocar la meta en su superficie";
-    DrawTextFont(instructions, 20, 64, 16, DARKGRAY);
+    std::string instructions;
+    if (m_designTool == DesignTool::Grid) {
+        if (m_gridAnchor.has_value()) {
+            const GridDefinition preview = PreviewGrid(
+                *m_gridAnchor, m_gridPreviewCursor,
+                custom.definition.grid.cellSize
+            );
+            instructions = "Cuadrícula " +
+                std::to_string(preview.dims.x) + " x " +
+                std::to_string(preview.dims.y) +
+                " | segundo clic o botón Cuadrícula: confirmar | Esc: cancelar";
+        } else {
+            instructions = "Primer clic: celda inicial | mueve el mouse para ampliar | máximo 10 x 8";
+        }
+    } else {
+        instructions = m_designTool == DesignTool::Terrain
+            ? "Clic izquierdo: puntos | clic derecho: cerrar | arrastra clic derecho: mover vista"
+            : m_designTool == DesignTool::Eraser
+            ? "Haz clic dentro de una forma de terreno para borrarla"
+            : m_designTool == DesignTool::Passenger
+            ? "Haz clic sobre el terreno para colocar un pasajero"
+            : "Haz clic sobre el terreno para colocar la meta en su superficie";
+    }
+    DrawTextFont(instructions.c_str(), 20, 106, 15, WHITE);
     DrawTextFont(
         TextFormat(
-            "Terreno %s   Grid %s   Meta %s",
+            "Terreno %s   Cuadrícula %s   Meta %s",
             custom.hasTerrain ? "OK" : "-",
             custom.hasGrid ? "OK" : "-",
             custom.hasGoal ? "OK" : "-"
@@ -609,8 +870,11 @@ void CustomLevelEditorScene::Render() const {
         20,
         m_context->windowHeight - 28,
         16,
-        ready ? DARKGREEN : DARKGRAY
+        ready ? GREEN : WHITE
     );
+    DrawTextFont("Arrastra clic derecho: mover vista",
+        m_context->windowWidth - 290,
+        m_context->windowHeight - 27, 13, WHITE);
     const bool approved = m_context->customLevels->HasValidApproval(
         static_cast<std::size_t>(m_context->activeCustomLevel)
     );
@@ -621,7 +885,7 @@ void CustomLevelEditorScene::Render() const {
         20,
         m_context->windowHeight - 48,
         13,
-        approved ? DARKGREEN : MAROON
+        approved ? GREEN : GOLD
     );
     if (m_musicPickerOpen) {
         const auto& categories = GetCustomMusicCategories();
@@ -630,29 +894,36 @@ void CustomLevelEditorScene::Render() const {
         const float panelY = (m_context->windowHeight - 540.0f) / 2.0f;
         DrawRectangle(0, 0, m_context->windowWidth, m_context->windowHeight, Fade(BLACK, 0.5f));
         const Rectangle panel{panelX, panelY, 700.0f, 540.0f};
-        DrawRectangleRec(panel, RAYWHITE);
-        DrawRectangleLinesEx(panel, 2.0f, DARKGRAY);
-        DrawTextFont("Música del nivel", static_cast<int>(panelX + 18), static_cast<int>(panelY + 18), 22, BLACK);
+        DrawRectangleRec(panel, Fade(BLACK, 0.96f));
+        DrawRectangleLinesEx(panel, 3.0f, Color{129, 195, 71, 255});
+        DrawTextFont("Música del nivel", static_cast<int>(panelX + 18), static_cast<int>(panelY + 18), 22, GOLD);
         for (std::size_t i = 0; i < categories.size(); ++i) {
             const Rectangle tab{panelX + 18.0f + (i % 4) * 164.0f,
                 panelY + 50.0f + (i / 4) * 36.0f, 158.0f, 30.0f};
-            UiButton::Draw(tab, categories[i].name.c_str(),
-                static_cast<int>(i) == m_musicCategory ? SKYBLUE : LIGHTGRAY, BLACK, 13);
+            DrawEditorTextButton(tab, categories[i].name.c_str(),
+                ui.game.toolbarSlot,
+                static_cast<int>(i) == m_musicCategory);
         }
         const Rectangle list{panelX + 18.0f, panelY + 164.0f, 664.0f, 300.0f};
-        DrawRectangleRec(list, RAYWHITE);
+        DrawRectangleRec(list, Color{22, 22, 22, 255});
+        DrawRectangleLinesEx(list, 1.0f, Color{129, 195, 71, 255});
         for (std::size_t i = 0; i < tracks.size(); ++i) {
             const float y = list.y + i * 52.0f - m_musicListScroll;
             if (y < list.y || y + 46.0f > list.y + list.height) continue;
             const Rectangle row{list.x, y, list.width, 46.0f};
-            DrawRectangleRec(row, static_cast<int>(i) == m_musicTrack ? Fade(SKYBLUE, 0.45f) : Fade(LIGHTGRAY, 0.35f));
+            DrawRectangleRec(row, static_cast<int>(i) == m_musicTrack
+                ? Fade(SKYBLUE, 0.32f) : Fade(DARKGRAY, 0.35f));
             const std::string label = tracks[i].artist.empty()
                 ? tracks[i].title
                 : tracks[i].title + " - " + tracks[i].artist;
-            DrawTextFont(label.c_str(), static_cast<int>(row.x + 12), static_cast<int>(row.y + 13), 16, BLACK);
+            DrawTextFont(label.c_str(), static_cast<int>(row.x + 12), static_cast<int>(row.y + 13), 16, WHITE);
         }
-        UiButton::Draw(Rectangle{panelX + 372.0f, panelY + 484.0f, 150.0f, 38.0f}, "Confirmar", SKYBLUE);
-        UiButton::Draw(Rectangle{panelX + 532.0f, panelY + 484.0f, 150.0f, 38.0f}, "Cancelar", LIGHTGRAY);
+        DrawEditorTextButton(
+            Rectangle{panelX + 372.0f, panelY + 484.0f, 150.0f, 38.0f},
+            "Confirmar", ui.game.toolbarSlot);
+        DrawEditorTextButton(
+            Rectangle{panelX + 532.0f, panelY + 484.0f, 150.0f, 38.0f},
+            "Cancelar", ui.game.toolbarSlot);
     }
     EndDrawing();
 }
