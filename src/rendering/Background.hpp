@@ -5,13 +5,19 @@
 
 // one per Lima district
 enum class BackgroundId : std::size_t {
-    Miraflores,
     Barranco,
+    Barriadas,
+    CentroDeLima,
     Chorrillos,
-    Rimac
+    Miraflores,
+    Rimac,
+    SanJuanDeLurigancho,
+    SanJuanDeMiraflores,
+    SantiagoDeSurco,
+    Surquillo,
 };
 
-inline constexpr std::size_t BackgroundCount = 4;
+inline constexpr std::size_t BackgroundCount = 10;
 
 // how fast the background scrolls compared to the world
 inline constexpr float BackgroundParallaxFactor = 0.1f;

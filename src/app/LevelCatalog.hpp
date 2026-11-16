@@ -53,7 +53,7 @@ inline constexpr std::array OfficialLevels{
     LevelMenuEntry{
         .levelIndex = 9,
         .jsonPath = "assets/levels/level_09.json",
-        .customMusicPath = "assets/audio/custom/El Aguajal.ogg",
+        .customMusicPath = "assets/audio/custom/Motor y Motivo.ogg",
     },
     LevelMenuEntry{
         .levelIndex = 10,
