@@ -216,7 +216,7 @@ void WorldRenderer::Render(
                 }
             }
         }
-    } else if (state == GameState::Play) {
+    } else if (state == GameState::Play || state == GameState::Results) {
         if (beforePlayParts) {
             beforePlayParts();
         }

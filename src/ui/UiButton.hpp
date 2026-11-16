@@ -76,6 +76,16 @@ inline bool IsHovered(Rectangle bounds) {
     return CheckCollisionPointRec(GetMousePosition(), bounds);
 }
 
+inline void DrawHotkeyNumber(Rectangle bounds, int hotkey) {
+    const char* label = TextFormat("%d", hotkey);
+    constexpr int fontSize = 12;
+    const int x = static_cast<int>(bounds.x + bounds.width -
+        MeasureTextFont(label, fontSize) - 8.0f);
+    const int y = static_cast<int>(bounds.y + 5.0f);
+    DrawTextFont(label, x + 1, y + 1, fontSize, Fade(BLACK, 0.8f));
+    DrawTextFont(label, x, y, fontSize, WHITE);
+}
+
 inline void DrawTextureFit(const Texture2D& texture, Rectangle bounds, Color tint = WHITE) {
     if (texture.id == 0) return;
     DrawTexturePro(

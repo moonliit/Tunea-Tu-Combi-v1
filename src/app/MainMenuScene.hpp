@@ -18,6 +18,8 @@ class MainMenuScene : public I_Scene {
     bool m_selectingLevel = false;
     bool m_editingLevels = false;
     bool m_browsingCommunity = false;
+    bool m_communitySearchOpen = false;
+    std::string m_communityQuery;
     int m_communityScroll = 0;
     int m_selectedLevel = 0;
     std::string m_newLevelName;

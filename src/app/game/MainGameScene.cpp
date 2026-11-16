@@ -30,6 +30,53 @@ Rectangle ResultsReturnButton(int width, int height) {
     return UiButton::CenteredAtBottom(width, height, 210.0f, 64.0f, 20.0f);
 }
 
+void DrawScoreValue(
+    const std::string& value,
+    const UiTextures& textures,
+    float right,
+    float top,
+    float maxWidth
+) {
+    constexpr float glyphHeight = 58.0f;
+    constexpr float spacing = 2.0f;
+    const auto& glyphFor = [&](char character) -> const Texture2D& {
+        return character == '-'
+            ? textures.scoreMinus
+            : textures.scoreDigits[static_cast<std::size_t>(character - '0')];
+    };
+    float naturalWidth = 0.0f;
+    for (char character : value) {
+        const Texture2D& glyph = glyphFor(character);
+        naturalWidth += glyphHeight * glyph.width / glyph.height + spacing;
+    }
+    if (naturalWidth <= 0.0f) return;
+    naturalWidth -= spacing;
+    const float scale = std::min(1.0f, maxWidth / naturalWidth);
+    const float drawnHeight = glyphHeight * scale;
+    float x = right - naturalWidth * scale;
+    for (char character : value) {
+        const Texture2D& glyph = glyphFor(character);
+        const float drawnWidth = drawnHeight * glyph.width / glyph.height;
+        DrawTexturePro(glyph,
+            Rectangle{0.0f, 0.0f,
+                static_cast<float>(glyph.width), static_cast<float>(glyph.height)},
+            Rectangle{x, top + (glyphHeight - drawnHeight) / 2.0f,
+                drawnWidth, drawnHeight},
+            Vector2{}, 0.0f, WHITE);
+        x += drawnWidth + spacing * scale;
+    }
+}
+
+Rectangle DesignLevelButton(int width, int height) {
+    const Rectangle playButton = UiButton::PlaySideButton(width, height);
+    return Rectangle{
+        playButton.x,
+        playButton.y - 98.0f,
+        playButton.width,
+        90.0f
+    };
+}
+
 float RoutePreviewProgress(float time) {
     const float t = std::clamp(time, 0.0f, 1.0f);
     const auto sigmoidDistance = [](float value) {
@@ -268,13 +315,8 @@ void MainGameScene::ProcessInput(float dt) {
     }
     if (m_stateMachine.IsBuildMode() && ProcessGhostControls()) return;
     if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
-        const Rectangle designButton = UiButton::CenteredAbove(
-            UiButton::PlaySideButton(
-                m_appContext->windowWidth, m_appContext->windowHeight
-            ),
-            110.0f,
-            52.0f,
-            8.0f
+        const Rectangle designButton = DesignLevelButton(
+            m_appContext->windowWidth, m_appContext->windowHeight
         );
         if (UiButton::WasClicked(designButton)) {
             m_appContext->audioController->SetFanActive(false);
@@ -482,16 +524,17 @@ void MainGameScene::Update(float dt) {
         m_leaderboard.Poll(frameMs);
         m_playSession.Update(dt);
         m_ghostPlayback.Update(frameMs);
-        const auto& parts = m_playSession.GetRuntimeGrid().GetActiveParts();
-        if (!parts.empty()) {
+        const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+        const auto& parts = runtimeGrid.GetActiveParts();
+        {
             Vector2 center{};
             std::optional<Vector2> driverPosition;
+            int partCount = 0;
             for (const Part* part : parts) {
-                const auto position = part->GetRenderState(
-                    m_playSession.GetRuntimeGrid()
-                ).position;
+                const auto position = part->GetRenderState(runtimeGrid).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
+                ++partCount;
                 if (!driverPosition && IsOrContainsDriver(part)) {
                     driverPosition = Vector2{
                         static_cast<float>(position.x),
@@ -499,12 +542,28 @@ void MainGameScene::Update(float dt) {
                     };
                 }
             }
-            m_camera.target = ClampToBounds(
-                driverPosition.value_or(Vector2{
-                    center.x / parts.size(), center.y / parts.size()
-                }),
-                m_mapBounds
-            );
+            for (const auto& ejected : m_playSession.GetEjectedParts()) {
+                if (!ejected) continue;
+                const auto position = ejected->GetRenderState(runtimeGrid).position;
+                center.x += static_cast<float>(position.x);
+                center.y += static_cast<float>(position.y);
+                ++partCount;
+                if (ejected->GetType() == PartType::Driver) {
+                    driverPosition = Vector2{
+                        static_cast<float>(position.x),
+                        static_cast<float>(position.y)
+                    };
+                }
+            }
+            if (partCount > 0) {
+                m_camera.target = ClampToBounds(
+                    driverPosition.value_or(Vector2{
+                        center.x / static_cast<float>(partCount),
+                        center.y / static_cast<float>(partCount)
+                    }),
+                    m_mapBounds
+                );
+            }
         }
         UpdateGoalParticles(dt);
         return;
@@ -1098,41 +1157,71 @@ bool MainGameScene::ProcessGhostControls() {
 void MainGameScene::RenderGhostControls() const {
     const GhostLoadStatus status = m_ghostPlayback.GetStatus();
     const bool canUse = GhostCanBeRequested(status);
-    DrawRectangleRec(GhostPanel(), Fade(DARKBLUE, 0.84f));
-    DrawRectangleLinesEx(GhostPanel(), 2.0f, SKYBLUE);
+    const Rectangle panel = GhostPanel();
+    const Color accentBlue{91, 212, 246, 255};
+    const Color accentYellow{243, 237, 33, 255};
+    DrawRectangleRec(panel, Color{9, 27, 54, 239});
+    DrawRectangleLinesEx(panel, 2.0f, accentBlue);
+    DrawRectangle(static_cast<int>(panel.x + 2.0f),
+        static_cast<int>(panel.y + 2.0f),
+        static_cast<int>(panel.width - 4.0f), 23,
+        Color{20, 58, 91, 255});
+    DrawRectangle(static_cast<int>(panel.x + 6.0f),
+        static_cast<int>(panel.y + 25.0f),
+        static_cast<int>(panel.width - 12.0f), 2, accentBlue);
+    DrawRectangle(static_cast<int>(panel.x + 6.0f),
+        static_cast<int>(panel.y + 25.0f), 70, 2, accentYellow);
     DrawTextFont("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
-    UiButton::Draw(
+
+    const auto drawGhostButton = [&](Rectangle bounds, const char* label,
+        bool enabled, bool active, int fontSize) {
+        const bool hovered = enabled && UiButton::IsHovered(bounds);
+        DrawRectangleRec(bounds,
+            !enabled ? Color{24, 40, 58, 235}
+            : hovered ? Color{42, 103, 143, 245}
+            : active ? Color{29, 88, 126, 245}
+            : Color{20, 58, 91, 245});
+        DrawRectangleLinesEx(bounds, active ? 2.0f : 1.0f,
+            enabled ? (active ? accentYellow : accentBlue)
+                    : Color{65, 107, 127, 255});
+        DrawTextFont(label,
+            static_cast<int>(bounds.x +
+                (bounds.width - MeasureTextFont(label, fontSize)) / 2.0f),
+            static_cast<int>(bounds.y + (bounds.height - fontSize) / 2.0f),
+            fontSize, enabled ? WHITE : Color{150, 175, 188, 255});
+    };
+    drawGhostButton(
         GhostPreviewButton(),
         m_competeAgainstGhost
             ? "LISTO PARA COMPETIR"
             : m_ghostPlayback.IsPlaying()
             ? "REPRODUCIENDO RECORRIDO"
             : "VER RECORRIDO DEL CAMPEÓN",
-        canUse && !m_competeAgainstGhost ? DARKGREEN : DARKGRAY,
-        canUse && !m_competeAgainstGhost ? WHITE : GRAY,
+        canUse && !m_competeAgainstGhost,
+        m_ghostPlayback.IsPlaying(),
         11
     );
-    UiButton::Draw(
+    drawGhostButton(
         GhostPauseButton(),
         "PARAR",
-        m_ghostPlayback.IsPlaying() ? MAROON : DARKGRAY,
-        WHITE,
+        m_ghostPlayback.IsPlaying(),
+        false,
         12
     );
-    UiButton::Draw(
+    drawGhostButton(
         GhostRestartButton(),
         "REINICIAR",
-        canUse && !m_competeAgainstGhost ? ORANGE : DARKGRAY,
-        canUse && !m_competeAgainstGhost ? WHITE : GRAY,
+        canUse && !m_competeAgainstGhost,
+        false,
         12
     );
-    UiButton::Draw(
+    drawGhostButton(
         GhostCompeteButton(),
         m_competeAgainstGhost
             ? "COMPETIR CON FANTASMA: SÍ"
             : "COMPETIR CON FANTASMA: NO",
-        m_competeAgainstGhost ? DARKGREEN : DARKGRAY,
-        canUse ? WHITE : GRAY,
+        canUse,
+        m_competeAgainstGhost,
         10
     );
 
@@ -1164,28 +1253,26 @@ void MainGameScene::RenderGhostControls() const {
             break;
         case GhostLoadStatus::Incompatible:
             message = "Grabación incompatible con esta versión";
-            messageColor = ORANGE;
+            messageColor = accentYellow;
             break;
         case GhostLoadStatus::Error:
             message = "Sin conexión: edición y juego siguen disponibles";
-            messageColor = ORANGE;
+            messageColor = accentYellow;
             break;
         case GhostLoadStatus::Idle:
             message = "Fantasma no disponible";
             break;
     }
+    DrawRectangle(static_cast<int>(panel.x + 6.0f),
+        static_cast<int>(panel.y + 100.0f),
+        static_cast<int>(panel.width - 12.0f), 1,
+        Fade(accentBlue, 0.65f));
     DrawTextFont(message.c_str(), 22, 180, 11, messageColor);
 }
 
 void MainGameScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
-
-    if (m_stateMachine.IsResultsMode()) {
-        RenderResults();
-        EndDrawing();
-        return;
-    }
 
     const auto renderPassengersBeforeVehicle = [&]() {
         const std::vector<TrackedPart> trackedParts = CollectParts(
@@ -1355,27 +1442,27 @@ void MainGameScene::Render() const {
         );
         const float centerX = m_appContext->windowWidth / 2.0f;
         const float centerY = m_appContext->windowHeight / 2.0f;
-        DrawRectangle(
-            0, 0,
-            m_appContext->windowWidth,
-            m_appContext->windowHeight,
-            Fade(DARKGRAY, 0.5f)
-        );
         const char* label = "Ya llego el chofer, causa!";
+        const int labelX = static_cast<int>(
+            centerX - MeasureTextFont(label, 30) / 2
+        );
+        DrawTextFont(label, labelX + 2,
+            static_cast<int>(centerY - 88.0f), 30, BLACK);
         DrawTextFont(
             label,
-            static_cast<int>(centerX - MeasureTextFont(label, 30) / 2),
+            labelX,
             static_cast<int>(centerY - 90.0f),
             30,
             WHITE
         );
-        const char* number = TextFormat("%d", count);
-        DrawTextFont(
+        const Texture2D& number = m_appContext->textureLibrary->GetUi()
+            .game.countdownNumbers[static_cast<std::size_t>(count - 1)];
+        DrawTexturePro(
             number,
-            static_cast<int>(centerX - MeasureTextFont(number, 120) / 2),
-            static_cast<int>(centerY - 35.0f),
-            120,
-            WHITE
+            Rectangle{0.0f, 0.0f,
+                static_cast<float>(number.width), static_cast<float>(number.height)},
+            Rectangle{centerX - 80.0f, centerY - 30.0f, 160.0f, 160.0f},
+            Vector2{}, 0.0f, WHITE
         );
     }
     UiButton::DrawTextured(
@@ -1385,21 +1472,31 @@ void MainGameScene::Render() const {
         "Menú"
     );
     if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
-        UiButton::DrawTextured(
-            UiButton::CenteredAbove(
-                UiButton::PlaySideButton(
-                    m_appContext->windowWidth, m_appContext->windowHeight
-                ),
-                110.0f,
-                50.0f,
-                // 100.0f,
-                // 52.0f,
-                8.0f
-            ),
-            m_appContext->textureLibrary->GetUi().game.navDiseno,
-            true,
-            "DISEÑO"
+        const Rectangle designButton = DesignLevelButton(
+            m_appContext->windowWidth, m_appContext->windowHeight
         );
+        const UiGameTextures& gameUi = m_appContext->textureLibrary->GetUi().game;
+        UiButton::DrawTextureFit(gameUi.toolbarSlot.normal, designButton);
+        DrawTexturePro(
+            gameUi.navDiseno.normal,
+            Rectangle{116.0f, 18.0f, 168.0f, 151.0f},
+            Rectangle{designButton.x + 54.0f, designButton.y + 3.0f,
+                62.0f, 58.0f},
+            Vector2{}, 0.0f, WHITE
+        );
+        const bool hovered = UiButton::IsHovered(designButton);
+        if (hovered) {
+            DrawRectangleRec(Rectangle{
+                designButton.x + 4.0f, designButton.y + 4.0f,
+                designButton.width - 8.0f, designButton.height - 8.0f
+            }, Fade(WHITE, IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? 0.10f : 0.18f));
+        }
+        const char* label = "Diseñar nivel";
+        DrawTextFont(label,
+            static_cast<int>(designButton.x +
+                (designButton.width - MeasureTextFont(label, 17)) / 2.0f),
+            static_cast<int>(designButton.y + 66.0f),
+            17, WHITE);
     }
 
     EndDrawing();
@@ -1420,7 +1517,8 @@ void MainGameScene::RenderResults() const {
     const float panelWidth = (width - 96.0f) / 2.0f;
     const Rectangle rankingPanel{30.0f, 82.0f, panelWidth, height - 180.0f};
     const Rectangle scorePanel{
-        rankingPanel.x + panelWidth + 36.0f, 82.0f,
+        rankingPanel.x + panelWidth + 36.0f,
+        rankingPanel.y + (rankingPanel.height - 430.0f) / 2.0f,
         panelWidth, 430.0f
     };
     DrawRectangleRec(rankingPanel, Fade(BLACK, 0.86f));
@@ -1497,7 +1595,8 @@ void MainGameScene::RenderResults() const {
 
     const int panelX = static_cast<int>(scorePanel.x + 22.0f);
     const int valueX = static_cast<int>(scorePanel.x + scorePanel.width - 22.0f);
-    DrawTextFont("PUNTUACIÓN", panelX, 106, 28, GOLD);
+    const int scoreY = static_cast<int>(scorePanel.y);
+    DrawTextFont("PUNTUACIÓN", panelX, scoreY + 24, 28, GOLD);
     const auto row = [panelX, valueX, bodyText, accentPink](
         const std::string& label,
         std::int64_t value,
@@ -1517,64 +1616,90 @@ void MainGameScene::RenderResults() const {
         "Pasajeros recogidos (" +
             std::to_string(m_statistics.passengersCollected) + ")",
         m_score.passengerPickup,
-        150
+        scoreY + 68
     );
     row(
         "Pasajeros entregados (" +
             std::to_string(m_statistics.passengersDelivered) + ")",
         m_score.passengerDelivery,
-        186
+        scoreY + 104
     );
     row(
         "Piezas entregadas (" +
             std::to_string(m_statistics.partsDelivered) + "/" +
             std::to_string(m_statistics.initialParts) + ")",
         m_score.partDelivery,
-        222
+        scoreY + 140
     );
     row(
         "Construcción (" +
             std::to_string(m_statistics.initialParts) + " piezas)",
         m_score.constructionPenalty,
-        258
+        scoreY + 176
     );
     row(
         "Rapidez (" + std::to_string(m_statistics.driverTimeMs) + " ms)",
         m_score.speed,
-        294
+        scoreY + 212
     );
-    DrawLine(panelX, 365, valueX, 365, accentGreen);
-    DrawTextFont("TOTAL", panelX, 382, 42, GOLD);
+    DrawLine(panelX, scoreY + 283, valueX, scoreY + 283, accentGreen);
+    const UiTextures& ui = m_appContext->textureLibrary->GetUi();
+    const Texture2D& totalLabel = ui.scoreTotalLabel;
+    constexpr float totalLabelHeight = 54.0f;
+    const float totalLabelWidth = totalLabelHeight *
+        totalLabel.width / totalLabel.height;
+    UiButton::DrawTextureFit(totalLabel,
+        Rectangle{static_cast<float>(panelX), static_cast<float>(scoreY + 294),
+            totalLabelWidth, totalLabelHeight});
     const std::string total = std::to_string(m_score.total);
-    DrawTextFont(
-        total.c_str(),
-        static_cast<int>(valueX - MeasureTextFont(total.c_str(), 52)),
-        376,
-        52,
-        GOLD
+    DrawScoreValue(total, ui, static_cast<float>(valueX),
+        static_cast<float>(scoreY + 292),
+        std::max(20.0f, valueX - panelX - totalLabelWidth - 16.0f)
     );
     if (leaderboard.personalBest.available) {
         const std::string personal = "Récord personal local: " +
             std::to_string(leaderboard.personalBest.total);
-        DrawTextFont(personal.c_str(), panelX, 435, 16, bodyText);
+        DrawTextFont(personal.c_str(), panelX, scoreY + 353, 16, bodyText);
         DrawTextFont(
             leaderboard.personalBest.currentAttempt
                 ? "Nueva mejor marca local"
                 : "Tu mejor marca local anterior sigue vigente",
             panelX,
-            460,
+            scoreY + 378,
             13,
             leaderboard.personalBest.currentAttempt ? accentGreen : mutedText
         );
     }
 
+    const Rectangle returnButton = ResultsReturnButton(width, height);
     UiButton::DrawTextured(
-        ResultsReturnButton(width, height),
+        returnButton,
         m_appContext->textureLibrary->GetUi().resultsBack,
         true,
         "Volver"
     );
-    DrawTextFont("ENTER", width / 2 + 118, height - 52, 11, bodyText);
+    constexpr int enterSize = 11;
+    const char* enterLabel = "ENTER";
+    DrawTextFont(
+        enterLabel,
+        static_cast<int>(returnButton.x + returnButton.width -
+            MeasureTextFont(enterLabel, enterSize) - 10.0f),
+        static_cast<int>(returnButton.y + 8.0f),
+        enterSize,
+        bodyText
+    );
+    if (m_isEditableDraft && m_appContext->activeCustomLevel >= 0 &&
+        m_appContext->customLevels->HasValidApproval(
+            static_cast<std::size_t>(m_appContext->activeCustomLevel))) {
+        const char* publishMessage = "¡Ya puedes publicar tu nivel!";
+        const int messageX = static_cast<int>(
+            returnButton.x + returnButton.width + 18.0f
+        );
+        const int messageY = static_cast<int>(returnButton.y + 22.0f);
+        DrawTextFont(publishMessage, messageX + 1,
+            messageY + 1, 17, BLACK);
+        DrawTextFont(publishMessage, messageX, messageY, 17, GOLD);
+    }
 }
 
 std::optional<std::string> MainGameScene::PersonalRecordOwner() const {

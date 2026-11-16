@@ -13,23 +13,6 @@
 
 namespace {
 
-void DrawHotkeyBadge(Rectangle bounds, int hotkey) {
-    const Rectangle badge{
-        bounds.x + bounds.width - 23.0f,
-        bounds.y + 5.0f,
-        18.0f,
-        18.0f
-    };
-    DrawRectangleRec(badge, Fade(BLACK, 0.75f));
-    DrawTextFont(
-        TextFormat("%d", hotkey),
-        static_cast<int>(badge.x + 5.0f),
-        static_cast<int>(badge.y + 2.0f),
-        12,
-        WHITE
-    );
-}
-
 void DrawCenteredTexture(const Texture2D& texture, Rectangle bounds, float padding, Color tint) {
     if (texture.id == 0) return;
     const float maxW = std::max(1.0f, bounds.width - padding * 2.0f);
@@ -144,18 +127,6 @@ void DrawTexturedControl(
             );
         }
     }
-    if (control.type == UiControlType::Activation) {
-        DrawRectangleRec(
-            Rectangle{
-                control.bounds.x + 2.0f,
-                control.bounds.y + control.bounds.height - 20.0f,
-                control.bounds.width - 4.0f,
-                18.0f
-            },
-            Fade(BLACK, 0.65f)
-        );
-    }
-
     // label overlay (kept for clarity; can be hidden when art includes text)
     if (!control.label.empty()) {
         const char* label = control.label.data();
@@ -172,7 +143,7 @@ void DrawTexturedControl(
     }
 
     if (hotkey.has_value()) {
-        DrawHotkeyBadge(control.bounds, hotkey.value());
+        UiButton::DrawHotkeyNumber(control.bounds, hotkey.value());
     }
 }
 

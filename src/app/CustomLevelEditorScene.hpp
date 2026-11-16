@@ -4,6 +4,7 @@
 #include "math/Vector2D.hpp"
 #include <raylib.h>
 #include <optional>
+#include <string>
 #include <vector>
 struct AppContext;
 class CustomLevelEditorScene final : public I_Scene {
@@ -21,6 +22,7 @@ class CustomLevelEditorScene final : public I_Scene {
     bool m_rightPressOnCanvas = false;
     std::vector<Math::Vector2D> m_erasedPassengerPositions;
     bool m_musicPickerOpen = false;
+    std::string m_publishFeedbackDraftId;
     int m_musicCategory = 0;
     int m_musicTrack = 0;
     float m_musicListScroll = 0.0f;

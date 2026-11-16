@@ -142,9 +142,12 @@
             transition: opacity 0.3s;
         }
         #loading.done { opacity: 0; pointer-events: none; }
+        #loading img { display: block; width: min(340px, 75%); height: auto; }
+        #loading #label:empty { display: none; }
         #loading .track { width: 220px; height: 2px; background: var(--line); }
         #loading #fill { width: 0; height: 100%; background: var(--accent); transition: width 0.15s linear; }
         #loading.error { color: var(--text); }
+        #loading.error img { display: none; }
         #loading.error .track { display: none; }
 
         /* About the game */
@@ -285,7 +288,8 @@
             <div id="frame">
                 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
                 <div id="loading" role="status">
-                    <span id="label">Cargando…</span>
+                    <img src="loading-cargando.png" alt="Cargando...">
+                    <span id="label"></span>
                     <div class="track"><div id="fill"></div></div>
                 </div>
                 <div id="bar">
@@ -336,7 +340,7 @@
                     fill.style.width = percent + '%';
                     label.textContent = (/download/i.test(m[1]) ? 'Descargando… ' : 'Preparando… ') + percent + ' %';
                 } else {
-                    label.textContent = 'Cargando…';
+                    label.textContent = '';
                 }
             },
             monitorRunDependencies(left) {

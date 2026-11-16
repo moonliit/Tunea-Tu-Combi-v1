@@ -21,6 +21,7 @@ struct UiButtonSkin {
 struct UiGameTextures {
     UiButtonSkin toolbarSlot;
     Texture2D editHammer{};
+    std::array<Texture2D, 3> countdownNumbers{};
     UiButtonSkin modePlay;
     UiButtonSkin modeEdit;
     UiButtonSkin clearSelection; // DROP
@@ -52,8 +53,12 @@ struct UiTextures {
     UiButtonSkin menuReset;
     UiButtonSkin menuEditorLevels;
     UiButtonSkin menuCreateLevel;
+    Texture2D menuCreatePlus{};
     UiButtonSkin menuBack;
     UiButtonSkin resultsBack;
+    Texture2D scoreTotalLabel{};
+    std::array<Texture2D, 10> scoreDigits{};
+    Texture2D scoreMinus{};
     UiButtonSkin menuEditAndPlay;
     UiButtonSkin menuPublish;
     UiButtonSkin menuDelete;
@@ -61,6 +66,8 @@ struct UiTextures {
     UiButtonSkin menuDialogCreate;
     UiButtonSkin menuCommunity;
     UiButtonSkin menuMyLevels;
+    Texture2D communityPreviousLabel{};
+    Texture2D communityNextLabel{};
     std::array<UiButtonSkin, MaxOfficialLevelCount> menuLevelTitles{};
 
     UiGameTextures game;

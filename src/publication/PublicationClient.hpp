@@ -45,6 +45,7 @@ class PublicationClient {
 public:
     void Publish(const nlohmann::json& payload);
     void OpenCatalog();
+    void SearchCatalog(const std::string& query);
     void NextCatalogPage();
     void PreviousCatalogPage();
     void PlayPublicLevel(const std::string& id);

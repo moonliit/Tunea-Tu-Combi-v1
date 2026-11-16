@@ -14,6 +14,9 @@ EM_JS(void, ConsumePublicationActionWeb, (const char* action), {
     Module['api'].consumePublicationAction(UTF8ToString(action));
 });
 EM_JS(void, OpenCatalogWeb, (), { Module['api'].openCatalog(); });
+EM_JS(void, SearchCatalogWeb, (const char* query), {
+    Module['api'].searchCatalog(UTF8ToString(query));
+});
 EM_JS(void, NextCatalogPageWeb, (), { Module['api'].nextCatalogPage(); });
 EM_JS(void, PreviousCatalogPageWeb, (), { Module['api'].previousCatalogPage(); });
 EM_JS(void, PlayPublicLevelWeb, (const char* id), {
@@ -54,6 +57,19 @@ void PublicationClient::OpenCatalog() {
     m_catalog.error.clear();
     OpenCatalogWeb();
 #else
+    m_catalog = {
+        .error = "Los niveles públicos están disponibles en la versión web."
+    };
+#endif
+}
+
+void PublicationClient::SearchCatalog(const std::string& query) {
+#ifdef __EMSCRIPTEN__
+    m_catalog.loading = true;
+    m_catalog.error.clear();
+    SearchCatalogWeb(query.c_str());
+#else
+    static_cast<void>(query);
     m_catalog = {
         .error = "Los niveles públicos están disponibles en la versión web."
     };
