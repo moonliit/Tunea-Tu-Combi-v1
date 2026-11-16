@@ -8,6 +8,7 @@
 
 #include "math/Vector2D.hpp"
 #include "math/AABB.hpp"
+#include <algorithm>
 
 namespace Physics {
 
@@ -55,6 +56,9 @@ namespace Physics {
 
         Math::Vector2D GetPosition() const override { return m_transform.position; }
         Math::RealNum GetRotation() const override { return m_transform.rotation; }
+        void SetFriction(float friction) override {
+            m_material.friction = std::max(0.0f, friction);
+        }
         void AddMass(float mass) override {
             if (m_bodyType == BodyType::Static || mass <= 0.0f) return;
             const Math::RealNum previousMass = m_massData.mass;

@@ -7,6 +7,7 @@ using namespace Math;
 namespace {
 
 constexpr float FanForce = 750.0f;
+constexpr float WheelFriction = 1.75f;
 
 constexpr float WindSailForce = 1750.0f;
 constexpr float WindSailActiveDuration = 0.75f;
@@ -307,6 +308,9 @@ void Part::SetPhysicsBody(
 
     m_physicsBody = body;
     if (m_physicsBody) {
+        if (m_type == PartType::CircleWheel) {
+            m_physicsBody->SetFriction(WheelFriction);
+        }
         m_physicsBody->m_part = this;
     }
     m_physicsWorld = physics.get();
