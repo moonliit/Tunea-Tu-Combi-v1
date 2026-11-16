@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jueguitos</title>
+    <style>
+        :root {
+            --bg: #17171a;
+            --header: #0f0f11;
+            --box: #202024;
+            --line: #2f2f35;
+            --text: #ececec;
+            --muted: #9a9aa3;
+            --accent: #d9772b;
+            --wrap: 1544px;
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: var(--text);
+            background: var(--bg);
+            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+        a { color: inherit; text-decoration: none; }
+        [hidden] { display: none !important; }
+        .wrap { width: min(var(--wrap), 100% - 32px); margin: 0 auto; }
+
+        /* Site header */
+        #site { background: var(--header); border-bottom: 1px solid var(--line); }
+        #site .wrap { height: 52px; display: flex; align-items: center; gap: 32px; }
+        .brand { font-size: 20px; font-weight: 700; letter-spacing: 0.01em; }
+        #site nav { display: flex; align-self: stretch; gap: 4px; }
+        #site nav a {
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            color: var(--muted);
+            border-bottom: 2px solid transparent;
+        }
+        #site nav a:hover { color: var(--text); }
+        #site nav a[aria-current] { color: var(--text); border-bottom-color: var(--accent); }
+
+        /* Home: the catalog of games */
+        #home { flex: 1; padding: 24px 0 40px; }
+        #home h1 { margin: 0 0 16px; font-size: 20px; }
+        .cards {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+        .cards li { display: flex; }
+        .card { flex: 1; display: block; background: var(--box); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+        a.card:hover { border-color: var(--accent); }
+        .card.disabled { cursor: default; }
+        .card.disabled .thumb { display: grid; place-items: center; aspect-ratio: 5 / 3; background: #1a1a1e; color: #4a4a52; }
+        .card.disabled .thumb svg { width: 56px; height: 56px; }
+        .card.disabled h2 { color: #b5b5bd; }
+        .card img { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; object-fit: cover; background: #000; }
+        .card .meta { padding: 12px 14px; }
+        .card h2 { margin: 0 0 8px; font-size: 16px; }
+
+        /* Game page: the game on the left, the account and community panels on the right */
+        #page {
+            flex: 1;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            gap: 14px 24px;
+            align-items: start;
+            align-content: start;
+            padding: 20px 0 40px;
+        }
+        #head { grid-column: 1 / -1; }
+        #main { min-width: 0; }
+        .crumbs { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+        .crumbs a:hover { color: var(--text); text-decoration: underline; }
+        #head h1 { margin: 0 0 8px; font-size: 24px; font-weight: 700; }
+        .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+        .tags span {
+            padding: 1px 8px;
+            color: var(--muted);
+            background: #26262b;
+            border: 1px solid var(--line);
+            border-radius: 3px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        /* The game frame: the canvas and, under it, a bar with the fullscreen button. */
+        #frame {
+            display: grid;
+            grid-template-rows: auto auto;
+            background: #000;
+            border: 1px solid var(--line);
+        }
+        #canvas { grid-area: 1 / 1; display: block; width: 100%; height: auto; aspect-ratio: 1200 / 720; border: 0; }
+        #bar {
+            grid-row: 2;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            height: 40px;
+            padding: 0 8px;
+            background: #1b1b1f;
+            border-top: 1px solid var(--line);
+        }
+        #bar button {
+            display: grid;
+            place-items: center;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            color: var(--muted);
+            background: none;
+            border: 0;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #bar button:hover { color: var(--text); background: #2a2a30; }
+        #bar svg { width: 22px; height: 22px; }
+        #frame.fullscreen { display: grid; grid-template-rows: auto; place-items: center; border: 0; }
+        #frame.fullscreen #canvas { width: min(100vw, calc(100vh * 5 / 3)); height: auto; }
+        #frame.fullscreen #bar { display: none; }
+
+        /* Loading screen over the canvas until the game starts. */
+        #loading {
+            grid-area: 1 / 1;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: var(--muted);
+            background: #0d0d0d;
+            transition: opacity 0.3s;
+        }
+        #loading.done { opacity: 0; pointer-events: none; }
+        #loading .track { width: 220px; height: 2px; background: var(--line); }
+        #loading #fill { width: 0; height: 100%; background: var(--accent); transition: width 0.15s linear; }
+        #loading.error { color: var(--text); }
+        #loading.error .track { display: none; }
+
+        /* About the game */
+        #about { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); max-width: 760px; }
+        #about h2 { margin: 0 0 8px; font-size: 16px; }
+        #about p { margin: 0; color: #cfcfd6; }
+
+        /* Sidebar boxes. The panels come from api.js, which writes their look inline. */
+        #sidebar > section, #sidebar > details {
+            width: 100%;
+            max-width: none !important;
+            margin: 0 0 16px !important;
+            padding: 14px 16px !important;
+            color: var(--text) !important;
+            background: var(--box) !important;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
+        }
+        /* The community panel is always open, so its title is just a heading. */
+        #sidebar summary { font-weight: 600; list-style: none; pointer-events: none; }
+        #sidebar summary::-webkit-details-marker { display: none; }
+        #sidebar h3 { margin: 16px 0 6px; font-size: 14px; font-weight: 600; }
+        #sidebar p { margin: 6px 0; }
+        #sidebar [style*="665c50"] { color: var(--muted) !important; }
+        #sidebar [style*="border-top"] { border-top-color: var(--line) !important; flex-wrap: wrap; }
+        #sidebar > section > p[role="status"] { font-weight: 600; }
+        #sidebar > section > p:not([role]):not([aria-live]) { color: var(--muted); font-size: 12px; }
+        #sidebar > section > p[aria-live] { color: var(--muted); }
+        #sidebar > section > p[aria-live]:empty { margin: 0; }
+        #sidebar > section form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+        #sidebar > section label { flex: 1 1 100%; }
+        #sidebar > section input { width: 100%; }
+
+        /* Buttons and fields, also the ones api.js creates. */
+        #sidebar button {
+            height: 32px;
+            padding: 0 14px;
+            color: var(--text);
+            background: #2a2a30;
+            border: 1px solid #3c3c44;
+            border-radius: 3px;
+            font: 500 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            cursor: pointer;
+        }
+        #sidebar button:hover:not(:disabled) { background: #33333b; }
+        #sidebar button[type="submit"] { color: #1a1008; background: var(--accent); border-color: var(--accent); }
+        #sidebar button[type="submit"]:hover:not(:disabled) { background: #e5873a; }
+        #sidebar button:disabled { opacity: 0.4; cursor: default; }
+        #sidebar input {
+            height: 32px;
+            padding: 0 10px;
+            color: var(--text);
+            background: #17171a;
+            border: 1px solid #3c3c44;
+            border-radius: 3px;
+            font: inherit;
+        }
+        #sidebar form input[type="text"], #sidebar form input:not([type]), #sidebar form input[type="search"] { min-width: 0; flex: 1; }
+        a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        #footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+        #footer .wrap { padding: 16px 0; }
+
+        @media (max-width: 980px) {
+            #page { grid-template-columns: minmax(0, 1fr); }
+            #sidebar { margin-top: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <header id="site">
+        <div class="wrap">
+            <a class="brand" href="#/">Jueguitos</a>
+            <nav>
+                <a href="#/" id="nav-games" aria-current="page">Juegos</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Home: the catalog of games (there is one) -->
+    <main id="home" class="wrap">
+        <h1>Juegos</h1>
+        <ul class="cards">
+            <li>
+                <a class="card" href="#/tunea-tu-combi">
+                    <img src="thumbnail.jpg" alt="" width="640" height="384">
+                    <div class="meta">
+                        <h2>Tunea Tu Combi</h2>
+                        <div class="tags"><span>Física</span><span>Construcción</span><span>Editor de niveles</span></div>
+                    </div>
+                </a>
+            </li>
+            <!-- Placeholders: not links, nothing to open yet. -->
+            <li>
+                <div class="card disabled" aria-disabled="true">
+                    <div class="thumb">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>
+                            <path d="M14 3v5h5M9 13h6M9 17h6"></path>
+                        </svg>
+                    </div>
+                    <div class="meta">
+                        <h2>Informe (en PDF)</h2>
+                        <div class="tags"><span>Próximamente</span></div>
+                    </div>
+                </div>
+            </li>
+            <li>
+                <div class="card disabled" aria-disabled="true">
+                    <div class="thumb">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="12" rx="1.5"></rect>
+                            <path d="M12 16v4M8 20h8M7 12l3-3 3 2 4-4"></path>
+                        </svg>
+                    </div>
+                    <div class="meta">
+                        <h2>PPT (en PDF)</h2>
+                        <div class="tags"><span>Próximamente</span></div>
+                    </div>
+                </div>
+            </li>
+        </ul>
+    </main>
+
+    <!-- Game page. The canvas has to exist from the start; the game itself is loaded when this page opens. -->
+    <div id="page" class="wrap" hidden>
+        <div id="head">
+            <nav class="crumbs" aria-label="Ruta"><a href="#/">Juegos</a> › Tunea Tu Combi</nav>
+            <h1>Tunea Tu Combi</h1>
+            <div class="tags"><span>Física</span><span>Construcción</span><span>Editor de niveles</span></div>
+        </div>
+        <main id="main">
+            <!-- api.js adds its panels right before this element; the script below moves them to the sidebar. -->
+            <div id="frame">
+                <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+                <div id="loading" role="status">
+                    <span id="label">Cargando…</span>
+                    <div class="track"><div id="fill"></div></div>
+                </div>
+                <div id="bar">
+                    <button id="fullscreen" type="button" title="Pantalla completa" aria-label="Pantalla completa">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="2.5" y="4.5" width="19" height="15" rx="2"></rect>
+                            <path d="M8 9.5V8h1.5M16 9.5V8h-1.5M8 14.5V16h1.5M16 14.5V16h-1.5"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <section id="about">
+                <h2>Acerca del juego</h2>
+                <p>Arma tu combi con bloques, ruedas, ventiladores, velas y barriles de TNT. Recoge pasajeros y llévalos hasta la meta. Cada nivel tiene su propio ranking, y puedes crear y publicar tus propios niveles.</p>
+            </section>
+        </main>
+        <aside id="sidebar"></aside>
+    </div>
+
+    <footer id="footer"><div class="wrap">© 2026 Jueguitos</div></footer>
+
+    <!-- Emscripten's loader goes in a template so it does not run until the game page opens. -->
+    <template id="game-script">{{{ SCRIPT }}}</template>
+
+    <script>
+        const loading = document.getElementById('loading');
+        const fill = document.getElementById('fill');
+        const label = document.getElementById('label');
+
+        function showError(message) {
+            label.textContent = message;
+            loading.classList.add('error');
+            loading.classList.remove('done');
+        }
+
+        var Module = {
+            canvas: document.getElementById('canvas'),
+            // The game's log goes to the browser console, not to the page.
+            print: (...args) => console.log(args.join(' ')),
+            printErr: (...args) => console.warn(args.join(' ')),
+            totalDependencies: 0,
+            // Emscripten reports "Downloading data... (done/total)" and "" when it is ready.
+            setStatus(text) {
+                if (!text) { loading.classList.add('done'); return; }
+                const m = text.match(/^(.*)\((\d+(?:\.\d+)?)\/(\d+)\)/);
+                if (m) {
+                    const percent = Math.round(100 * m[2] / m[3]);
+                    fill.style.width = percent + '%';
+                    label.textContent = (/download/i.test(m[1]) ? 'Descargando… ' : 'Preparando… ') + percent + ' %';
+                } else {
+                    label.textContent = 'Cargando…';
+                }
+            },
+            monitorRunDependencies(left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left
+                    ? 'Preparing... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')'
+                    : 'All downloads complete.');
+            },
+            onAbort() { showError('Algo salió mal. Recarga la página para intentarlo de nuevo.'); }
+        };
+        Module.setStatus('Downloading...');
+
+        Module.canvas.addEventListener('webglcontextlost', event => {
+            event.preventDefault();
+            showError('Se perdió la gráfica. Recarga la página para intentarlo de nuevo.');
+        });
+
+        // api.js puts its panels before the game frame; they belong in the sidebar.
+        const sidebar = document.getElementById('sidebar');
+
+        // The community panel is a normal box, not a dropdown: keep it open.
+        function keepOpen(details) {
+            details.open = true;
+            details.addEventListener('toggle', () => { details.open = true; });
+            details.querySelector('summary')?.setAttribute('tabindex', '-1');
+        }
+
+        new MutationObserver(records => {
+            for (const record of records) {
+                for (const node of record.addedNodes) {
+                    if (node.tagName === 'DETAILS') keepOpen(node);
+                    if (node.tagName === 'SECTION' || node.tagName === 'DETAILS') sidebar.append(node);
+                }
+            }
+        }).observe(document.getElementById('main'), { childList: true });
+
+        // Two pages in one file: "#/" is the catalog of games, "#/tunea-tu-combi" is the game.
+        // The game only starts downloading when its page opens.
+        const home = document.getElementById('home');
+        const page = document.getElementById('page');
+        const navGames = document.getElementById('nav-games');
+        let gameStarted = false;
+
+        function startGame() {
+            gameStarted = true;
+            const loader = document.getElementById('game-script').content.querySelector('script');
+            const script = document.createElement('script');
+            if (loader.src) script.src = loader.getAttribute('src');
+            else script.textContent = loader.textContent;
+            document.body.append(script);
+        }
+
+        function route() {
+            const onGame = location.hash === '#/tunea-tu-combi';
+            // A running game cannot be unloaded, so leaving it reloads the page (this also stops its music).
+            if (!onGame && gameStarted) { location.reload(); return; }
+            home.hidden = onGame;
+            page.hidden = !onGame;
+            navGames.toggleAttribute('aria-current', !onGame);
+            document.title = onGame ? 'Tunea Tu Combi · Jueguitos' : 'Jueguitos';
+            if (onGame && !gameStarted) startGame();
+        }
+        window.addEventListener('hashchange', route);
+        route();
+
+        // The browser's own fullscreen: the canvas just scales, the mouse still maps correctly.
+        const frame = document.getElementById('frame');
+        const fullscreenButton = document.getElementById('fullscreen');
+        if (!document.fullscreenEnabled) fullscreenButton.hidden = true;
+        fullscreenButton.addEventListener('click', () => {
+            if (document.fullscreenElement) document.exitFullscreen();
+            else frame.requestFullscreen().catch(() => {});
+        });
+        document.addEventListener('fullscreenchange', () => {
+            frame.classList.toggle('fullscreen', document.fullscreenElement === frame);
+        });
+    </script>
+</body>
+</html>

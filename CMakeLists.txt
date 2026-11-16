@@ -60,6 +60,11 @@ if(EMSCRIPTEN)
     target_link_options(ray PRIVATE "--pre-js" "${CMAKE_CURRENT_SOURCE_DIR}/src/web/api.js")
     set_property(TARGET ray APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/web/api.js")
 
+    # The page around the game, and the picture of its card on the home page
+    target_link_options(ray PRIVATE "--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/src/web/shell.html")
+    set_property(TARGET ray APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/web/shell.html")
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/web/thumbnail.jpg" "${CMAKE_BINARY_DIR}/thumbnail.jpg" COPYONLY)
+
     # Automatically preload assets folder if it contains files
     file(GLOB ASSET_FILES "assets/*")
     if(ASSET_FILES)

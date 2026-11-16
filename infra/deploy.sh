@@ -116,6 +116,7 @@ deploy_web() {
             *.data) upload "$file" "$(basename "$file")" application/octet-stream ;;
         esac
     done
+    upload "$web/thumbnail.jpg" thumbnail.jpg image/jpeg
     aws cloudfront create-invalidation --distribution-id "$distribution" --paths '/*' >/dev/null
 }
 
