@@ -1291,8 +1291,7 @@ void MainMenuScene::RenderTitleWorld() const {
         std::nullopt,
         PartOrientation::Up,
         m_context->windowHeight,
-        {},
-        !m_selectingLevel && !m_browsingCommunity
+        {}
     );
 }
 
