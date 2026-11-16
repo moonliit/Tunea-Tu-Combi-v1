@@ -60,11 +60,15 @@ if(EMSCRIPTEN)
     # Emscripten link flags & output extension (.html)
     set_target_properties(ray PROPERTIES
         SUFFIX ".html"
-        LINK_FLAGS "-s USE_GLFW=3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -s FORCE_FILESYSTEM=1"
+        LINK_FLAGS "-s USE_GLFW=3 -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s ASYNCIFY -s FORCE_FILESYSTEM=1 -lidbfs.js"
     )
 
     target_link_options(ray PRIVATE "--pre-js" "${CMAKE_CURRENT_SOURCE_DIR}/src/web/api.js")
     set_property(TARGET ray APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/web/api.js")
+
+    # Keeps the editor's drafts in the browser between visits.
+    target_link_options(ray PRIVATE "SHELL:--pre-js \"${CMAKE_CURRENT_SOURCE_DIR}/src/web/persistence.js\"")
+    set_property(TARGET ray APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/web/persistence.js")
 
     # The page around the game, and the picture of its card on the home page
     target_link_options(ray PRIVATE "--shell-file" "${CMAKE_CURRENT_SOURCE_DIR}/src/web/shell.html")

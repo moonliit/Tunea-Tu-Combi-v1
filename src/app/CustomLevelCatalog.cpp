@@ -6,6 +6,14 @@
 #include <random>
 #include <utility>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+// Saves user_data in the browser's storage (survives reloading the page)
+EM_JS(void, PersistUserData, (), { Module['persistence'].save(); });
+#else
+void PersistUserData() {}
+#endif
+
 namespace {
 
 std::string CreateUuid() {
@@ -106,6 +114,8 @@ void CustomLevelCatalog::Save() {
         data.push_back(std::move(item));
     }
     file << data.dump(2);
+    file.close();
+    PersistUserData();
 }
 
 void CustomLevelCatalog::Add(std::string name) {
