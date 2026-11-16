@@ -196,6 +196,7 @@ void TextureLibrary::Initialize() {
     m_ui.menuEditAndPlay = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/editar_y_jugar");
     m_ui.menuPublish = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/publicar");
     m_ui.menuDelete = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/borrar");
+    m_ui.menuDialogAccept = LoadButtonSkin("assets/textures/ui/main_menu/dialog/aceptar");
     m_ui.menuDialogCancel = LoadButtonSkin("assets/textures/ui/main_menu/dialog/cancelar");
     m_ui.menuDialogCreate = LoadButtonSkin("assets/textures/ui/main_menu/dialog/crear");
     m_ui.menuCommunity = LoadButtonSkin("assets/textures/ui/main_menu/nav/community");
@@ -278,6 +279,7 @@ void TextureLibrary::Shutdown() {
     UnloadUiSkin(m_ui.menuEditAndPlay);
     UnloadUiSkin(m_ui.menuPublish);
     UnloadUiSkin(m_ui.menuDelete);
+    UnloadUiSkin(m_ui.menuDialogAccept);
     UnloadUiSkin(m_ui.menuDialogCancel);
     UnloadUiSkin(m_ui.menuDialogCreate);
     UnloadUiSkin(m_ui.menuCommunity);

@@ -62,6 +62,7 @@ struct UiTextures {
     UiButtonSkin menuEditAndPlay;
     UiButtonSkin menuPublish;
     UiButtonSkin menuDelete;
+    UiButtonSkin menuDialogAccept;
     UiButtonSkin menuDialogCancel;
     UiButtonSkin menuDialogCreate;
     UiButtonSkin menuCommunity;

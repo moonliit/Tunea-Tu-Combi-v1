@@ -30,6 +30,47 @@ Rectangle ResultsReturnButton(int width, int height) {
     return UiButton::CenteredAtBottom(width, height, 210.0f, 64.0f, 20.0f);
 }
 
+struct ExitConfirmDialogLayout {
+    Rectangle dialog;
+    Rectangle cancel;
+    Rectangle confirm;
+};
+
+ExitConfirmDialogLayout GetExitConfirmDialogLayout(int width, int height) {
+    const Rectangle dialog{
+        (width - 520.0f) / 2.0f,
+        (height - 286.0f) / 2.0f,
+        520.0f,
+        286.0f
+    };
+    return {
+        dialog,
+        Rectangle{dialog.x + 24.0f, dialog.y + 196.0f, 186.0f, 80.0f},
+        Rectangle{dialog.x + dialog.width - 210.0f, dialog.y + 196.0f, 186.0f, 80.0f}
+    };
+}
+
+void DrawExitConfirmAction(
+    Rectangle bounds,
+    const UiButtonSkin& skin,
+    const char* label,
+    bool enabled
+) {
+    const bool hovered = enabled && UiButton::IsHovered(bounds);
+    const bool pressed = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    UiButton::DrawTextureFit(
+        UiButton::ResolveButtonTexture(skin, enabled, hovered, pressed),
+        Rectangle{bounds.x, bounds.y, bounds.width, 54.0f}
+    );
+    DrawTextFont(
+        label,
+        static_cast<int>(bounds.x + (bounds.width - MeasureTextFont(label, 16)) / 2.0f),
+        static_cast<int>(bounds.y + 62.0f),
+        16,
+        enabled ? (hovered ? GOLD : WHITE) : Color{190, 201, 203, 255}
+    );
+}
+
 void DrawScoreValue(
     const std::string& value,
     const UiTextures& textures,
@@ -309,8 +350,28 @@ void MainGameScene::ProcessInput(float dt) {
         }
         return;
     }
-    if (m_stateMachine.IsBuildMode() && IsKeyPressed(KEY_ESCAPE)) {
-        ReturnToLevelSelector();
+
+    if (m_exitConfirmOpen) {
+        const ExitConfirmDialogLayout dialog = GetExitConfirmDialogLayout(
+            m_appContext->windowWidth, m_appContext->windowHeight
+        );
+        if (IsKeyPressed(KEY_ESCAPE) || UiButton::WasClicked(dialog.cancel)) {
+            m_appContext->audioController->PlayUiClick();
+            m_exitConfirmOpen = false;
+            return;
+        }
+        if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(dialog.confirm)) {
+            m_exitConfirmOpen = false;
+            ReturnToLevelSelector();
+            return;
+        }
+        return;
+    }
+
+    if ((m_stateMachine.IsBuildMode() || m_stateMachine.IsPlayMode() ||
+         m_stateMachine.IsViewMode()) && IsKeyPressed(KEY_ESCAPE)) {
+        m_appContext->audioController->PlayUiClick();
+        m_exitConfirmOpen = true;
         return;
     }
     if (m_stateMachine.IsBuildMode() && ProcessGhostControls()) return;
@@ -346,7 +407,8 @@ void MainGameScene::ProcessInput(float dt) {
 
     const Rectangle menuButton = UiButton::GameMenuButton(m_appContext->windowWidth);
     if (UiButton::WasClicked(menuButton)) {
-        ReturnToLevelSelector();
+        m_appContext->audioController->PlayUiClick();
+        m_exitConfirmOpen = true;
         return;
     }
 
@@ -1644,7 +1706,7 @@ void MainGameScene::Render() const {
         );
         const float centerX = m_appContext->windowWidth / 2.0f;
         const float centerY = m_appContext->windowHeight / 2.0f;
-        const char* label = "Ya llego el chofer, causa!";
+        const char* label = "¡Ya llegó el chofer, causa!";
         const int labelX = static_cast<int>(
             centerX - MeasureTextFont(label, 30) / 2
         );
@@ -1699,6 +1761,57 @@ void MainGameScene::Render() const {
                 (designButton.width - MeasureTextFont(label, 17)) / 2.0f),
             static_cast<int>(designButton.y + 66.0f),
             17, WHITE);
+    }
+
+    if (m_exitConfirmOpen) {
+        const int width = m_appContext->windowWidth;
+        const int height = m_appContext->windowHeight;
+        DrawRectangle(0, 0, width, height, Fade(BLACK, 0.62f));
+        const ExitConfirmDialogLayout layout =
+            GetExitConfirmDialogLayout(width, height);
+        const Rectangle& dialog = layout.dialog;
+        const Color accentGreen{129, 195, 71, 255};
+        const Color accentPink{237, 18, 121, 255};
+        const Color mutedText{190, 201, 203, 255};
+        const UiTextures& ui = m_appContext->textureLibrary->GetUi();
+
+        DrawRectangleRec(
+            Rectangle{dialog.x + 7.0f, dialog.y + 8.0f, dialog.width, dialog.height},
+            Fade(BLACK, 0.55f)
+        );
+        DrawRectangleRec(dialog, Color{12, 17, 24, 250});
+        DrawRectangleLinesEx(dialog, 3.0f, accentGreen);
+        DrawRectangle(
+            static_cast<int>(dialog.x + 3.0f),
+            static_cast<int>(dialog.y + 84.0f),
+            static_cast<int>(dialog.width - 6.0f),
+            3,
+            accentPink
+        );
+        DrawTextFont(
+            "¿SALIR DEL NIVEL?",
+            static_cast<int>(dialog.x + 24.0f),
+            static_cast<int>(dialog.y + 18.0f),
+            28,
+            GOLD
+        );
+        DrawTextFont(
+            "Volverás al selector y perderás el progreso no guardado.",
+            static_cast<int>(dialog.x + 24.0f),
+            static_cast<int>(dialog.y + 57.0f),
+            16,
+            mutedText
+        );
+        DrawTextFont(
+            "ESC: cancelar   ENTER: salir",
+            static_cast<int>(dialog.x + 24.0f),
+            static_cast<int>(dialog.y + 132.0f),
+            15,
+            mutedText
+        );
+
+        DrawExitConfirmAction(layout.cancel, ui.menuDialogCancel, "CANCELAR", true);
+        DrawExitConfirmAction(layout.confirm, ui.menuDialogAccept, "SALIR", true);
     }
 
     EndDrawing();
