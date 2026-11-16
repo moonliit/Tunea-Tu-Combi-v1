@@ -37,6 +37,7 @@ public:
     std::vector<ActivationAction> GetVisibleActions() const;
     static std::vector<ActivationAction> GetActionsForGrid(const EditorGrid& grid);
 
+    bool CanActivate(ActivationAction action) const;
     void Publish(ActivationAction action);
     void Update(float deltaTime);
 

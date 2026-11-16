@@ -34,9 +34,26 @@ Vector2D RotateLocalOffset(Vector2D offset, PartOrientation orientation) {
 
 }
 
+bool Part::CanActivateNow() const {
+    if ((!m_physicsBody && !m_attachmentBody) || !m_activationEnabled) return false;
+
+    switch (m_type) {
+        case PartType::WindSail:
+            return m_cooldownRemaining <= 0.0f;
+        case PartType::Fan:
+        case PartType::TNTBarrel:
+        case PartType::SquareBlock:
+        case PartType::CircleWheel:
+        case PartType::Driver:
+        case PartType::DriverBox:
+            return true;
+    }
+
+    return false;
+}
+
 void Part::Activate() {
-    if (!m_physicsBody && !m_attachmentBody) return;
-    if (!m_activationEnabled) return;
+    if (!CanActivateNow()) return;
 
     switch (m_type) {
         case PartType::Fan:
@@ -44,8 +61,6 @@ void Part::Activate() {
             m_propulsionActive = m_activationActive;
             break;
         case PartType::WindSail:
-            if (m_cooldownRemaining > 0.0f) return;
-
             m_activationActive = true;
             m_propulsionActive = true;
             m_activeTimeRemaining = WindSailActiveDuration;

@@ -487,17 +487,20 @@ void MainGameScene::ProcessInput(float dt) {
 
     if (m_stateMachine.IsPlayMode()) {
         if (input.activationAction.has_value()) {
-            if (IsWindSailAction(input.activationAction.value())) {
+            const ActivationAction action = input.activationAction.value();
+
+            if (IsWindSailAction(action) &&
+                m_playSession.GetActivationRegistry().CanActivate(action)) {
                 m_appContext->audioController->PlaySail();
             }
-            if (IsTntAction(input.activationAction.value())) {
+            if (IsTntAction(action)) {
                 int amount = m_playSession.GetActiveTntAmount();
                 m_appContext->audioController->PlayTntExplosion(amount);
             }
-            if (input.activationAction == ActivationAction::DriverHonk) {
+            if (action == ActivationAction::DriverHonk) {
                 m_appContext->audioController->PlayDriverHorn();
             }
-            m_playSession.ActivateAction(input.activationAction.value());
+            m_playSession.ActivateAction(action);
         }
     }
 
@@ -1068,6 +1071,7 @@ void MainGameScene::TransitionToPlayMode() {
 }
 
 void MainGameScene::UpdateGoalWindow(double frameMs) {
+    const bool countdownWasActive = m_goalWindow.GetStartMs() >= 0.0;
     const EditorGrid& grid = m_playSession.GetRuntimeGrid();
     const std::vector<TrackedPart> parts = CollectParts(grid);
     std::vector<GoalPartSample> partSamples;
@@ -1143,6 +1147,9 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
         partSamples,
         passengerSamples
     );
+    if (!countdownWasActive && update.active) {
+        m_appContext->audioController->PlayVictory();
+    }
     if (update.completed && !m_levelCompleted) {
         CompleteRun();
     }
@@ -1437,6 +1444,7 @@ void MainGameScene::RenderDamageParticles() const {
 }
 
 void MainGameScene::ResetToBuildMode() {
+    m_appContext->audioController->StopVictory();
     m_elapsedMs = 0.0;
     m_goalWindow.Reset();
     m_previousPartPositions.clear();
@@ -1478,6 +1486,7 @@ void MainGameScene::FinishRoutePreview() {
 }
 
 void MainGameScene::ReturnToCustomLevelEditor() {
+    m_appContext->audioController->StopVictory();
     m_appContext->audioController->PlayUiClick();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);
@@ -1494,6 +1503,7 @@ void MainGameScene::ReturnToCustomLevelEditor() {
 }
 
 void MainGameScene::ReturnToLevelSelector() {
+    m_appContext->audioController->StopVictory();
     m_appContext->audioController->PlayUiClick();
     m_appContext->audioController->SetFanActive(false);
     m_appContext->audioController->SetWheelActive(false);

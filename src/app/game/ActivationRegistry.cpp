@@ -32,6 +32,13 @@ bool ActivationRegistry::IsActive(ActivationAction action) const {
     return false;
 }
 
+bool ActivationRegistry::CanActivate(ActivationAction action) const {
+    for (Part* part : GetSubscribers(action)) {
+        if (part->CanActivateNow()) return true;
+    }
+    return false;
+}
+
 void ActivationRegistry::Publish(ActivationAction action) {
     for (Part* part : GetSubscribers(action)) {
         part->Activate();

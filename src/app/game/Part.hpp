@@ -104,6 +104,7 @@ public:
     void SetActivationEnabled(bool enabled) { m_activationEnabled = enabled; }
     void Activate();
     void UpdateActivation(float deltaTime);
+    bool CanActivateNow() const;
     bool IsActivationActive() const { return m_activationActive; }
 
     void SetPhysicsBody(EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics);

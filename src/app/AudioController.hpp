@@ -100,6 +100,7 @@ class AudioController {
     Sound m_partSelect{};
     Sound m_partPlace{};
     Sound m_sailSound{};
+    Sound m_victorySound{};
     std::array<Sound, 9> m_damageSounds{};
     std::array<Sound, 12> m_screamingSounds{};
     std::array<Sound, 4> m_breakageSounds{};
@@ -148,6 +149,8 @@ public:
     void PlayPartSelect();
     void PlayPartPlace();
     void PlaySail();
+    void PlayVictory();
+    void StopVictory();
     void PlayDriverHorn();
     void PlayDamageEffect();
     void PlayScreamingEffect();

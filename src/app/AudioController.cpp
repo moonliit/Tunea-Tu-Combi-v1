@@ -110,7 +110,8 @@ void AudioController::Initialize() {
     m_uiClick = LoadSound("assets/audio/sfx/ui_click.ogg");
     m_partSelect = LoadSound("assets/audio/sfx/part_select.ogg");
     m_partPlace = LoadSound("assets/audio/sfx/part_place.wav");
-    m_sailSound = LoadSound("assets/audio/sfx/sail.ogg");
+    m_sailSound = LoadSound("assets/audio/sfx/sail.wav");
+    m_victorySound = LoadSound("assets/audio/sfx/victory.wav");
     m_damageSounds = {
         LoadSound("assets/audio/sfx/damage_01.wav"),
         LoadSound("assets/audio/sfx/damage_02.wav"),
@@ -151,13 +152,14 @@ void AudioController::Initialize() {
         LoadSound("assets/audio/sfx/combi_horn_2.ogg"),
         LoadSound("assets/audio/sfx/combi_horn_3.wav")
     };
-    m_fanSound = LoadMusicStream("assets/audio/sfx/fan.ogg");
+    m_fanSound = LoadMusicStream("assets/audio/sfx/fan.wav");
     m_wheelSound = LoadMusicStream("assets/audio/sfx/wheel.ogg");
     m_fanSound.looping = true;
     m_wheelSound.looping = true;
-    SetMusicVolume(m_fanSound, 0.45f);
+    SetMusicVolume(m_fanSound, 0.3f);
     SetMusicVolume(m_wheelSound, 0.05f);
-    SetSoundVolume(m_sailSound, 0.5f);
+    SetSoundVolume(m_sailSound, 0.4f);
+    SetSoundVolume(m_victorySound, 2.0f);
     SetSoundVolume(m_uiClick, 0.45f);
     SetSoundVolume(m_partSelect, 0.45f);
     SetSoundVolume(m_partPlace, 0.5f);
@@ -180,6 +182,7 @@ void AudioController::Shutdown() {
     UnloadSound(m_partSelect);
     UnloadSound(m_partPlace);
     UnloadSound(m_sailSound);
+    UnloadSound(m_victorySound);
     UnloadSound(m_explosionSound);
     for (Sound horn : m_horns) UnloadSound(horn);
     for (Sound damage : m_damageSounds) UnloadSound(damage);
@@ -407,6 +410,8 @@ void AudioController::PlayUiClick() { PlaySound(m_uiClick); }
 void AudioController::PlayPartSelect() { PlaySound(m_partSelect); }
 void AudioController::PlayPartPlace() { PlaySound(m_partPlace); }
 void AudioController::PlaySail() { PlaySound(m_sailSound); }
+void AudioController::PlayVictory() { PlaySound(m_victorySound); }
+void AudioController::StopVictory() { StopSound(m_victorySound); }
 void AudioController::PlayDriverHorn() {
     PlaySound(m_horns[m_nextHorn]);
     m_nextHorn = (m_nextHorn + 1) % static_cast<int>(m_horns.size());
