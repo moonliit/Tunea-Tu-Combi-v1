@@ -389,13 +389,6 @@ void MainMenuScene::ProcessInput(float) {
         }
     }
 
-    if (m_context->returnToCustomDesign) {
-        m_context->returnToCustomDesign = false;
-        m_context->focusCustomEditorCamera = true;
-        m_context->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
-        return;
-    }
-
     if (m_browsingCommunity && m_communitySearchOpen &&
         IsKeyPressed(KEY_ESCAPE)) {
         m_communitySearchOpen = false;
@@ -721,6 +714,10 @@ void MainMenuScene::Render() const {
 
     const UiTextures& ui = m_context->textureLibrary->GetUi();
     RenderTitleWorld();
+    if (m_selectingLevel || m_browsingCommunity) {
+        DrawRectangle(0, 0, m_context->windowWidth,
+            m_context->windowHeight, Fade(BLACK, 0.22f));
+    }
 
     if (!m_selectingLevel && !m_browsingCommunity) {
         DrawRectangle(0, 0, m_context->windowWidth, m_context->windowHeight, Fade(BLACK, 0.12f));
@@ -772,8 +769,6 @@ void MainMenuScene::Render() const {
         DrawMenuChoiceLabel("JUGAR", buttons.play, 21);
         DrawMenuChoiceLabel("MIS NIVELES", buttons.myLevels, 17);
     } else if (m_browsingCommunity) {
-        DrawRectangle(0, 0, m_context->windowWidth,
-            m_context->windowHeight, Fade(BLACK, 0.22f));
         DrawSelectorTitle("NIVELES DE LA COMUNIDAD",
             m_context->windowWidth, 24.0f);
         const PublicCatalogSnapshot& catalog =

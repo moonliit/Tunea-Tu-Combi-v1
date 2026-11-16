@@ -12,6 +12,8 @@ private:
     bool m_selectedIsDefaultOrientation = true;
     std::optional<PartType> m_repositionedPartType;
     PartOrientation m_repositionedOrientation = PartOrientation::Up;
+    std::optional<Math::GridCoord> m_repositionedOrigin;
+    std::optional<Part> m_repositionedOriginalCell;
 
 public:
     explicit BuildSession(BuildModel& buildModel): m_buildModel(buildModel) {}
@@ -26,11 +28,7 @@ public:
         m_selectedPartType.reset(); 
         m_selectedIsDefaultOrientation = true; 
     }
-    void ClearHand() {
-        m_selectedPartType.reset();
-        m_selectedIsDefaultOrientation = true;
-        m_repositionedPartType.reset();
-    }
+    void ClearHand();
     bool HasHandItem() const {
         return m_selectedPartType.has_value() || m_repositionedPartType.has_value();
     }

@@ -20,7 +20,6 @@ struct AppContext {
     SceneRequester* sceneRequester;
     int unlockedLevel = 1;
     int completedLevel = 0;
-    bool returnToCustomDesign = false;
     bool focusCustomEditorCamera = false;
     bool returnedToSelector = false;
     std::optional<bool> requestedCustomSelector;

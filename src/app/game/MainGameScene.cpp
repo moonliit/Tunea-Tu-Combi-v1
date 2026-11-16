@@ -25,6 +25,13 @@ namespace {
 // how far past the level the camera keeps following the driver
 constexpr float MapCameraMargin = 500.0f;
 constexpr float RoutePreviewHoldSeconds = 0.2f;
+constexpr float PreviewZoomOutSeconds = 0.78f;
+constexpr float PreviewOverviewHoldSeconds = 0.7f;
+constexpr float PreviewZoomInSeconds = 0.95f;
+constexpr float PreviewSplitZoomOutSeconds = 0.62f;
+constexpr float PreviewSplitHoldSeconds = 0.35f;
+constexpr float PreviewSplitPanSeconds = 0.55f;
+constexpr float PreviewSplitZoomInSeconds = 0.85f;
 
 Rectangle ResultsReturnButton(int width, int height) {
     return UiButton::CenteredAtBottom(width, height, 210.0f, 64.0f, 20.0f);
@@ -120,30 +127,23 @@ Rectangle DesignLevelButton(int width, int height) {
 
 float RoutePreviewProgress(float time) {
     const float t = std::clamp(time, 0.0f, 1.0f);
-    const auto sigmoidDistance = [](float value) {
-        constexpr float sharpness = 10.0f;
-        return std::log1p(std::exp(sharpness * (value - 0.5f)));
-    };
-    const float start = sigmoidDistance(0.0f);
-    const float range = sigmoidDistance(1.0f) - start;
-    const auto accelerated = [&](float value) {
-        return 0.35f * value +
-            0.65f * (sigmoidDistance(value) - start) / range;
-    };
-    constexpr float brakingStart = 0.82f;
-    if (t <= brakingStart) return accelerated(t);
+    return t * t * (3.0f - 2.0f * t);
+}
 
-    // Preserve the accelerating speed at the join, then settle smoothly
-    const float join = accelerated(brakingStart);
-    const float sigmoid = 1.0f / (1.0f + std::exp(-10.0f * (brakingStart - 0.5f)));
-    const float joinVelocity = 0.35f + 6.5f * sigmoid / range;
-    const float span = 1.0f - brakingStart;
-    const float u = (t - brakingStart) / span;
-    const float u2 = u * u;
-    const float u3 = u2 * u;
-    return (2.0f * u3 - 3.0f * u2 + 1.0f) * join +
-        (u3 - 2.0f * u2 + u) * span * joinVelocity +
-        (-2.0f * u3 + 3.0f * u2);
+void MovePreviewCamera(
+    Camera2D& camera,
+    Vector2 from,
+    float fromZoom,
+    Vector2 to,
+    float toZoom,
+    float progress
+) {
+    const float t = RoutePreviewProgress(progress);
+    camera.target = {
+        std::lerp(from.x, to.x, t),
+        std::lerp(from.y, to.y, t)
+    };
+    camera.zoom = std::lerp(fromZoom, toZoom, t);
 }
 
 float CalculateGridFitZoom(
@@ -241,23 +241,23 @@ double HorizontalRadius(const PartRenderState& state) {
 }
 
 Rectangle GhostPreviewButton() {
-    return {20.0f, 104.0f, 230.0f, 32.0f};
+    return {20.0f, 122.0f, 230.0f, 32.0f};
 }
 
 Rectangle GhostPanel() {
-    return {14.0f, 76.0f, 350.0f, 126.0f};
+    return {14.0f, 94.0f, 350.0f, 126.0f};
 }
 
 Rectangle GhostPauseButton() {
-    return {258.0f, 104.0f, 100.0f, 32.0f};
+    return {258.0f, 122.0f, 100.0f, 32.0f};
 }
 
 Rectangle GhostRestartButton() {
-    return {20.0f, 142.0f, 110.0f, 30.0f};
+    return {20.0f, 160.0f, 110.0f, 30.0f};
 }
 
 Rectangle GhostCompeteButton() {
-    return {138.0f, 142.0f, 220.0f, 30.0f};
+    return {138.0f, 160.0f, 220.0f, 30.0f};
 }
 
 bool GhostCanBeRequested(GhostLoadStatus status) {
@@ -315,14 +315,47 @@ MainGameScene::MainGameScene(
         static_cast<float>(specs.goal.position.x),
         static_cast<float>(specs.goal.position.y)
     };
+    const Math::AABB content = m_level.GetContentBounds();
+    const float contentWidth = std::max(1.0f,
+        static_cast<float>(content.max.x - content.min.x));
+    const float contentHeight = std::max(1.0f,
+        static_cast<float>(content.max.y - content.min.y));
+    const float availableWidth = std::max(1.0f,
+        static_cast<float>(m_appContext->windowWidth) - 120.0f);
+    const float availableHeight = std::max(1.0f,
+        static_cast<float>(m_appContext->windowHeight) - 170.0f);
+    const float widthFitZoom = availableWidth / contentWidth;
+    const float heightFitZoom = availableHeight / contentHeight;
+    m_routePreviewSplit = widthFitZoom < 0.32f &&
+        widthFitZoom < heightFitZoom;
+    m_routeOverviewZoom = std::min(m_editorCameraZoom,
+        m_routePreviewSplit
+            ? std::min({0.42f, availableWidth / (contentWidth * 0.55f),
+                heightFitZoom})
+            : std::min(widthFitZoom, heightFitZoom));
+    const float centerX = static_cast<float>(content.min.x + content.max.x) / 2.0f;
+    const float centerY = static_cast<float>(content.min.y + content.max.y) / 2.0f;
+    m_routeOverviewTarget = {centerX, centerY};
+    m_routeOverviewSecondTarget = m_routeOverviewTarget;
+    if (m_routePreviewSplit) {
+        const float leftX = static_cast<float>(content.min.x) + contentWidth * 0.25f;
+        const float rightX = static_cast<float>(content.max.x) - contentWidth * 0.25f;
+        const bool goalOnLeft = m_routePreviewStart.x <= m_editorCameraTarget.x;
+        m_routeOverviewTarget.x = goalOnLeft ? leftX : rightX;
+        m_routeOverviewSecondTarget.x = goalOnLeft ? rightX : leftX;
+    }
     const float routeDistance = std::hypot(
         m_routePreviewStart.x - m_editorCameraTarget.x,
         m_routePreviewStart.y - m_editorCameraTarget.y
     );
-    if (routeDistance > specs.grid.cellSize * 2.0f) {
-        m_routePreviewDuration = std::clamp(
-            1.0f + routeDistance / 1100.0f, 1.4f, 3.1f
-        );
+    if (routeDistance > specs.grid.cellSize * 2.0f ||
+        m_routeOverviewZoom < m_editorCameraZoom * 0.85f) {
+        m_routePreviewDuration = m_routePreviewSplit
+            ? PreviewSplitZoomOutSeconds + PreviewSplitHoldSeconds +
+                PreviewSplitPanSeconds + PreviewSplitHoldSeconds +
+                PreviewSplitZoomInSeconds
+            : PreviewZoomOutSeconds + PreviewOverviewHoldSeconds +
+                PreviewZoomInSeconds;
         m_routePreviewActive = true;
         m_camera.target = m_routePreviewStart;
     }
@@ -334,6 +367,10 @@ MainGameScene::MainGameScene(
 
 void MainGameScene::ProcessInput(float dt) {
     if (m_routePreviewActive) {
+        if (m_isEditableDraft && IsKeyPressed(KEY_ESCAPE)) {
+            ReturnToCustomLevelEditor();
+            return;
+        }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
             IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
             IsKeyPressed(KEY_ESCAPE)) {
@@ -350,7 +387,6 @@ void MainGameScene::ProcessInput(float dt) {
         }
         return;
     }
-
     if (m_exitConfirmOpen) {
         const ExitConfirmDialogLayout dialog = GetExitConfirmDialogLayout(
             m_appContext->windowWidth, m_appContext->windowHeight
@@ -368,6 +404,12 @@ void MainGameScene::ProcessInput(float dt) {
         return;
     }
 
+    if (m_isEditableDraft && m_stateMachine.IsBuildMode() &&
+        IsKeyPressed(KEY_ESCAPE)) {
+        ReturnToCustomLevelEditor();
+        return;
+    }
+
     if ((m_stateMachine.IsBuildMode() || m_stateMachine.IsPlayMode() ||
          m_stateMachine.IsViewMode()) && IsKeyPressed(KEY_ESCAPE)) {
         m_appContext->audioController->PlayUiClick();
@@ -380,27 +422,7 @@ void MainGameScene::ProcessInput(float dt) {
             m_appContext->windowWidth, m_appContext->windowHeight
         );
         if (UiButton::WasClicked(designButton)) {
-            m_appContext->audioController->SetFanActive(false);
-            m_appContext->audioController->SetWheelActive(false);
-            if (m_appContext->activeCustomLevel >= 0 &&
-                m_appContext->activeCustomLevel <
-                    static_cast<int>(m_appContext->customLevels->GetLevels().size())) {
-                m_appContext->audioController->StartLevelEditorMusic(
-                    m_appContext->customLevels->GetLevels()[m_appContext->activeCustomLevel].musicPath,
-                    false
-                );
-            } else {
-                auto scenario = m_appContext->audioController->GetCurrentScenario();
-                if (!scenario.levelEditorTrackName.empty()) {
-                    m_appContext->audioController->SetCurrentScenario(
-                        {Scenario::LevelEditorBuild, -1, scenario.levelEditorTrackName}
-                    );
-                } else {
-                    m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel});
-                }
-            }
-            m_appContext->returnToCustomDesign = true;
-            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+            ReturnToCustomLevelEditor();
             return;
         }
     }
@@ -457,7 +479,15 @@ void MainGameScene::ProcessInput(float dt) {
          m_stateMachine.IsViewMode() ||
          (m_stateMachine.IsPlayMode() &&
           input.editorAction == EditorAction::ReturnToBuild))) {
-        switch (input.editorAction.value()) {
+        const EditorAction action = *input.editorAction;
+        if (m_buildSession.HasRepositionedPart() &&
+            (action == EditorAction::MoveUp ||
+             action == EditorAction::MoveRight ||
+             action == EditorAction::MoveDown ||
+             action == EditorAction::MoveLeft)) {
+            m_buildSession.ClearHand();
+        }
+        switch (action) {
             case EditorAction::MoveUp:
                 m_level.GetBuildModel().ShiftContents({0, -1});
                 break;
@@ -471,7 +501,10 @@ void MainGameScene::ProcessInput(float dt) {
                 m_level.GetBuildModel().ShiftContents({-1, 0});
                 break;
             case EditorAction::ClearBuild:
-                if (m_buildSession.HasHandItem()) {
+                if (m_buildSession.HasRepositionedPart()) {
+                    m_buildSession.DiscardRepositionedPart();
+                    m_buildSession.ClearSelection();
+                } else if (m_buildSession.HasHandItem()) {
                     m_buildSession.ClearHand();
                 } else {
                     m_level.GetBuildModel().Clear();
@@ -636,16 +669,46 @@ void MainGameScene::Update(float dt) {
             RoutePreviewHoldSeconds + m_routePreviewDuration) {
             FinishRoutePreview();
         } else if (m_routePreviewElapsed > RoutePreviewHoldSeconds) {
-            const float time = (
-                m_routePreviewElapsed - RoutePreviewHoldSeconds
-            ) / m_routePreviewDuration;
-            const float progress = RoutePreviewProgress(time);
-            m_camera.target = {
-                m_routePreviewStart.x +
-                    (m_editorCameraTarget.x - m_routePreviewStart.x) * progress,
-                m_routePreviewStart.y +
-                    (m_editorCameraTarget.y - m_routePreviewStart.y) * progress
-            };
+            float time = m_routePreviewElapsed - RoutePreviewHoldSeconds;
+            const float zoomOut = m_routePreviewSplit
+                ? PreviewSplitZoomOutSeconds : PreviewZoomOutSeconds;
+            if (time < zoomOut) {
+                MovePreviewCamera(m_camera, m_routePreviewStart,
+                    m_editorCameraZoom, m_routeOverviewTarget,
+                    m_routeOverviewZoom, time / zoomOut);
+            } else {
+                time -= zoomOut;
+                const float firstHold = m_routePreviewSplit
+                    ? PreviewSplitHoldSeconds : PreviewOverviewHoldSeconds;
+                if (time < firstHold) {
+                    m_camera.target = m_routeOverviewTarget;
+                    m_camera.zoom = m_routeOverviewZoom;
+                } else {
+                    time -= firstHold;
+                    if (m_routePreviewSplit && time < PreviewSplitPanSeconds) {
+                        MovePreviewCamera(m_camera, m_routeOverviewTarget,
+                            m_routeOverviewZoom, m_routeOverviewSecondTarget,
+                            m_routeOverviewZoom, time / PreviewSplitPanSeconds);
+                    } else {
+                        if (m_routePreviewSplit) {
+                            time -= PreviewSplitPanSeconds;
+                        }
+                        if (m_routePreviewSplit && time < PreviewSplitHoldSeconds) {
+                            m_camera.target = m_routeOverviewSecondTarget;
+                            m_camera.zoom = m_routeOverviewZoom;
+                        } else {
+                            if (m_routePreviewSplit) {
+                                time -= PreviewSplitHoldSeconds;
+                            }
+                            const float zoomIn = m_routePreviewSplit
+                                ? PreviewSplitZoomInSeconds : PreviewZoomInSeconds;
+                            MovePreviewCamera(m_camera, m_routeOverviewSecondTarget,
+                                m_routeOverviewZoom, m_editorCameraTarget,
+                                m_editorCameraZoom, time / zoomIn);
+                        }
+                    }
+                }
+            }
         }
         UpdateGoalParticles(dt);
         return;
@@ -1362,6 +1425,22 @@ void MainGameScene::FinishRoutePreview() {
     ResetEditorCamera();
 }
 
+void MainGameScene::ReturnToCustomLevelEditor() {
+    m_appContext->audioController->PlayUiClick();
+    m_appContext->audioController->SetFanActive(false);
+    m_appContext->audioController->SetWheelActive(false);
+    if (m_appContext->activeCustomLevel >= 0 &&
+        m_appContext->activeCustomLevel <
+            static_cast<int>(m_appContext->customLevels->GetLevels().size())) {
+        m_appContext->audioController->StartLevelEditorMusic(
+            m_appContext->customLevels->GetLevels()[m_appContext->activeCustomLevel].musicPath,
+            false
+        );
+    }
+    m_appContext->focusCustomEditorCamera = true;
+    m_appContext->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
+}
+
 void MainGameScene::ReturnToLevelSelector() {
     m_appContext->audioController->PlayUiClick();
     m_appContext->audioController->SetFanActive(false);
@@ -1433,7 +1512,8 @@ void MainGameScene::RenderGhostControls() const {
         static_cast<int>(panel.width - 12.0f), 2, accentBlue);
     DrawRectangle(static_cast<int>(panel.x + 6.0f),
         static_cast<int>(panel.y + 25.0f), 70, 2, accentYellow);
-    DrawTextFont("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
+    DrawTextFont("FANTASMA DEL CAMPEÓN", 22,
+        static_cast<int>(panel.y + 6.0f), 14, WHITE);
 
     const auto drawGhostButton = [&](Rectangle bounds, const char* label,
         bool enabled, bool active, int fontSize) {
@@ -1529,7 +1609,8 @@ void MainGameScene::RenderGhostControls() const {
         static_cast<int>(panel.y + 100.0f),
         static_cast<int>(panel.width - 12.0f), 1,
         Fade(accentBlue, 0.65f));
-    DrawTextFont(message.c_str(), 22, 180, 11, messageColor);
+    DrawTextFont(message.c_str(), 22,
+        static_cast<int>(panel.y + 104.0f), 11, messageColor);
 }
 
 void MainGameScene::Render() const {

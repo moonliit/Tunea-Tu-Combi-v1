@@ -402,6 +402,21 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Rectangle editButton = EditorCombiButton(
         m_context->windowWidth, m_context->windowHeight
     );
+    const auto returnToMyLevels = [&] {
+        m_gridAnchor.reset();
+        m_gridAnchorLevel = -1;
+        m_terrainWorkPoints.clear();
+        m_musicPickerOpen = false;
+        m_context->requestedCustomSelector = true;
+        m_context->requestedCommunitySelector = false;
+        m_context->audioController->PlayUiClick();
+        m_context->audioController->ReturnToSelector();
+        m_context->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+    };
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        returnToMyLevels();
+        return;
+    }
 
     if (!m_musicPickerOpen &&
         (IsKeyPressed(KEY_ONE) || UiButton::WasClicked(terrainButton))) {
@@ -503,14 +518,10 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
     if (UiButton::WasClicked(menuButton)) {
-        m_gridAnchor.reset();
-        m_context->audioController->PlayUiClick();
-        m_context->audioController->ReturnToSelector();
-        m_context->sceneRequester->RequestSceneChange({SceneId::MainMenu});
-        m_terrainWorkPoints.clear();
+        returnToMyLevels();
         return;
     }
-    if (UiButton::WasClicked(editButton)) {
+    if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(editButton)) {
         if (!custom.hasTerrain || !custom.hasGrid || !custom.hasGoal) return;
         m_gridAnchor.reset();
         m_context->audioController->PlayUiClick();
@@ -521,12 +532,6 @@ void CustomLevelEditorScene::ProcessInput(float) {
         auto scenario = m_context->audioController->GetCurrentScenario();
         m_context->audioController->StartLevel(-1, scenario.levelEditorTrackName);
         m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
-        return;
-    }
-
-    if (m_gridAnchor.has_value() && IsKeyPressed(KEY_ESCAPE)) {
-        m_gridAnchor.reset();
-        m_gridAnchorLevel = -1;
         return;
     }
 
@@ -930,8 +935,12 @@ void CustomLevelEditorScene::Render() const {
     DrawTexturePro(ui.game.editHammer,
         Rectangle{0, 0, static_cast<float>(ui.game.editHammer.width),
             static_cast<float>(ui.game.editHammer.height)},
-        Rectangle{editButton.x + 55, editButton.y + 2, 60, 60},
+        Rectangle{editButton.x + 24, editButton.y + 2, 60, 60},
         Vector2{}, 0, ready ? WHITE : Fade(WHITE, 0.55f));
+    UiButton::DrawTextureFit(ui.keyEnterBadge,
+        Rectangle{editButton.x + editButton.width - 80.0f,
+            editButton.y + 4.0f, 76.0f, 32.0f},
+        ready ? WHITE : Fade(WHITE, 0.55f));
     const char* editLabel = "Editar combi";
     DrawTextFont(editLabel,
         static_cast<int>(editButton.x +
@@ -953,7 +962,7 @@ void CustomLevelEditorScene::Render() const {
             instructions = "Cuadrícula " +
                 std::to_string(preview.dims.x) + " x " +
                 std::to_string(preview.dims.y) +
-                " | segundo clic o botón Cuadrícula: confirmar | Esc: cancelar";
+                " | segundo clic o botón Cuadrícula: confirmar | Esc: Mis niveles";
         } else {
             instructions = "Primer clic: celda inicial | mueve el mouse para ampliar | máximo 10 x 8";
         }
@@ -991,14 +1000,17 @@ void CustomLevelEditorScene::Render() const {
         : approved
             ? "Esta versión fue completada y puede publicarse con el botón de arriba."
             : "Para publicar, completa esta versión exacta. Los cambios invalidan la victoria.";
-    const Rectangle publicationBadge{
-        14.0f,
-        static_cast<float>(m_context->windowHeight - 55),
-        MeasureTextFont(publicationText, 13) + 12.0f,
-        27.0f
-    };
-    DrawRectangleRec(publicationBadge, Fade(BLACK, 0.78f));
-    DrawRectangleLinesEx(publicationBadge, 1.0f, Color{237, 18, 121, 255});
+    if (showPublicationFeedback) {
+        const Rectangle publicationBadge{
+            14.0f,
+            static_cast<float>(m_context->windowHeight - 55),
+            MeasureTextFont(publicationText, 13) + 12.0f,
+            27.0f
+        };
+        DrawRectangleRec(publicationBadge, Fade(BLACK, 0.78f));
+        DrawRectangleLinesEx(publicationBadge, 1.0f,
+            Color{237, 18, 121, 255});
+    }
     DrawTextFont(publicationText, 20, m_context->windowHeight - 48, 13,
         showPublicationFeedback
             ? (publication.status == PublicationStatus::Error ||

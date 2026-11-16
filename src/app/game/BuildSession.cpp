@@ -1,4 +1,17 @@
 #include "app/game/BuildSession.hpp"
+#include <utility>
+
+void BuildSession::ClearHand() {
+    ClearSelection();
+    if (m_repositionedOrigin.has_value() &&
+        m_repositionedOriginalCell.has_value()) {
+        m_buildModel.GetGrid().GetPart(*m_repositionedOrigin) =
+            std::move(*m_repositionedOriginalCell);
+    }
+    m_repositionedPartType.reset();
+    m_repositionedOrigin.reset();
+    m_repositionedOriginalCell.reset();
+}
 
 void BuildSession::SelectPartType(PartType type) {
     if (m_selectedPartType.has_value() && m_selectedPartType.value() == type) {
@@ -24,9 +37,12 @@ bool BuildSession::PlaceSelectedPart(Math::GridCoord coord) {
 }
 
 bool BuildSession::PickUpPart(Math::GridCoord coord) {
+    if (m_repositionedPartType.has_value()) ClearHand();
     std::optional<Part>& part = m_buildModel.GetGrid().GetPart(coord);
     if (!part.has_value()) return false;
 
+    m_repositionedOrigin = coord;
+    m_repositionedOriginalCell = *part;
     Part* partToPickUp = &part.value();
     // picks up the whole box rather than extracting the driver on its own.
     // (a driver box always travels together with its inner driver)
@@ -60,12 +76,16 @@ bool BuildSession::PlaceRepositionedPart(Math::GridCoord coord) {
     );
     if (placed) {
         m_repositionedPartType.reset();
+        m_repositionedOrigin.reset();
+        m_repositionedOriginalCell.reset();
     }
     return placed;
 }
 
 void BuildSession::DiscardRepositionedPart() {
     m_repositionedPartType.reset();
+    m_repositionedOrigin.reset();
+    m_repositionedOriginalCell.reset();
 }
 
 void BuildSession::RotatePart(Math::GridCoord coord) {

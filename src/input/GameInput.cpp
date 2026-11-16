@@ -137,6 +137,8 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
                     context.state,
                     context.activationRegistry,
                     context.grid,
+                    context.selectedPartType.has_value() ||
+                        context.hasRepositionedPart,
                     context.screenWidth,
                     context.screenHeight
                 );
@@ -152,6 +154,16 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
                             );
                     }
                 );
+                const bool releasedOnCancel = std::any_of(
+                    controls.begin(),
+                    controls.end(),
+                    [&mousePosition](const UiControl& control) {
+                        return control.enabled &&
+                            control.type == UiControlType::Editor &&
+                            control.editorAction == EditorAction::ClearSelection &&
+                            CheckCollisionPointRec(mousePosition, control.bounds);
+                    }
+                );
                 const Vector2 mouseWorld = GetScreenToWorld2D(
                     mousePosition,
                     context.camera
@@ -160,7 +172,9 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
                     mouseWorld.x,
                     mouseWorld.y
                 }).has_value();
-                if (releasedOnTrash || !releasedInsideGrid) {
+                if (releasedOnCancel) {
+                    frame.editorAction = EditorAction::ClearSelection;
+                } else if (releasedOnTrash || !releasedInsideGrid) {
                     frame.discardRepositionedPart = true;
                 } else {
                     frame.placePart = true;
@@ -178,6 +192,8 @@ GameInputFrame GameInput::Capture(const GameInputContext& context) const {
         context.state,
         context.activationRegistry,
         context.grid,
+        context.selectedPartType.has_value() ||
+            context.hasRepositionedPart,
         context.screenWidth,
         context.screenHeight
     );

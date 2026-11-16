@@ -40,6 +40,10 @@ private:
     Vector2 m_editorCameraTarget;
     float m_editorCameraZoom = 1.0f;
     Vector2 m_routePreviewStart{};
+    Vector2 m_routeOverviewTarget{};
+    Vector2 m_routeOverviewSecondTarget{};
+    float m_routeOverviewZoom = 1.0f;
+    bool m_routePreviewSplit = false;
     float m_routePreviewElapsed = 0.0f;
     float m_routePreviewDuration = 0.0f;
     bool m_routePreviewActive = false;
@@ -120,6 +124,7 @@ private:
     void ResetToBuildMode();
     void ResetEditorCamera();
     void FinishRoutePreview();
+    void ReturnToCustomLevelEditor();
     void ReturnToLevelSelector();
     void TransitionToPlayMode();
     void UpdateGoalWindow(double frameMs);
