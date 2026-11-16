@@ -22,6 +22,7 @@ private:
     PhysicsAssembler m_assembler;
     ActivationRegistry m_activationRegistry;
     Math::Vector2D m_gravity;
+    std::vector<std::unique_ptr<Part>> m_ejectedParts;
     int m_tntConsumedAmount = 0;
     bool m_damageConsumed = false;
     bool m_breakageConsumed = false;
@@ -58,6 +59,9 @@ public:
     const Math::TerrainVisualDefinition& GetTerrainVisual() const {
         return m_terrainVisual;
     }
+    const std::vector<std::unique_ptr<Part>>& GetEjectedParts() const {
+        return m_ejectedParts;
+    }
     std::size_t GetJointCount() const {
         return m_assembler.GetJointCount();
     }
@@ -92,10 +96,12 @@ public:
         return m_assembler.ConsumeBrokenConnections();
     }
 
+
 private:
     void BuildActivationSubscriptions();
     void ProcessImpacts();
     void RemoveConsumedTnt();
+    void EjectContainedPart(Part& container, float impactImpulse);
 };
 
 #endif

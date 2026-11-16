@@ -97,7 +97,8 @@ public:
     void SetAttachmentBody(std::shared_ptr<I_RigidBody> body);
     void SetContainedBody(
         std::shared_ptr<I_RigidBody> body,
-        I_PhysicsWorld* physicsWorld
+        I_PhysicsWorld* physicsWorld,
+        EditorGrid* grid
     );
     void SetPropulsionActive(bool active) { m_propulsionActive = active; }
     void Activate();
@@ -105,6 +106,11 @@ public:
     bool IsActivationActive() const { return m_activationActive; }
 
     void SetPhysicsBody(EditorGrid& grid, std::unique_ptr<I_PhysicsWorld>& physics);
+    void AdoptPhysicsBody(
+        std::shared_ptr<I_RigidBody> body,
+        I_PhysicsWorld* physicsWorld,
+        EditorGrid* grid
+    );
     void ResetPhysicsBody() {
         m_physicsBody = nullptr;
         m_attachmentBody = nullptr;
@@ -131,7 +137,7 @@ public:
     bool ContainPart(std::unique_ptr<Part> part);
     std::unique_ptr<Part> RemoveContainedPart();
     void ApplyPropulsionForce(float magnitude);
-    void ApplyRadialImpulseForce(float magnitude, float radius);
+    void ApplyRadialImpulseForce(float breakMagnitude, float launchMagnitude, float radius);
     bool IsRemovalRequested() const { return m_removalRequested; }
     void ClearRemovalRequest() { m_removalRequested = false; }
 
