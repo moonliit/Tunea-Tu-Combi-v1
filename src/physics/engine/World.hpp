@@ -28,6 +28,8 @@ private:
     int m_positionIterations;
     bool m_firstTerrainContactSeen = false;
     float m_firstLandingProtectionRemaining = 0.0f;
+    float m_linearDamping = 0.05f;
+    float m_angularDamping = 0.675f;
 
 public:
     explicit World(

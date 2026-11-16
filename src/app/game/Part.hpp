@@ -97,7 +97,8 @@ public:
     void SetAttachmentBody(std::shared_ptr<I_RigidBody> body);
     void SetContainedBody(
         std::shared_ptr<I_RigidBody> body,
-        I_PhysicsWorld* physicsWorld
+        I_PhysicsWorld* physicsWorld,
+        EditorGrid* grid
     );
     void SetPropulsionActive(bool active) { m_propulsionActive = active; }
     void Activate();
