@@ -150,17 +150,17 @@ PartOrientation GetPropulsionFacingOrientation(PartOrientation orientation) {
 
 const char* GetActivationLabel(ActivationAction action) {
     switch (action) {
-        case ActivationAction::FanUp: return "Fan ^";
-        case ActivationAction::FanRight: return "Fan >";
-        case ActivationAction::FanDown: return "Fan v";
-        case ActivationAction::FanLeft: return "Fan <";
-        case ActivationAction::WindSailUp: return "Sail ^";
-        case ActivationAction::WindSailRight: return "Sail >";
-        case ActivationAction::WindSailDown: return "Sail v";
-        case ActivationAction::WindSailLeft: return "Sail <";
+        case ActivationAction::FanUp: return "Ventilador ^";
+        case ActivationAction::FanRight: return "Ventilador >";
+        case ActivationAction::FanDown: return "Ventilador v";
+        case ActivationAction::FanLeft: return "Ventilador <";
+        case ActivationAction::WindSailUp: return "Inflador ^";
+        case ActivationAction::WindSailRight: return "Inflador >";
+        case ActivationAction::WindSailDown: return "Inflador v";
+        case ActivationAction::WindSailLeft: return "Inflador <";
         case ActivationAction::TNT: return "TNT";
         case ActivationAction::DriverHonk: return "Claxon";
         case ActivationAction::Count: break;
     }
-    return "Action";
+    return "Acción";
 }

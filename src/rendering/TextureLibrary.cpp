@@ -69,7 +69,9 @@ void UnloadUiSkin(UiButtonSkin& skin) {
 
 }
 
-void DrawTextFont(const char *text, int posX, int posY, float fontSize, Color color) {
+namespace {
+
+const Font& MatchaFont() {
     static const Font font = [] {
         // LoadFont() only rasterizes raylib's default ASCII set.
         // Fixed for allowing Spanish punctuation and accents render:
@@ -79,8 +81,23 @@ void DrawTextFont(const char *text, int posX, int posY, float fontSize, Color co
         for (int cp = 160; cp <= 255; ++cp) codepoints[count++] = cp;
         return LoadFontEx(fontPath, 32, codepoints, count);
     }();
-    float spacing = fontSize / 10.0f;
-    DrawTextEx(font, text, (Vector2){ (float)posX, (float)posY }, fontSize, spacing, color);
+    return font;
+}
+
+}
+
+void DrawTextFont(const char *text, int posX, int posY, float fontSize, Color color) {
+    DrawTextEx(
+        MatchaFont(), text,
+        Vector2{static_cast<float>(posX), static_cast<float>(posY)},
+        fontSize, fontSize / 10.0f, color
+    );
+}
+
+float MeasureTextFont(const char *text, float fontSize) {
+    return MeasureTextEx(
+        MatchaFont(), text, fontSize, fontSize / 10.0f
+    ).x;
 }
 
 void TextureLibrary::Initialize() {
@@ -114,12 +131,14 @@ void TextureLibrary::Initialize() {
     m_ui.menuEditorLevels = LoadButtonSkin("assets/textures/ui/main_menu/buttons/editor_de_niveles");
     m_ui.menuCreateLevel = LoadButtonSkin("assets/textures/ui/main_menu/buttons/crear_nivel");
     m_ui.menuBack = LoadButtonSkin("assets/textures/ui/main_menu/buttons/menu");
+    m_ui.resultsBack = LoadButtonSkin("assets/textures/ui/results/volver");
     m_ui.menuEditAndPlay = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/editar_y_jugar");
     m_ui.menuPublish = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/publicar");
     m_ui.menuDelete = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/borrar");
     m_ui.menuDialogCancel = LoadButtonSkin("assets/textures/ui/main_menu/dialog/cancelar");
     m_ui.menuDialogCreate = LoadButtonSkin("assets/textures/ui/main_menu/dialog/crear");
-    m_ui.menuToEditor = LoadButtonSkin("assets/textures/ui/main_menu/nav/to_editor");
+    m_ui.menuCommunity = LoadButtonSkin("assets/textures/ui/main_menu/nav/community");
+    m_ui.menuMyLevels = LoadButtonSkin("assets/textures/ui/main_menu/nav/my_levels");
 
     for (std::size_t index = 0; index < m_ui.menuLevelTitles.size(); ++index) {
         m_ui.menuLevelTitles[index] = LoadButtonSkin(
@@ -129,6 +148,7 @@ void TextureLibrary::Initialize() {
 
     // main game UI
     m_ui.game.toolbarSlot = LoadButtonSkin("assets/textures/ui/game/toolbar/slot");
+    m_ui.game.editHammer = LoadSmoothTexture("assets/textures/ui/level_editor/edit_hammer.png");
     m_ui.game.modePlay = LoadButtonSkin("assets/textures/ui/game/mode/play");
     m_ui.game.modeEdit = LoadButtonSkin("assets/textures/ui/game/mode/edit");
     m_ui.game.clearSelection = LoadButtonSkin("assets/textures/ui/game/actions/clear_selection_drop");
@@ -171,13 +191,17 @@ void TextureLibrary::Shutdown() {
     UnloadUiSkin(m_ui.menuEditorLevels);
     UnloadUiSkin(m_ui.menuCreateLevel);
     UnloadUiSkin(m_ui.menuBack);
+    UnloadUiSkin(m_ui.resultsBack);
     UnloadUiSkin(m_ui.menuEditAndPlay);
     UnloadUiSkin(m_ui.menuPublish);
     UnloadUiSkin(m_ui.menuDelete);
     UnloadUiSkin(m_ui.menuDialogCancel);
     UnloadUiSkin(m_ui.menuDialogCreate);
+    UnloadUiSkin(m_ui.menuCommunity);
+    UnloadUiSkin(m_ui.menuMyLevels);
 
     UnloadUiSkin(m_ui.game.toolbarSlot);
+    UnloadTexture(m_ui.game.editHammer);
     UnloadUiSkin(m_ui.game.modePlay);
     UnloadUiSkin(m_ui.game.modeEdit);
     UnloadUiSkin(m_ui.game.clearSelection);

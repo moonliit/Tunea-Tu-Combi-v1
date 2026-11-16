@@ -40,6 +40,12 @@ add_executable(ray ${SOURCES})
 if(EMSCRIPTEN)
     # --- WebAssembly Configuration ---
 
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Matcha Style.ttf"
+        "${CMAKE_CURRENT_BINARY_DIR}/MatchaStyle.ttf"
+        COPYONLY
+    )
+
     # Link WebAssembly static libraries
     target_link_libraries(ray PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/lib/web/libraylib.web.a

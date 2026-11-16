@@ -6,7 +6,7 @@ namespace {
 
 const PartDefinition SQUARE_BOX{
     PartType::SquareBlock,
-    "Square box",
+    "Cabina de pasajero",
     1.0f,
     PartShape::Box,
     PartBehavior::Passive,
@@ -20,7 +20,7 @@ const PartDefinition SQUARE_BOX{
 };
 const PartDefinition CIRCLE_WHEEL{
     PartType::CircleWheel,
-    "Circle wheel",
+    "Llanta",
     1.0f,
     PartShape::Circle,
     PartBehavior::Passive,
@@ -31,7 +31,7 @@ const PartDefinition CIRCLE_WHEEL{
 };
 const PartDefinition TNT_BARREL{
     PartType::TNTBarrel,
-    "TNT barrel",
+    "Tanque SOLGAS",
     1.0f,
     PartShape::Box,
     PartBehavior::Explosive,
@@ -42,7 +42,7 @@ const PartDefinition TNT_BARREL{
 };
 const PartDefinition FAN{
     PartType::Fan,
-    "Fan",
+    "Ventilador",
     1.0f,
     PartShape::Capsule,
     PartBehavior::Passive,
@@ -53,7 +53,7 @@ const PartDefinition FAN{
 };
 const PartDefinition WIND_SAIL{
     PartType::WindSail,
-    "Wind sail",
+    "Inflador de globos",
     1.0f,
     PartShape::Triangle,
     PartBehavior::Passive,
@@ -64,7 +64,7 @@ const PartDefinition WIND_SAIL{
 };
 const PartDefinition DRIVER{
     PartType::Driver,
-    "Driver",
+    "Chofer",
     0.0f,
     PartShape::Box,
     PartBehavior::Passive,
@@ -75,7 +75,7 @@ const PartDefinition DRIVER{
 };
 const PartDefinition DRIVER_BOX{
     PartType::DriverBox,
-    "Driver box",
+    "Cabina del chofer",
     1.0f,
     PartShape::Box,
     PartBehavior::Passive,

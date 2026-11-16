@@ -23,6 +23,39 @@ namespace {
 
 // how far past the level the camera keeps following the driver
 constexpr float MapCameraMargin = 500.0f;
+constexpr float RoutePreviewHoldSeconds = 0.2f;
+
+Rectangle ResultsReturnButton(int width, int height) {
+    return UiButton::CenteredAtBottom(width, height, 210.0f, 64.0f, 20.0f);
+}
+
+float RoutePreviewProgress(float time) {
+    const float t = std::clamp(time, 0.0f, 1.0f);
+    const auto sigmoidDistance = [](float value) {
+        constexpr float sharpness = 10.0f;
+        return std::log1p(std::exp(sharpness * (value - 0.5f)));
+    };
+    const float start = sigmoidDistance(0.0f);
+    const float range = sigmoidDistance(1.0f) - start;
+    const auto accelerated = [&](float value) {
+        return 0.35f * value +
+            0.65f * (sigmoidDistance(value) - start) / range;
+    };
+    constexpr float brakingStart = 0.82f;
+    if (t <= brakingStart) return accelerated(t);
+
+    // Preserve the accelerating speed at the join, then settle smoothly
+    const float join = accelerated(brakingStart);
+    const float sigmoid = 1.0f / (1.0f + std::exp(-10.0f * (brakingStart - 0.5f)));
+    const float joinVelocity = 0.35f + 6.5f * sigmoid / range;
+    const float span = 1.0f - brakingStart;
+    const float u = (t - brakingStart) / span;
+    const float u2 = u * u;
+    const float u3 = u2 * u;
+    return (2.0f * u3 - 3.0f * u2 + 1.0f) * join +
+        (u3 - 2.0f * u2 + u) * span * joinVelocity +
+        (-2.0f * u3 + 3.0f * u2);
+}
 
 float CalculateGridFitZoom(
     int screenWidth,
@@ -211,6 +244,21 @@ MainGameScene::MainGameScene(
     m_camera.zoom = std::max(minimumZoom, cameraDefinition.zoom);
     m_editorCameraTarget = m_camera.target;
     m_editorCameraZoom = m_camera.zoom;
+    m_routePreviewStart = {
+        static_cast<float>(specs.goal.position.x),
+        static_cast<float>(specs.goal.position.y)
+    };
+    const float routeDistance = std::hypot(
+        m_routePreviewStart.x - m_editorCameraTarget.x,
+        m_routePreviewStart.y - m_editorCameraTarget.y
+    );
+    if (routeDistance > specs.grid.cellSize * 2.0f) {
+        m_routePreviewDuration = std::clamp(
+            1.0f + routeDistance / 1100.0f, 1.4f, 3.1f
+        );
+        m_routePreviewActive = true;
+        m_camera.target = m_routePreviewStart;
+    }
     // parallax starts from here
     m_worldRenderer.SetBackgroundOrigin(m_camera.target.x);
     m_passengerCollected.assign(m_level.GetDefinition().passengers.size(), false);
@@ -218,19 +266,25 @@ MainGameScene::MainGameScene(
 }
 
 void MainGameScene::ProcessInput(float dt) {
+    if (m_routePreviewActive) {
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
+            IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
+            IsKeyPressed(KEY_ESCAPE)) {
+            FinishRoutePreview();
+        }
+        return;
+    }
     if (m_stateMachine.IsResultsMode()) {
-        const Rectangle returnButton = UiButton::CenteredAtBottom(
-            m_appContext->windowWidth,
-            m_appContext->windowHeight,
-            220.0f,
-            42.0f,
-            30.0f
+        const Rectangle returnButton = ResultsReturnButton(
+            m_appContext->windowWidth, m_appContext->windowHeight
         );
         if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(returnButton)) {
-            m_appContext->audioController->PlayUiClick();
-            m_appContext->audioController->ReturnToSelector();
-            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+            ReturnToLevelSelector();
         }
+        return;
+    }
+    if (m_stateMachine.IsBuildMode() && IsKeyPressed(KEY_ESCAPE)) {
+        ReturnToLevelSelector();
         return;
     }
     if (m_stateMachine.IsBuildMode() && ProcessGhostControls()) return;
@@ -269,14 +323,9 @@ void MainGameScene::ProcessInput(float dt) {
         }
     }
 
-    const Rectangle menuButton = UiButton::AtTopRight(
-        m_appContext->windowWidth, 12.0f, 20.0f, 102.0f, 52.0f
-    );
+    const Rectangle menuButton = UiButton::GameMenuButton(m_appContext->windowWidth);
     if (UiButton::WasClicked(menuButton)) {
-        m_appContext->audioController->SetFanActive(false);
-        m_appContext->audioController->SetWheelActive(false);
-        m_appContext->audioController->ReturnToSelector();
-        m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+        ReturnToLevelSelector();
         return;
     }
 
@@ -452,6 +501,53 @@ void MainGameScene::Update(float dt) {
     const double frameMs = static_cast<double>(dt) * 1000.0;
     if (m_stateMachine.IsResultsMode()) {
         m_leaderboard.Poll(frameMs);
+        m_playSession.Update(dt);
+        m_ghostPlayback.Update(frameMs);
+        const auto& parts = m_playSession.GetRuntimeGrid().GetActiveParts();
+        if (!parts.empty()) {
+            Vector2 center{};
+            std::optional<Vector2> driverPosition;
+            for (const Part* part : parts) {
+                const auto position = part->GetRenderState(
+                    m_playSession.GetRuntimeGrid()
+                ).position;
+                center.x += static_cast<float>(position.x);
+                center.y += static_cast<float>(position.y);
+                if (!driverPosition && IsOrContainsDriver(part)) {
+                    driverPosition = Vector2{
+                        static_cast<float>(position.x),
+                        static_cast<float>(position.y)
+                    };
+                }
+            }
+            m_camera.target = ClampToBounds(
+                driverPosition.value_or(Vector2{
+                    center.x / parts.size(), center.y / parts.size()
+                }),
+                m_mapBounds
+            );
+        }
+        UpdateGoalParticles(dt);
+        return;
+    }
+    if (m_routePreviewActive) {
+        m_routePreviewElapsed += dt;
+        if (m_routePreviewElapsed >=
+            RoutePreviewHoldSeconds + m_routePreviewDuration) {
+            FinishRoutePreview();
+        } else if (m_routePreviewElapsed > RoutePreviewHoldSeconds) {
+            const float time = (
+                m_routePreviewElapsed - RoutePreviewHoldSeconds
+            ) / m_routePreviewDuration;
+            const float progress = RoutePreviewProgress(time);
+            m_camera.target = {
+                m_routePreviewStart.x +
+                    (m_editorCameraTarget.x - m_routePreviewStart.x) * progress,
+                m_routePreviewStart.y +
+                    (m_editorCameraTarget.y - m_routePreviewStart.y) * progress
+            };
+        }
+        UpdateGoalParticles(dt);
         return;
     }
     m_ghostPlayback.Update(frameMs);
@@ -861,6 +957,25 @@ void MainGameScene::ResetEditorCamera() {
     m_camera.zoom = m_editorCameraZoom;
 }
 
+void MainGameScene::FinishRoutePreview() {
+    m_routePreviewActive = false;
+    ResetEditorCamera();
+}
+
+void MainGameScene::ReturnToLevelSelector() {
+    m_appContext->audioController->PlayUiClick();
+    m_appContext->audioController->SetFanActive(false);
+    m_appContext->audioController->SetWheelActive(false);
+    m_appContext->audioController->ReturnToSelector();
+    m_appContext->requestedCommunitySelector =
+        m_level.GetDefinition().levelNumber == -2;
+    if (!m_appContext->requestedCommunitySelector) {
+        m_appContext->requestedCustomSelector =
+            m_level.GetDefinition().levelNumber < 0;
+    }
+    m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+}
+
 bool MainGameScene::ProcessGhostControls() {
     if (m_levelId.empty()) return false;
     const GhostLoadStatus status = m_ghostPlayback.GetStatus();
@@ -987,12 +1102,6 @@ void MainGameScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
 
-    if (m_stateMachine.IsResultsMode()) {
-        RenderResults();
-        EndDrawing();
-        return;
-    }
-
     m_worldRenderer.Render(
         m_camera,
         m_stateMachine.GetState(),
@@ -1066,6 +1175,36 @@ void MainGameScene::Render() const {
         );
     }
     EndMode2D();
+    if (m_stateMachine.IsResultsMode()) {
+        RenderResults();
+        EndDrawing();
+        return;
+    }
+    if (m_routePreviewActive) {
+        const int width = m_appContext->windowWidth;
+        const int height = m_appContext->windowHeight;
+        const float progress = std::clamp(
+            (m_routePreviewElapsed - RoutePreviewHoldSeconds) /
+                m_routePreviewDuration,
+            0.0f, 1.0f
+        );
+        constexpr int bannerHeight = 42;
+        DrawRectangle(0, 0, width, bannerHeight, Fade(DARKBLUE, 0.78f));
+        DrawTextFont("VISTA PREVIA DEL RECORRIDO", 20, 13, 20, WHITE);
+        DrawRectangle(0, height - 5, width, 5, Fade(DARKBLUE, 0.65f));
+        DrawRectangle(0, height - 5, static_cast<int>(width * progress), 5, SKYBLUE);
+        constexpr int skipFontSize = 12;
+        const char* skipText = "CLIC O ENTER PARA OMITIR";
+        DrawTextFont(
+            skipText,
+            static_cast<int>(width - 20 - MeasureTextFont(skipText, skipFontSize)),
+            (bannerHeight - skipFontSize) / 2,
+            skipFontSize,
+            WHITE
+        );
+        EndDrawing();
+        return;
+    }
     m_uiRenderer.Render(
         m_appContext->windowWidth,
         m_appContext->windowHeight,
@@ -1099,7 +1238,7 @@ void MainGameScene::Render() const {
         const char* label = "Ya llego el chofer, causa!";
         DrawTextFont(
             label,
-            static_cast<int>(centerX - MeasureText(label, 30) / 2),
+            static_cast<int>(centerX - MeasureTextFont(label, 30) / 2),
             static_cast<int>(centerY - 90.0f),
             30,
             WHITE
@@ -1107,17 +1246,15 @@ void MainGameScene::Render() const {
         const char* number = TextFormat("%d", count);
         DrawTextFont(
             number,
-            static_cast<int>(centerX - MeasureText(number, 120) / 2),
+            static_cast<int>(centerX - MeasureTextFont(number, 120) / 2),
             static_cast<int>(centerY - 35.0f),
             120,
             WHITE
         );
     }
     UiButton::DrawTextured(
-        UiButton::AtTopRight(
-            m_appContext->windowWidth, 12.0f, 20.0f, 102.0f, 52.0f
-        ),
-        m_appContext->textureLibrary->GetUi().game.navMenu,
+        UiButton::GameMenuButton(m_appContext->windowWidth),
+        m_appContext->textureLibrary->GetUi().menuBack,
         true,
         "Menú"
     );
@@ -1145,28 +1282,43 @@ void MainGameScene::Render() const {
 void MainGameScene::RenderResults() const {
     const int width = m_appContext->windowWidth;
     const int height = m_appContext->windowHeight;
-    DrawTextFont("Resultados", 36, 28, 34, BLACK);
+    const Color accentPink{237, 18, 121, 255};
+    const Color accentGreen{129, 195, 71, 255};
+    const Color bodyText{246, 243, 225, 255};
+    const Color mutedText{190, 201, 203, 255};
+    DrawRectangle(0, 0, width, height, Fade(BLACK, 0.32f));
+    DrawRectangle(0, 0, width, 72, Fade(BLACK, 0.86f));
+    DrawRectangle(0, 70, width, 3, accentPink);
+    DrawTextFont("RESULTADOS", 36, 22, 36, GOLD);
 
-    const Rectangle rankingPanel{30.0f, 82.0f, width * 0.44f, height - 165.0f};
-    DrawRectangleRec(rankingPanel, Fade(LIGHTGRAY, 0.55f));
-    DrawRectangleLinesEx(rankingPanel, 2.0f, GRAY);
-    DrawTextFont("Ranking", 52, 106, 26, DARKGRAY);
+    const float panelWidth = (width - 96.0f) / 2.0f;
+    const Rectangle rankingPanel{30.0f, 82.0f, panelWidth, height - 180.0f};
+    const Rectangle scorePanel{
+        rankingPanel.x + panelWidth + 36.0f, 82.0f,
+        panelWidth, 430.0f
+    };
+    DrawRectangleRec(rankingPanel, Fade(BLACK, 0.86f));
+    DrawRectangleLinesEx(rankingPanel, 3.0f, accentGreen);
+    DrawRectangleRec(scorePanel, Fade(BLACK, 0.86f));
+    DrawRectangleLinesEx(scorePanel, 3.0f, accentGreen);
+    DrawTextFont("RANKING", 52, 106, 26, GOLD);
     const LeaderboardSnapshot& leaderboard = m_leaderboard.GetSnapshot();
     if (leaderboard.status == LeaderboardStatus::Loading) {
-        DrawTextFont("Esperando confirmación del servidor...", 52, 150, 15, GRAY);
+        DrawTextFont("Esperando confirmación del servidor...", 52, 150, 15, mutedText);
     } else if (leaderboard.status == LeaderboardStatus::Unavailable) {
-        DrawTextFont("Ranking global no disponible.", 52, 150, 17, MAROON);
+        DrawTextFont("Ranking global no disponible.", 52, 150, 17, bodyText);
         if (leaderboard.personalBest.available) {
             const std::string local = "Récord personal local: " +
                 std::to_string(leaderboard.personalBest.total);
-            DrawTextFont(local.c_str(), 52, 183, 16, DARKGRAY);
+            DrawTextFont(local.c_str(), 52, 183, 16, mutedText);
         }
     } else if (leaderboard.status == LeaderboardStatus::Ready) {
         if (leaderboard.entries.empty()) {
-            DrawTextFont("Aún no hay marcas clasificadas.", 52, 150, 16, GRAY);
+            DrawTextFont("Aún no hay marcas clasificadas.", 52, 150, 16, mutedText);
         }
         int rowY = 142;
         for (const LeaderboardEntry& entry : leaderboard.entries) {
+            if (rowY + 49 > rankingPanel.y + rankingPanel.height - 62) break;
             const bool own = !m_leaderboard.GetCombiId().empty() &&
                 entry.combiId == m_leaderboard.GetCombiId();
             const bool current = own &&
@@ -1180,7 +1332,7 @@ void MainGameScene::RenderResults() const {
             if (own) {
                 DrawRectangleRec(
                     rowPanel,
-                    Fade(current ? SKYBLUE : GOLD, 0.42f)
+                    Fade(current ? SKYBLUE : GOLD, 0.25f)
                 );
             }
             const std::string name = entry.name.empty()
@@ -1188,22 +1340,22 @@ void MainGameScene::RenderResults() const {
                 : entry.name;
             const std::string label = "#" + std::to_string(entry.rank) +
                 "  " + name;
-            DrawTextFont(label.c_str(), 50, rowY + 5, 16, own ? BLACK : DARKGRAY);
+            DrawTextFont(label.c_str(), 50, rowY + 5, 16, own ? GOLD : bodyText);
             const std::string totalValue = std::to_string(entry.total);
             DrawTextFont(
                 totalValue.c_str(),
                 static_cast<int>(rankingPanel.x + rankingPanel.width - 14.0f) -
-                    MeasureText(totalValue.c_str(), 18),
+                    MeasureTextFont(totalValue.c_str(), 18),
                 rowY + 4,
                 18,
-                BLACK
+                GOLD
             );
             std::string detail = std::to_string(entry.driverTimeMs) +
                 " ms · " + std::to_string(entry.initialParts) + " piezas";
             if (own) {
                 detail += current ? " · esta partida" : " · tu récord anterior";
             }
-            DrawTextFont(detail.c_str(), 50, rowY + 28, 12, own ? MAROON : GRAY);
+            DrawTextFont(detail.c_str(), 50, rowY + 28, 12, own ? SKYBLUE : mutedText);
             rowY += 53;
         }
         DrawTextFont(
@@ -1213,7 +1365,7 @@ void MainGameScene::RenderResults() const {
             46,
             static_cast<int>(rankingPanel.y + rankingPanel.height - 27.0f),
             11,
-            GRAY
+            mutedText
         );
         DrawTextFont(
             leaderboard.championRunRef.empty()
@@ -1222,72 +1374,72 @@ void MainGameScene::RenderResults() const {
             46,
             static_cast<int>(rankingPanel.y + rankingPanel.height - 46.0f),
             11,
-            leaderboard.championRunRef.empty() ? GRAY : DARKGREEN
+            leaderboard.championRunRef.empty() ? mutedText : accentGreen
         );
     }
 
-    const int panelX = static_cast<int>(width * 0.52f);
-    const int valueX = width - 55;
-    DrawTextFont("Puntuación", panelX, 86, 28, BLACK);
-    const auto row = [panelX, valueX](
+    const int panelX = static_cast<int>(scorePanel.x + 22.0f);
+    const int valueX = static_cast<int>(scorePanel.x + scorePanel.width - 22.0f);
+    DrawTextFont("PUNTUACIÓN", panelX, 106, 28, GOLD);
+    const auto row = [panelX, valueX, bodyText, accentPink](
         const std::string& label,
         std::int64_t value,
         int y
     ) {
-        DrawTextFont(label.c_str(), panelX, y, 18, DARKGRAY);
+        DrawTextFont(label.c_str(), panelX, y, 18, bodyText);
         const std::string number = std::to_string(value);
         DrawTextFont(
             number.c_str(),
-            valueX - MeasureText(number.c_str(), 18),
+            static_cast<int>(valueX - MeasureTextFont(number.c_str(), 18)),
             y,
             18,
-            value < 0 ? MAROON : BLACK
+            value < 0 ? accentPink : GOLD
         );
     };
     row(
         "Pasajeros recogidos (" +
             std::to_string(m_statistics.passengersCollected) + ")",
         m_score.passengerPickup,
-        135
+        150
     );
     row(
         "Pasajeros entregados (" +
             std::to_string(m_statistics.passengersDelivered) + ")",
         m_score.passengerDelivery,
-        171
+        186
     );
     row(
         "Piezas entregadas (" +
             std::to_string(m_statistics.partsDelivered) + "/" +
             std::to_string(m_statistics.initialParts) + ")",
         m_score.partDelivery,
-        207
+        222
     );
     row(
         "Construcción (" +
             std::to_string(m_statistics.initialParts) + " piezas)",
         m_score.constructionPenalty,
-        243
+        258
     );
     row(
         "Rapidez (" + std::to_string(m_statistics.driverTimeMs) + " ms)",
         m_score.speed,
-        279
+        294
     );
-    DrawLine(panelX, 365, valueX, 365, DARKGRAY);
-    DrawTextFont("TOTAL", panelX, 382, 30, BLACK);
+    DrawLine(panelX, 365, valueX, 365, accentGreen);
+    DrawTextFont("TOTAL", panelX, 382, 42, GOLD);
     const std::string total = std::to_string(m_score.total);
     DrawTextFont(
         total.c_str(),
-        valueX - MeasureText(total.c_str(), 42),
-        375,
-        42,
-        MAROON
+        static_cast<int>(valueX - MeasureTextFont(total.c_str(), 52)),
+        376,
+        52,
+        GOLD
     );
     if (leaderboard.personalBest.available) {
         const std::string personal = "Récord personal local: " +
             std::to_string(leaderboard.personalBest.total);
-        DrawTextFont(personal.c_str(), panelX, 435, 16, DARKGRAY);
+        DrawTextFont(personal.c_str(), panelX, 435, 16, bodyText);
         DrawTextFont(
             leaderboard.personalBest.currentAttempt
                 ? "Nueva mejor marca local"
@@ -1295,16 +1447,17 @@ void MainGameScene::RenderResults() const {
             panelX,
             460,
             13,
-            leaderboard.personalBest.currentAttempt ? DARKGREEN : GRAY
+            leaderboard.personalBest.currentAttempt ? accentGreen : mutedText
         );
     }
 
-    UiButton::Draw(
-        UiButton::CenteredAtBottom(width, height, 220.0f, 42.0f, 30.0f),
-        "Volver a niveles",
-        SKYBLUE
+    UiButton::DrawTextured(
+        ResultsReturnButton(width, height),
+        m_appContext->textureLibrary->GetUi().resultsBack,
+        true,
+        "Volver"
     );
-    DrawTextFont("ENTER", width / 2 + 72, height - 57, 10, DARKGRAY);
+    DrawTextFont("ENTER", width / 2 + 118, height - 52, 11, bodyText);
 }
 
 std::optional<std::string> MainGameScene::PersonalRecordOwner() const {

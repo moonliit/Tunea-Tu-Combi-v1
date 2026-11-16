@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 enum class PublicationStatus {
     Idle,
@@ -19,8 +20,23 @@ struct PublicationSnapshot {
     std::string message;
 };
 
+struct PublicLevelSummary {
+    std::string id;
+    std::string name;
+    std::string author;
+};
+
+struct PublicCatalogSnapshot {
+    bool loading = false;
+    bool hasPrevious = false;
+    bool hasNext = false;
+    std::string error;
+    std::vector<PublicLevelSummary> levels;
+};
+
 class PublicationClient {
     PublicationSnapshot m_snapshot;
+    PublicCatalogSnapshot m_catalog;
     std::optional<nlohmann::json> m_playRequest;
     std::optional<nlohmann::json> m_copyRequest;
     std::uint64_t m_revision = 0;
@@ -28,10 +44,15 @@ class PublicationClient {
 
 public:
     void Publish(const nlohmann::json& payload);
+    void OpenCatalog();
+    void NextCatalogPage();
+    void PreviousCatalogPage();
+    void PlayPublicLevel(const std::string& id);
     void Poll(double frameMs);
     std::optional<nlohmann::json> TakePlayRequest();
     std::optional<nlohmann::json> TakeCopyRequest();
     const PublicationSnapshot& GetSnapshot() const { return m_snapshot; }
+    const PublicCatalogSnapshot& GetCatalogSnapshot() const { return m_catalog; }
 };
 
 #endif
