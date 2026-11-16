@@ -201,6 +201,7 @@ bool IsOrContainsDriver(const Part* part) {
 struct TrackedPart {
     const Part* part;
     PartRenderState state;
+    bool driverContainer;
 };
 
 void CollectPart(
@@ -208,7 +209,12 @@ void CollectPart(
     const EditorGrid& grid,
     std::vector<TrackedPart>& output
 ) {
-    output.push_back({&part, part.GetRenderState(grid)});
+    output.push_back({
+        &part,
+        part.GetRenderState(grid),
+        part.HasContainedPart() &&
+            part.GetContainedPart()->GetType() == PartType::Driver
+    });
     if (part.HasContainedPart()) {
         CollectPart(*part.GetContainedPart(), grid, output);
     }
@@ -713,11 +719,23 @@ void MainGameScene::Update(float dt) {
             }
             if (availableBoxes.empty()) continue;
 
-            static std::mt19937 randomEngine{std::random_device{}()};
-            std::uniform_int_distribution<std::size_t> chooseBox(
-                0, availableBoxes.size() - 1
+            const Part* hostPart = *std::min_element(
+                availableBoxes.begin(), availableBoxes.end(),
+                [&passenger, &runtimeGrid](const Part* first, const Part* second) {
+                    const auto firstState = first->GetRenderState(runtimeGrid);
+                    const auto secondState = second->GetRenderState(runtimeGrid);
+                    const double firstDx = firstState.position.x - passenger.position.x;
+                    const double firstDy = firstState.position.y - passenger.position.y;
+                    const double secondDx = secondState.position.x - passenger.position.x;
+                    const double secondDy = secondState.position.y - passenger.position.y;
+                    const double firstDistance = firstDx * firstDx + firstDy * firstDy;
+                    const double secondDistance = secondDx * secondDx + secondDy * secondDy;
+                    if (firstDistance != secondDistance) {
+                        return firstDistance < secondDistance;
+                    }
+                    return first->GetId() < second->GetId();
+                }
             );
-            const Part* hostPart = availableBoxes[chooseBox(randomEngine)];
             hostPart->GetPhysicsBody()->AddMass(GetPartDefinition(PartType::Fan).mass);
             m_passengerCollected[passengerIndex] = true;
             m_carriedPassengers.push_back({
@@ -971,6 +989,14 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
     const std::vector<TrackedPart> parts = CollectParts(grid);
     std::vector<GoalPartSample> partSamples;
     partSamples.reserve(parts.size() + m_playSession.GetEjectedParts().size());
+    const bool driverIsContained = std::any_of(
+        parts.begin(), parts.end(),
+        [](const TrackedPart& tracked) { return tracked.driverContainer; }
+    );
+    const auto driverContainer = std::find_if(
+        parts.begin(), parts.end(),
+        [](const TrackedPart& tracked) { return tracked.driverContainer; }
+    );
     for (const TrackedPart& tracked : parts) {
         const PartId id = tracked.part->GetId();
         const double currentX = static_cast<double>(tracked.state.position.x);
@@ -990,7 +1016,11 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
             .currentY = currentY,
             .horizontalRadius = HorizontalRadius(tracked.state),
             .initial = m_initialPartIds.contains(id),
-            .driver = tracked.part->GetType() == PartType::Driver
+            .driver = tracked.part->GetType() == PartType::Driver,
+            .driverVehiclePart = driverIsContained &&
+                m_playSession.ArePartsConnected(
+                    driverContainer->part->GetId(), id
+                )
         });
     }
     for (const auto& ejected : m_playSession.GetEjectedParts()) {
@@ -1014,7 +1044,8 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
             .currentY = currentY,
             .horizontalRadius = HorizontalRadius(state),
             .initial = false,
-            .driver = ejected->GetType() == PartType::Driver
+            .driver = ejected->GetType() == PartType::Driver,
+            .driverVehiclePart = false
         });
     }
     std::vector<GoalPassengerSample> passengerSamples;

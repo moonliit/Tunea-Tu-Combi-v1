@@ -126,6 +126,9 @@ public:
     const EditorGrid& GetRuntimeGrid() const {
         return m_runtimeModel.GetGrid();
     }
+    bool ArePartsConnected(PartId first, PartId second) const {
+        return m_assembler.ArePartsConnected(first, second);
+    }
     int& GetTntConsumedAmount() { return m_tntConsumedAmount; }
     int GetActiveTntAmount() {
         int count = 0;
