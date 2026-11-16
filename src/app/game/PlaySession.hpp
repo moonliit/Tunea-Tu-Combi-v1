@@ -31,6 +31,10 @@ struct ExplosionVisual {
     float radius = 1.0f;
 };
 
+struct DamageVisual {
+    Math::Vector2D position{0.0f, 0.0f};
+};
+
 class PlaySession {
 private:
     BuildModel& m_model;
@@ -48,6 +52,8 @@ private:
     std::unordered_map<PartId, CarriedPassengerInfo> m_carriedPassengersByHost;
     std::vector<std::size_t> m_ejectedPassengerIds;
     std::vector<ExplosionVisual> m_explosionVisuals;
+    std::vector<DamageVisual> m_damageVisuals;
+    std::vector<DamageVisual> m_breakageVisuals;
     int m_tntConsumedAmount = 0;
     bool m_damageConsumed = false;
     bool m_breakageConsumed = false;
@@ -128,6 +134,16 @@ public:
     std::vector<ExplosionVisual> ConsumeExplosionVisuals() {
         std::vector<ExplosionVisual> visuals = std::move(m_explosionVisuals);
         m_explosionVisuals.clear();
+        return visuals;
+    }
+    std::vector<DamageVisual> ConsumeDamageVisuals() {
+        std::vector<DamageVisual> visuals = std::move(m_damageVisuals);
+        m_damageVisuals.clear();
+        return visuals;
+    }
+    std::vector<DamageVisual> ConsumeBreakageVisuals() {
+        std::vector<DamageVisual> visuals = std::move(m_breakageVisuals);
+        m_breakageVisuals.clear();
         return visuals;
     }
     void RegisterCarriedPassenger(PartId hostId, const CarriedPassengerInfo& passenger);

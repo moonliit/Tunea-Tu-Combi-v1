@@ -99,6 +99,7 @@ private:
     Texture2D m_levelGoalTexture{};
     UiTextures m_ui{};
     ExplosionAnimation m_explosionAnim{};
+    Texture2D m_damageStarTexture{};
     Font m_font{};
     bool m_initialized = false;
 
@@ -119,6 +120,7 @@ public:
     const Texture2D& GetPassenngerSkirt() const { return m_passengerSkirt; }
     const UiTextures& GetUi() const { return m_ui; }
     const ExplosionAnimation& GetExplosionAnim() const { return m_explosionAnim; }
+    const Texture2D& GetDamageStarTexture() const { return m_damageStarTexture; }
 
     // todas las imágenes de assets/textures/passengers/faces, ordenadas por nombre
     const std::vector<PassengerFace>& GetPassengerFaces() const {

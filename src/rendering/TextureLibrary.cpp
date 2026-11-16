@@ -164,6 +164,7 @@ void TextureLibrary::Initialize() {
             m_explosionAnim.frames.push_back(texture);
         }
     }
+    m_damageStarTexture = LoadSmoothTexture("assets/textures/vfx/star.png", true);
 
     // UI textures (static, startup-loaded; missing files fall back to missing texture)
     m_ui.logo = LoadSmoothTexture("assets/textures/ui/branding/logo.png");
@@ -306,6 +307,8 @@ void TextureLibrary::Shutdown() {
         UnloadTexture(frame);
     }
     m_explosionAnim.frames.clear();
+    UnloadTexture(m_damageStarTexture);
+    m_damageStarTexture = Texture2D{};
 
     m_initialized = false;
 }

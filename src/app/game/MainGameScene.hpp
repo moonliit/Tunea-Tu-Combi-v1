@@ -83,6 +83,31 @@ private:
     std::vector<ExplosionVisualInstance> m_explosionVisuals;
     void UpdateExplosionVisuals(float dt);
     void RenderExplosionVisuals() const;
+
+    struct DamageStarParticle {
+        Math::Vector2D position{0.0f, 0.0f};
+        Math::Vector2D velocity{0.0f, 0.0f};
+        float life = 0.0f;
+        float maxLife = 1.0f;
+        float size = 1.0f;
+        float rotation = 0.0f;
+        float angularVelocity = 0.0f;
+    };
+    std::vector<DamageStarParticle> m_damageParticles;
+    void SpawnDamageStarBurst(
+        const Math::Vector2D& position,
+        float cellSize,
+        int particleCount,
+        float speedMin,
+        float speedMax,
+        float lifeMin,
+        float lifeMax,
+        float sizeMinScale,
+        float sizeMaxScale,
+        float spread
+    );
+    void UpdateDamageParticles(float dt);
+    void RenderDamageParticles() const;
     GoalWindowTracker m_goalWindow;
     Scoring::RunStatistics m_statistics;
     Scoring::ScoreBreakdown m_score;
