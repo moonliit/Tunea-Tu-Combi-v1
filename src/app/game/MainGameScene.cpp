@@ -764,6 +764,21 @@ void MainGameScene::Update(float dt) {
                 });
             }
             UpdateExplosionVisuals(dt);
+
+            const float cellSize = runtimeGrid.GetCellSize();
+            for (const DamageVisual& visual : m_playSession.ConsumeDamageVisuals()) {
+                SpawnDamageStarBurst(
+                    visual.position, cellSize,
+                    3, 60.0f, 140.0f, 0.65f, 0.85f, 0.35f, 0.60f, 0.05f
+                );
+            }
+            for (const DamageVisual& visual : m_playSession.ConsumeBreakageVisuals()) {
+                SpawnDamageStarBurst(
+                    visual.position, cellSize,
+                    12, 90.0f, 220.0f, 0.75f, 1.05f, 0.45f, 0.85f, 0.18f
+                );
+            }
+            UpdateDamageParticles(dt);
         }
         UpdateGoalWindow(frameMs);
         if (m_stateMachine.IsPlayMode()) {
@@ -772,6 +787,8 @@ void MainGameScene::Update(float dt) {
             );
         } else {
             m_playSession.ConsumeExplosionVisuals();
+            m_playSession.ConsumeDamageVisuals();
+            m_playSession.ConsumeBreakageVisuals();
         }
     }
     UpdateGoalParticles(dt);
@@ -787,6 +804,7 @@ void MainGameScene::TransitionToPlayMode() {
     m_statistics = {};
     m_score = {};
     m_explosionVisuals.clear();
+    m_damageParticles.clear();
     const auto& parts = m_level.GetGrid().GetActiveParts();
     const bool hasWheel = std::any_of(
         parts.begin(),
@@ -1142,12 +1160,114 @@ void MainGameScene::RenderExplosionVisuals() const {
     }
 }
 
+void MainGameScene::SpawnDamageStarBurst(
+    const Math::Vector2D& position,
+    float cellSize,
+    int particleCount,
+    float speedMin,
+    float speedMax,
+    float lifeMin,
+    float lifeMax,
+    float sizeMinScale,
+    float sizeMaxScale,
+    float spread
+) {
+    const int speedMinI = static_cast<int>(speedMin);
+    const int speedMaxI = static_cast<int>(speedMax);
+    const int lifeMinI = static_cast<int>(lifeMin * 100.0f);
+    const int lifeMaxI = static_cast<int>(lifeMax * 100.0f);
+    const int sizeMinI = static_cast<int>(sizeMinScale * 100.0f);
+    const int sizeMaxI = static_cast<int>(sizeMaxScale * 100.0f);
+
+    for (int i = 0; i < particleCount; ++i) {
+        const float angle =
+            (static_cast<float>(GetRandomValue(0, 359)) +
+             static_cast<float>(GetRandomValue(0, 99)) / 100.0f) *
+            DEG2RAD;
+        const float speed = static_cast<float>(GetRandomValue(speedMinI, speedMaxI));
+        const float maxLife =
+            static_cast<float>(GetRandomValue(lifeMinI, lifeMaxI)) / 100.0f;
+        const float sizeScale =
+            static_cast<float>(GetRandomValue(sizeMinI, sizeMaxI)) / 100.0f;
+        const float size = cellSize * sizeScale;
+        const Math::Vector2D direction{std::cos(angle), std::sin(angle)};
+        m_damageParticles.push_back(DamageStarParticle{
+            .position = position + direction * (cellSize * spread),
+            .velocity = direction * speed,
+            .life = maxLife,
+            .maxLife = maxLife,
+            .size = size,
+            .rotation = static_cast<float>(GetRandomValue(0, 359)),
+            .angularVelocity = static_cast<float>(GetRandomValue(-360, 360))
+        });
+    }
+}
+
+void MainGameScene::UpdateDamageParticles(float dt) {
+    for (DamageStarParticle& particle : m_damageParticles) {
+        particle.life -= dt;
+        particle.position.x += particle.velocity.x * dt;
+        particle.position.y += particle.velocity.y * dt;
+        particle.velocity.x *= std::exp(-4.0f * dt);
+        particle.velocity.y *= std::exp(-4.0f * dt);
+        particle.rotation += particle.angularVelocity * dt;
+    }
+
+    m_damageParticles.erase(
+        std::remove_if(
+            m_damageParticles.begin(),
+            m_damageParticles.end(),
+            [](const DamageStarParticle& particle) {
+                return particle.life <= 0.0f;
+            }
+        ),
+        m_damageParticles.end()
+    );
+}
+
+void MainGameScene::RenderDamageParticles() const {
+    const Texture2D& star = m_appContext->textureLibrary->GetDamageStarTexture();
+    if (star.id == 0) return;
+
+    for (const DamageStarParticle& particle : m_damageParticles) {
+        if (particle.life <= 0.0f || particle.maxLife <= 0.0f) continue;
+        const float t = std::clamp(particle.life / particle.maxLife, 0.0f, 1.0f);
+        const float fade = std::sqrt(t);
+        const float scale = 0.7f + 0.3f * t;
+        const float size = particle.size * scale;
+        const unsigned char alpha =
+            static_cast<unsigned char>(std::clamp(fade * 255.0f, 0.0f, 255.0f));
+
+        DrawTexturePro(
+            star,
+            Rectangle{
+                0.0f,
+                0.0f,
+                static_cast<float>(star.width),
+                static_cast<float>(star.height)
+            },
+            Rectangle{
+                static_cast<float>(particle.position.x),
+                static_cast<float>(particle.position.y),
+                size,
+                size
+            },
+            Vector2{size / 2.0f, size / 2.0f},
+            particle.rotation,
+            Color{255, 255, 255, alpha}
+        );
+    }
+}
+
 void MainGameScene::ResetToBuildMode() {
     m_elapsedMs = 0.0;
     m_goalWindow.Reset();
     m_previousPartPositions.clear();
     m_capture.Clear();
     m_explosionVisuals.clear();
+    m_damageParticles.clear();
+    m_playSession.ConsumeDamageVisuals();
+    m_playSession.ConsumeBreakageVisuals();
     if (m_competeAgainstGhost) m_ghostPlayback.PrepareCompetition();
     else m_ghostPlayback.StopAndRewind();
     m_leaderboard.Reset();
@@ -1460,6 +1580,7 @@ void MainGameScene::Render() const {
 
     RenderGoalParticles();
     RenderExplosionVisuals();
+    RenderDamageParticles();
     DrawTexturePro(
         goalTexture,
         Rectangle{0.0f, 0.0f, static_cast<float>(goalTexture.width), static_cast<float>(goalTexture.height)},

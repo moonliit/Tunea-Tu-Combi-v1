@@ -142,6 +142,8 @@ void PlaySession::Start() {
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
     m_explosionVisuals.clear();
+    m_damageVisuals.clear();
+    m_breakageVisuals.clear();
     m_tntConsumedAmount = 0;
     m_damageConsumed = false;
     m_breakageConsumed = false;
@@ -167,6 +169,8 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
     m_explosionVisuals.clear();
+    m_damageVisuals.clear();
+    m_breakageVisuals.clear();
     m_tntConsumedAmount = 0;
     m_damageConsumed = false;
     m_breakageConsumed = false;
@@ -255,7 +259,16 @@ void PlaySession::ProcessImpacts() {
                 impactedPartsForTnt.insert(impact.part);
             }
         } else if (impact.impulse >= DamageImpulseThreshold) {
-            // todo: draw damage effect
+            Math::Vector2D damagePosition{0.0f, 0.0f};
+            if (impact.part != nullptr) {
+                if (auto body = impact.part->GetPhysicsBody()) {
+                    damagePosition = body->GetPosition();
+                } else {
+                    damagePosition =
+                        impact.part->GetRenderState(m_runtimeModel.GetGrid()).position;
+                }
+            }
+            m_damageVisuals.push_back(DamageVisual{.position = damagePosition});
             m_damageConsumed = true;
         }
     }
@@ -276,7 +289,7 @@ void PlaySession::ProcessImpacts() {
     }
 
     for (const Math::Vector2D& breakagePos : m_physics->ConsumeBreakagePositions()) {
-        // todo: draw breakage effect
+        m_breakageVisuals.push_back(DamageVisual{.position = breakagePos});
         m_breakageConsumed = true;
     }
 }
