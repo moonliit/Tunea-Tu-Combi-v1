@@ -81,10 +81,13 @@ const Font& MatchaFont() {
     static const Font font = [] {
         // LoadFont() only rasterizes raylib's default ASCII set.
         // Fixed for allowing Spanish punctuation and accents render:
-        int codepoints[95 + 96];
+        // ASCII, Latin-1, and the curly quotes and ellipsis the texts use
+        constexpr std::array<int, 5> typographic{0x2018, 0x2019, 0x201C, 0x201D, 0x2026};
+        int codepoints[95 + 96 + typographic.size()];
         int count = 0;
         for (int cp = 32; cp <= 126; ++cp) codepoints[count++] = cp;
         for (int cp = 160; cp <= 255; ++cp) codepoints[count++] = cp;
+        for (const int cp : typographic) codepoints[count++] = cp;
         return LoadFontEx(fontPath, 32, codepoints, count);
     }();
     return font;

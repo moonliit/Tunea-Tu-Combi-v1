@@ -514,7 +514,7 @@ Module['api'] = (() => {
         INVALID_CAPTURE: 'La grabación no cumple los límites de publicación.',
         INVALID_GOAL_WINDOW: 'La grabación no confirma los tres segundos del chofer.',
         INVALID_LEVEL: 'El nivel supera los límites permitidos o tiene datos inválidos.',
-        INVALID_LEVEL_NAME: 'Usa un nombre de nivel de 3 a 40 caracteres.',
+        INVALID_LEVEL_NAME: 'Nombre de 3 a 40 letras, números, espacios, - o _.',
         PUBLICATION_LIMIT: 'Ya tienes cinco publicaciones activas. Retira una antes de publicar.',
         RETRY_PUBLICATION: 'Hubo otra publicación simultánea. Vuelve a intentarlo.'
     };
