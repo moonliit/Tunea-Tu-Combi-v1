@@ -76,6 +76,11 @@ Rectangle LevelEditorMenuButton(int width) {
         190.0f, 66.0f};
 }
 
+Rectangle LevelEditorPublishButton(int width) {
+    const Rectangle menu = LevelEditorMenuButton(width);
+    return Rectangle{menu.x - 150.0f, menu.y, 138.0f, menu.height};
+}
+
 void DrawEditorToolButton(
     Rectangle bounds,
     int icon,
@@ -165,9 +170,19 @@ void DrawEditorToolButton(
             DrawLineEx({cx - 20, top + 42}, {cx - 4, top + 42},
                 3, WHITE);
             break;
+        case 6:
+            DrawTexturePro(
+                textures.GetPartTexture(PartType::TNTBarrel),
+                Rectangle{0, 0,
+                    static_cast<float>(textures.GetPartTexture(PartType::TNTBarrel).width),
+                    static_cast<float>(textures.GetPartTexture(PartType::TNTBarrel).height)},
+                Rectangle{cx - 25, top + 2, 50, 50},
+                Vector2{}, 0.0f, WHITE
+            );
+            break;
     }
     static constexpr const char* labels[]{
-        "Terreno", "Cuadrícula", "Meta", "Música", "Borrador", "Pasajero"
+        "Terreno", "Cuadrícula", "Meta", "Música", "Borrador", "Pasajero", "SOLGAS"
     };
     const char* label = labels[icon];
     const int fontSize = icon == 1 ? 12 : 13;
@@ -179,6 +194,7 @@ void DrawEditorToolButton(
         bounds.x + 4, bounds.y + 4,
         bounds.width - 8, bounds.height - 8
     }, Fade(BLACK, 0.38f));
+    UiButton::DrawHotkeyNumber(bounds, icon + 1);
 }
 
 void DrawEditorTextButton(Rectangle bounds, const char* label,
@@ -256,6 +272,26 @@ std::optional<float> FindTerrainSurfaceY(
     return surfaceY;
 }
 
+void RepositionTntObstacles(CustomLevelData& custom) {
+    const float halfCell = custom.definition.grid.cellSize / 2.0f;
+    for (std::size_t i = 0; i < custom.definition.tntObstacles.size();) {
+        auto& obstacle = custom.definition.tntObstacles[i];
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(obstacle.position.x),
+            static_cast<float>(obstacle.position.y)
+        );
+        if (!surfaceY.has_value()) {
+            custom.definition.tntObstacles.erase(
+                custom.definition.tntObstacles.begin() + i
+            );
+            continue;
+        }
+        obstacle.position.y = *surfaceY - halfCell;
+        ++i;
+    }
+}
+
 }
 
 CustomLevelEditorScene::CustomLevelEditorScene(AppContext* context): m_context(context) {
@@ -271,6 +307,48 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
     CustomLevelData& custom = m_context->customLevels->GetLevels()[m_context->activeCustomLevel];
+    if (m_context->focusCustomEditorCamera) {
+        m_context->focusCustomEditorCamera = false;
+        m_designCamera.zoom = 1.0f;
+        if (custom.hasGrid) {
+            const GridDefinition& grid = custom.definition.grid;
+            m_designCamera.target = {
+                static_cast<float>(grid.worldPos.x),
+                static_cast<float>(grid.worldPos.y -
+                    grid.dims.y * grid.cellSize / 2.0f)
+            };
+        } else if (custom.hasGoal) {
+            m_designCamera.target = {
+                static_cast<float>(custom.definition.goal.position.x),
+                static_cast<float>(custom.definition.goal.position.y)
+            };
+        } else if (custom.hasTerrain) {
+            float widestSection = -1.0f;
+            for (const auto& boundary : Math::SampleTerrain(custom.definition.terrain)) {
+                if (boundary.empty()) continue;
+                float minX = static_cast<float>(boundary.front().x);
+                float maxX = minX;
+                float topY = static_cast<float>(boundary.front().y);
+                for (const Math::Vector2D& point : boundary) {
+                    minX = std::min(minX, static_cast<float>(point.x));
+                    maxX = std::max(maxX, static_cast<float>(point.x));
+                    topY = std::min(topY, static_cast<float>(point.y));
+                }
+                if (maxX - minX <= widestSection) continue;
+                widestSection = maxX - minX;
+                const float centerX = (minX + maxX) / 2.0f;
+                const float surfaceY = FindTerrainSurfaceY(
+                    custom.definition.terrain, centerX, topY
+                ).value_or(topY);
+                m_designCamera.target = {centerX, surfaceY};
+            }
+        } else {
+            m_designCamera.target = m_designCamera.offset;
+        }
+        m_terrainWorkPoints.clear();
+        m_gridAnchor.reset();
+        m_lastEraserMouseScreen.reset();
+    }
     if (m_gridAnchor.has_value() &&
         m_gridAnchorLevel != m_context->activeCustomLevel) {
         m_gridAnchor.reset();
@@ -282,6 +360,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         );
         custom.definition.initialCamera.reset();
         custom.hasGrid = true;
+        RepositionTntObstacles(custom);
         m_gridAnchor.reset();
         m_gridAnchorLevel = -1;
         m_context->customLevels->Save();
@@ -349,25 +428,46 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Rectangle musicButton = EditorToolbarButton(3);
     const Rectangle eraserButton = EditorToolbarButton(4);
     const Rectangle passengerButton = EditorToolbarButton(5);
+    const Rectangle tntButton = EditorToolbarButton(6);
+    const Rectangle publishButton = LevelEditorPublishButton(m_context->windowWidth);
     const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
     const Rectangle editButton = EditorCombiButton(
         m_context->windowWidth, m_context->windowHeight
     );
+    const auto returnToMyLevels = [&] {
+        m_gridAnchor.reset();
+        m_gridAnchorLevel = -1;
+        m_terrainWorkPoints.clear();
+        m_musicPickerOpen = false;
+        m_context->requestedCustomSelector = true;
+        m_context->requestedCommunitySelector = false;
+        m_context->audioController->PlayUiClick();
+        m_context->audioController->ReturnToSelector();
+        m_context->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+    };
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        returnToMyLevels();
+        return;
+    }
 
-    if (!m_musicPickerOpen && UiButton::WasClicked(terrainButton)) {
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_ONE) || UiButton::WasClicked(terrainButton))) {
         selectTool(DesignTool::Terrain);
         return;
     }
-    if (!m_musicPickerOpen && UiButton::WasClicked(gridButton)) {
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_TWO) || UiButton::WasClicked(gridButton))) {
         if (m_gridAnchor.has_value()) finishGrid();
         selectTool(DesignTool::Grid);
         return;
     }
-    if (!m_musicPickerOpen && UiButton::WasClicked(goalButton)) {
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_THREE) || UiButton::WasClicked(goalButton))) {
         selectTool(DesignTool::Goal);
         return;
     }
-    if (!m_musicPickerOpen && UiButton::WasClicked(musicButton)) {
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_FOUR) || UiButton::WasClicked(musicButton))) {
         m_gridAnchor.reset();
         m_terrainWorkPoints.clear();
         m_musicCategory = 0;
@@ -378,12 +478,19 @@ void CustomLevelEditorScene::ProcessInput(float) {
         m_context->audioController->StartLevelEditorMusic(custom.musicPath, true);
         return;
     }
-    if (!m_musicPickerOpen && UiButton::WasClicked(eraserButton)) {
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_FIVE) || UiButton::WasClicked(eraserButton))) {
         selectTool(DesignTool::Eraser);
         return;
     }
-    if (!m_musicPickerOpen && UiButton::WasClicked(passengerButton)) {
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_SIX) || UiButton::WasClicked(passengerButton))) {
         selectTool(DesignTool::Passenger);
+        return;
+    }
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_SEVEN) || UiButton::WasClicked(tntButton))) {
+        selectTool(DesignTool::TntObstacle);
         return;
     }
     if (m_musicPickerOpen) {
@@ -436,15 +543,22 @@ void CustomLevelEditorScene::ProcessInput(float) {
         }
         return;
     }
-    if (UiButton::WasClicked(menuButton)) {
-        m_gridAnchor.reset();
-        m_context->audioController->PlayUiClick();
-        m_context->audioController->ReturnToSelector();
-        m_context->sceneRequester->RequestSceneChange({SceneId::MainMenu});
-        m_terrainWorkPoints.clear();
+    if (UiButton::WasClicked(publishButton)) {
+        const std::size_t index = static_cast<std::size_t>(m_context->activeCustomLevel);
+        if (m_context->customLevels->HasValidApproval(index)) {
+            m_context->audioController->PlayUiClick();
+            m_publishFeedbackDraftId = custom.draftId;
+            m_context->publications.Publish(
+                m_context->customLevels->GetPublicationPayload(index)
+            );
+        }
         return;
     }
-    if (UiButton::WasClicked(editButton)) {
+    if (UiButton::WasClicked(menuButton)) {
+        returnToMyLevels();
+        return;
+    }
+    if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(editButton)) {
         if (!custom.hasTerrain || !custom.hasGrid || !custom.hasGoal) return;
         m_gridAnchor.reset();
         m_context->audioController->PlayUiClick();
@@ -455,12 +569,6 @@ void CustomLevelEditorScene::ProcessInput(float) {
         auto scenario = m_context->audioController->GetCurrentScenario();
         m_context->audioController->StartLevel(-1, scenario.levelEditorTrackName);
         m_context->sceneRequester->RequestSceneChange({SceneId::Game, &definition});
-        return;
-    }
-
-    if (m_gridAnchor.has_value() && IsKeyPressed(KEY_ESCAPE)) {
-        m_gridAnchor.reset();
-        m_gridAnchorLevel = -1;
         return;
     }
 
@@ -531,6 +639,51 @@ void CustomLevelEditorScene::ProcessInput(float) {
                 changed = true;
             }
             if (overPassenger) continue;
+            for (std::size_t i = 0; i < custom.definition.tntObstacles.size();) {
+                const auto& obstacle = custom.definition.tntObstacles[i];
+                const float radius = 20.0f;
+                if (std::abs(samplePoint.x - obstacle.position.x) > radius ||
+                    std::abs(samplePoint.y - obstacle.position.y) > radius) {
+                    ++i;
+                    continue;
+                }
+                custom.definition.tntObstacles.erase(
+                    custom.definition.tntObstacles.begin() + i
+                );
+                changed = true;
+                break;
+            }
+            if (changed) continue;
+            if (custom.hasGoal) {
+                const Math::AABB goalArea = custom.definition.goal.GetAABB();
+                const Rectangle goalBounds{
+                    static_cast<float>(goalArea.min.x),
+                    static_cast<float>(goalArea.min.y),
+                    static_cast<float>(goalArea.max.x - goalArea.min.x),
+                    static_cast<float>(goalArea.max.y - goalArea.min.y)
+                };
+                if (CheckCollisionPointRec(sampleWorld, goalBounds)) {
+                    custom.hasGoal = false;
+                    changed = true;
+                    break;
+                }
+            }
+            if (custom.hasGrid) {
+                const GridDefinition& grid = custom.definition.grid;
+                const float width = grid.dims.x * grid.cellSize;
+                const float height = grid.dims.y * grid.cellSize;
+                const Rectangle gridBounds{
+                    static_cast<float>(grid.worldPos.x) - width / 2.0f,
+                    static_cast<float>(grid.worldPos.y) - height,
+                    width, height
+                };
+                if (CheckCollisionPointRec(sampleWorld, gridBounds)) {
+                    custom.hasGrid = false;
+                    custom.definition.initialCamera.reset();
+                    changed = true;
+                    break;
+                }
+            }
             const auto boundaries = Math::SampleTerrain(custom.definition.terrain);
             for (std::size_t i = 0; i < boundaries.size(); ++i) {
                 if (!IsInsidePolygon(samplePoint, boundaries[i])) continue;
@@ -545,6 +698,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         m_lastEraserMouseScreen = screenMouse;
         if (terrainChanged) {
             custom.hasTerrain = !custom.definition.terrain.polygons.empty();
+            RepositionTntObstacles(custom);
             if (custom.hasGoal) {
                 const auto surfaceY = FindTerrainSurfaceY(
                     custom.definition.terrain,
@@ -589,6 +743,31 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
 
+    if (m_designTool == DesignTool::TntObstacle &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(point.x),
+            static_cast<float>(point.y)
+        );
+        if (surfaceY.has_value()) {
+            const Math::Vector2D position{point.x, surfaceY.value() - custom.definition.grid.cellSize / 2.0f};
+            const bool exists = std::any_of(
+                custom.definition.tntObstacles.begin(),
+                custom.definition.tntObstacles.end(),
+                [&](const TntObstacleDefinition& obstacle) {
+                    return std::abs(static_cast<float>(obstacle.position.x - position.x)) <
+                        custom.definition.grid.cellSize * 0.5f;
+                }
+            );
+            if (!exists) {
+                custom.definition.tntObstacles.push_back({position});
+                m_context->customLevels->Save();
+            }
+        }
+        return;
+    }
+
     if (m_designTool == DesignTool::Terrain &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         m_terrainWorkPoints.push_back(point);
@@ -606,6 +785,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         custom.definition.terrain.polygons.push_back(std::move(polygon));
         custom.hasTerrain = true;
         m_terrainWorkPoints.clear();
+        RepositionTntObstacles(custom);
         if (custom.hasGoal) {
             const auto surfaceY = FindTerrainSurfaceY(
                 custom.definition.terrain,
@@ -693,6 +873,37 @@ void CustomLevelEditorScene::Render() const {
             m_context->textureLibrary->FindPassengerFace(passenger.face),
             0.0f
         );
+    }
+    for (const auto& obstacle : custom.definition.tntObstacles) {
+        DrawTexturePro(
+            m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel),
+            Rectangle{0, 0,
+                static_cast<float>(m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel).width),
+                static_cast<float>(m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel).height)},
+            Rectangle{
+                static_cast<float>(obstacle.position.x - custom.definition.grid.cellSize / 2.0f),
+                static_cast<float>(obstacle.position.y - custom.definition.grid.cellSize / 2.0f),
+                custom.definition.grid.cellSize, custom.definition.grid.cellSize
+            }, Vector2{}, 0.0f, WHITE
+        );
+    }
+    if (m_designTool == DesignTool::TntObstacle) {
+        const Vector2 mouse = GetScreenToWorld2D(GetMousePosition(), m_designCamera);
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain, mouse.x, mouse.y
+        );
+        if (surfaceY.has_value()) {
+            const float size = custom.definition.grid.cellSize;
+            const Texture2D& texture =
+                m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel);
+            DrawTexturePro(
+                texture,
+                Rectangle{0, 0, static_cast<float>(texture.width),
+                    static_cast<float>(texture.height)},
+                Rectangle{mouse.x - size / 2.0f, *surfaceY - size, size, size},
+                Vector2{}, 0.0f, Fade(WHITE, 0.55f)
+            );
+        }
     }
     for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {
         const Vector2 point = m_terrainWorkPoints[i].ToRayVec();
@@ -797,6 +1008,8 @@ void CustomLevelEditorScene::Render() const {
     const Rectangle musicButton = EditorToolbarButton(3);
     const Rectangle eraserButton = EditorToolbarButton(4);
     const Rectangle passengerButton = EditorToolbarButton(5);
+    const Rectangle tntButton = EditorToolbarButton(6);
+    const Rectangle publishButton = LevelEditorPublishButton(m_context->windowWidth);
     const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
     const UiTextures& ui = m_context->textureLibrary->GetUi();
     DrawRectangle(0, 0, m_context->windowWidth, 129, Fade(BLACK, 0.88f));
@@ -819,7 +1032,14 @@ void CustomLevelEditorScene::Render() const {
     DrawEditorToolButton(passengerButton, 5,
         m_designTool == DesignTool::Passenger, false, false,
         *m_context->textureLibrary);
+    DrawEditorToolButton(tntButton, 6,
+        m_designTool == DesignTool::TntObstacle, false, false,
+        *m_context->textureLibrary);
     const bool ready = custom.hasTerrain && custom.hasGrid && custom.hasGoal;
+    const bool approved = m_context->customLevels->HasValidApproval(
+        static_cast<std::size_t>(m_context->activeCustomLevel)
+    );
+    UiButton::DrawTextured(publishButton, ui.menuPublish, approved, "Publicar");
     UiButton::DrawTextured(menuButton,
         ui.menuBack, true, "Menú");
     const Rectangle editButton = EditorCombiButton(
@@ -829,8 +1049,12 @@ void CustomLevelEditorScene::Render() const {
     DrawTexturePro(ui.game.editHammer,
         Rectangle{0, 0, static_cast<float>(ui.game.editHammer.width),
             static_cast<float>(ui.game.editHammer.height)},
-        Rectangle{editButton.x + 55, editButton.y + 2, 60, 60},
+        Rectangle{editButton.x + 24, editButton.y + 2, 60, 60},
         Vector2{}, 0, ready ? WHITE : Fade(WHITE, 0.55f));
+    UiButton::DrawTextureFit(ui.keyEnterBadge,
+        Rectangle{editButton.x + editButton.width - 80.0f,
+            editButton.y + 4.0f, 76.0f, 32.0f},
+        ready ? WHITE : Fade(WHITE, 0.55f));
     const char* editLabel = "Editar combi";
     DrawTextFont(editLabel,
         static_cast<int>(editButton.x +
@@ -852,26 +1076,31 @@ void CustomLevelEditorScene::Render() const {
             instructions = "Cuadrícula " +
                 std::to_string(preview.dims.x) + " x " +
                 std::to_string(preview.dims.y) +
-                " | segundo clic o botón Cuadrícula: confirmar | Esc: cancelar";
+                " | segundo clic o botón Cuadrícula: confirmar | Esc: Mis niveles";
         } else {
-            instructions = "Primer clic: celda inicial | mueve el mouse para ampliar | máximo 10 x 8";
+            instructions = "Actual " + std::to_string(custom.definition.grid.dims.x) +
+                " x " + std::to_string(custom.definition.grid.dims.y) +
+                " | primer clic: celda inicial | mueve el mouse para redimensionar | máximo 10 x 8";
         }
     } else {
         instructions = m_designTool == DesignTool::Terrain
             ? "Clic izquierdo: puntos | clic derecho: cerrar | arrastra clic derecho: mover vista"
             : m_designTool == DesignTool::Eraser
-            ? "Haz clic dentro de una forma de terreno para borrarla"
+            ? "Borrador: clic en pasajero, meta, cuadrícula o terreno | arrastra para borrar varios"
             : m_designTool == DesignTool::Passenger
             ? "Haz clic sobre el terreno para colocar un pasajero"
+            : m_designTool == DesignTool::TntObstacle
+            ? "Haz clic sobre el terreno para colocar un TNT estático"
             : "Haz clic sobre el terreno para colocar la meta en su superficie";
     }
     DrawTextFont(instructions.c_str(), 20, 106, 15, WHITE);
     DrawTextFont(
         TextFormat(
-            "Terreno %s   Cuadrícula %s   Meta %s",
+            "Terreno %s   Cuadrícula %s   Meta %s   TNT %d",
             custom.hasTerrain ? "OK" : "-",
             custom.hasGrid ? "OK" : "-",
-            custom.hasGoal ? "OK" : "-"
+            custom.hasGoal ? "OK" : "-",
+            static_cast<int>(custom.definition.tntObstacles.size())
         ),
         20,
         m_context->windowHeight - 28,
@@ -881,18 +1110,31 @@ void CustomLevelEditorScene::Render() const {
     DrawTextFont("Arrastra clic derecho: mover vista",
         m_context->windowWidth - 290,
         m_context->windowHeight - 27, 13, WHITE);
-    const bool approved = m_context->customLevels->HasValidApproval(
-        static_cast<std::size_t>(m_context->activeCustomLevel)
-    );
-    DrawTextFont(
-        approved
-            ? "Esta versión fue completada y puede publicarse desde el menú."
-            : "Para publicar, completa esta versión exacta. Los cambios invalidan la victoria.",
-        20,
-        m_context->windowHeight - 48,
-        13,
-        approved ? GREEN : GOLD
-    );
+    const PublicationSnapshot& publication = m_context->publications.GetSnapshot();
+    const bool showPublicationFeedback =
+        m_publishFeedbackDraftId == custom.draftId &&
+        !publication.message.empty();
+    const char* publicationText = showPublicationFeedback
+        ? publication.message.c_str()
+        : approved
+            ? "Esta versión fue completada y puede publicarse con el botón de arriba."
+            : "Para publicar, completa esta versión exacta. Los cambios invalidan la victoria.";
+    if (showPublicationFeedback) {
+        const Rectangle publicationBadge{
+            14.0f,
+            static_cast<float>(m_context->windowHeight - 55),
+            MeasureTextFont(publicationText, 13) + 12.0f,
+            27.0f
+        };
+        DrawRectangleRec(publicationBadge, Fade(BLACK, 0.78f));
+        DrawRectangleLinesEx(publicationBadge, 1.0f,
+            Color{237, 18, 121, 255});
+    }
+    DrawTextFont(publicationText, 20, m_context->windowHeight - 48, 13,
+        showPublicationFeedback
+            ? (publication.status == PublicationStatus::Error ||
+                publication.status == PublicationStatus::Unavailable ? GOLD : GREEN)
+            : approved ? GREEN : GOLD);
     if (m_musicPickerOpen) {
         const auto& categories = GetCustomMusicCategories();
         const auto& tracks = categories[m_musicCategory].tracks;

@@ -13,6 +13,7 @@ public:
         GameState state,
         const ActivationRegistry& activationRegistry,
         const EditorGrid& grid,
+        bool hasHandItem,
         int screenWidth,
         int screenHeight
     );

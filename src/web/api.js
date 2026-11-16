@@ -30,6 +30,8 @@ Module['api'] = (() => {
         loading: false,
         error: ''
     };
+    let catalogSearchTimer = null;
+    let catalogGeneration = 0;
     const ownPublicationState = {
         items: [],
         activeCount: 0,
@@ -516,7 +518,8 @@ Module['api'] = (() => {
         PUBLICATION_LIMIT: 'Ya tienes cinco publicaciones activas. Retira una antes de publicar.',
         RETRY_PUBLICATION: 'Hubo otra publicación simultánea. Vuelve a intentarlo.'
     };
-    async function loadCatalog(cursor = null, pushPrevious = false) {
+    async function loadCatalog(cursor = null, pushPrevious = false,
+        generation = ++catalogGeneration) {
         catalogState.loading = true;
         catalogState.error = '';
         renderPublications();
@@ -524,16 +527,35 @@ Module['api'] = (() => {
             const query = encodeURIComponent(catalogState.query);
             const cursorValue = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
             const result = await request(`/levels?query=${query}${cursorValue}`);
+            if (generation !== catalogGeneration) return;
             if (pushPrevious) catalogState.previous.push(catalogState.currentCursor);
             catalogState.currentCursor = cursor;
             catalogState.nextCursor = result.cursor ?? null;
             catalogState.items = result.items ?? [];
         } catch {
-            catalogState.error = 'No se pudo cargar el catálogo público.';
+            if (generation === catalogGeneration)
+                catalogState.error = 'No se pudo cargar el catálogo público.';
         } finally {
-            catalogState.loading = false;
-            renderPublications();
+            if (generation === catalogGeneration) {
+                catalogState.loading = false;
+                renderPublications();
+            }
         }
+    }
+    function searchCatalog(query) {
+        if (catalogSearchTimer !== null) clearTimeout(catalogSearchTimer);
+        catalogState.query = query.trim();
+        catalogState.previous = [];
+        catalogState.currentCursor = null;
+        catalogState.nextCursor = null;
+        catalogState.loading = true;
+        catalogState.error = '';
+        const generation = ++catalogGeneration;
+        renderPublications();
+        catalogSearchTimer = setTimeout(() => {
+            catalogSearchTimer = null;
+            loadCatalog(null, false, generation);
+        }, 180);
     }
     async function loadOwnPublications(cursor = null, pushPrevious = false) {
         if (status !== 'ready') {
@@ -667,6 +689,8 @@ Module['api'] = (() => {
         };
     }
     function openCatalog() {
+        if (catalogSearchTimer !== null) clearTimeout(catalogSearchTimer);
+        catalogSearchTimer = null;
         catalogState.query = '';
         catalogState.previous = [];
         loadCatalog(null);
@@ -819,9 +843,7 @@ Module['api'] = (() => {
         };
         search.addEventListener('submit', (event) => {
             event.preventDefault();
-            catalogState.query = searchInput.value.trim();
-            catalogState.previous = [];
-            loadCatalog(null);
+            searchCatalog(searchInput.value);
         });
         previous.addEventListener('click', () => {
             if (!catalogState.previous.length) return;
@@ -915,6 +937,7 @@ Module['api'] = (() => {
         publishDraft,
         catalogSnapshot,
         openCatalog,
+        searchCatalog,
         nextCatalogPage,
         previousCatalogPage,
         playPublicLevel,

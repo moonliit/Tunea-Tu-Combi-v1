@@ -5,7 +5,6 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <print>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -124,6 +123,21 @@ void AudioController::Initialize() {
         LoadSound("assets/audio/sfx/damage_09.wav"),
     };
     for (Sound damage : m_damageSounds) SetSoundVolume(damage, 0.65f);
+    m_screamingSounds = {
+        LoadSound("assets/audio/sfx/gritos/OE CTMR.wav"),
+        LoadSound("assets/audio/sfx/gritos/aaa grito x2.wav"),
+        LoadSound("assets/audio/sfx/gritos/aaaaaaa grito.wav"),
+        LoadSound("assets/audio/sfx/gritos/aaaaah.wav"),
+        LoadSound("assets/audio/sfx/gritos/aaah ahhhh.wav"),
+        LoadSound("assets/audio/sfx/gritos/aahh aaaa.wav"),
+        LoadSound("assets/audio/sfx/gritos/aea aea.wav"),
+        LoadSound("assets/audio/sfx/gritos/gritos.wav"),
+        LoadSound("assets/audio/sfx/gritos/oe mierda.wav"),
+        LoadSound("assets/audio/sfx/gritos/oe qué.wav"),
+        LoadSound("assets/audio/sfx/gritos/tamare.wav"),
+        LoadSound("assets/audio/sfx/gritos/uta ya la cagaste oe (ñangoso).wav"),
+    };
+    for (Sound scream : m_screamingSounds) SetSoundVolume(scream, 1.25f);
     m_breakageSounds = {
         LoadSound("assets/audio/sfx/breakage_1.ogg"),
         LoadSound("assets/audio/sfx/breakage_2.ogg"),
@@ -169,6 +183,7 @@ void AudioController::Shutdown() {
     UnloadSound(m_explosionSound);
     for (Sound horn : m_horns) UnloadSound(horn);
     for (Sound damage : m_damageSounds) UnloadSound(damage);
+    for (Sound scream : m_screamingSounds) UnloadSound(scream);
     for (Sound breakage : m_breakageSounds) UnloadSound(breakage);
     CloseAudioDevice();
     m_initialized = false;
@@ -402,6 +417,12 @@ void AudioController::PlayDamageEffect() {
     PlaySound(m_damageSounds[randomIndex]);
     m_damageSoundsTimer = m_damageSoundsTimeCooldown;
 }
+void AudioController::PlayScreamingEffect() {
+    if (m_screamingSoundsTimer > 0.0f) return;
+    int randomIndex = rand() % m_screamingSounds.size();
+    PlaySound(m_screamingSounds[randomIndex]);
+    m_screamingSoundsTimer = m_screamingSoundsTimeCooldown;
+}
 void AudioController::PlayBreakageEffect() {
     int randomIndex = rand() % m_breakageSounds.size();
     PlaySound(m_breakageSounds[randomIndex]);
@@ -469,6 +490,9 @@ void AudioController::Update(float deltaTime) {
     }
     if (m_damageSoundsTimer > 0.0f) {
         m_damageSoundsTimer = std::max(0.0f, m_damageSoundsTimer - deltaTime);
+    }
+    if (m_screamingSoundsTimer > 0.0f) {
+        m_screamingSoundsTimer = std::max(0.0f, m_screamingSoundsTimer - deltaTime);
     }
     UpdateVariantFade(deltaTime);
 }

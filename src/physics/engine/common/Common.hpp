@@ -11,7 +11,7 @@ namespace Physics {
     class BaseRigidBody;
 
     struct Material {
-        Math::RealNum friction = 0.4f;
+        Math::RealNum friction = 1.25f;
         Math::RealNum restitution = 0.2f;
 
         static inline Material FromCombined(const Material& matA, const Material& matB) {

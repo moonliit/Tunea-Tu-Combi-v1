@@ -25,37 +25,129 @@ namespace {
 // how far past the level the camera keeps following the driver
 constexpr float MapCameraMargin = 500.0f;
 constexpr float RoutePreviewHoldSeconds = 0.2f;
+constexpr float PreviewZoomOutSeconds = 0.78f;
+constexpr float PreviewOverviewHoldSeconds = 0.7f;
+constexpr float PreviewZoomInSeconds = 0.95f;
+constexpr float PreviewSplitZoomOutSeconds = 0.62f;
+constexpr float PreviewSplitHoldSeconds = 0.35f;
+constexpr float PreviewSplitPanSeconds = 0.55f;
+constexpr float PreviewSplitZoomInSeconds = 0.85f;
 
 Rectangle ResultsReturnButton(int width, int height) {
     return UiButton::CenteredAtBottom(width, height, 210.0f, 64.0f, 20.0f);
 }
 
+struct ExitConfirmDialogLayout {
+    Rectangle dialog;
+    Rectangle cancel;
+    Rectangle confirm;
+};
+
+ExitConfirmDialogLayout GetExitConfirmDialogLayout(int width, int height) {
+    constexpr float dialogWidth = 610.0f;
+    constexpr float dialogHeight = 200.0f;
+
+    const Rectangle dialog{
+        (static_cast<float>(width) - dialogWidth) / 2.0f,
+        (static_cast<float>(height) - dialogHeight) / 2.0f,
+        dialogWidth,
+        dialogHeight
+    };
+
+    return {
+        dialog,
+        Rectangle{dialog.x + 50.0f, dialog.y + 110.0f, 186.0f, 80.0f},
+        Rectangle{dialog.x + 246.0f, dialog.y + 110.0f, 186.0f, 80.0f}
+    };
+}
+
+void DrawExitConfirmAction(
+    Rectangle bounds,
+    const UiButtonSkin& skin,
+    const char* label,
+    bool enabled
+) {
+    const bool hovered = enabled && UiButton::IsHovered(bounds);
+    const bool pressed = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    UiButton::DrawTextureFit(
+        UiButton::ResolveButtonTexture(skin, enabled, hovered, pressed),
+        Rectangle{bounds.x, bounds.y, bounds.width, 54.0f}
+    );
+    DrawTextFont(
+        label,
+        static_cast<int>(bounds.x + (bounds.width - MeasureTextFont(label, 16)) / 2.0f),
+        static_cast<int>(bounds.y + 62.0f),
+        16,
+        enabled ? (hovered ? GOLD : WHITE) : Color{190, 201, 203, 255}
+    );
+}
+
+void DrawScoreValue(
+    const std::string& value,
+    const UiTextures& textures,
+    float right,
+    float top,
+    float maxWidth
+) {
+    constexpr float glyphHeight = 58.0f;
+    constexpr float spacing = 2.0f;
+    const auto& glyphFor = [&](char character) -> const Texture2D& {
+        return character == '-'
+            ? textures.scoreMinus
+            : textures.scoreDigits[static_cast<std::size_t>(character - '0')];
+    };
+    float naturalWidth = 0.0f;
+    for (char character : value) {
+        const Texture2D& glyph = glyphFor(character);
+        naturalWidth += glyphHeight * glyph.width / glyph.height + spacing;
+    }
+    if (naturalWidth <= 0.0f) return;
+    naturalWidth -= spacing;
+    const float scale = std::min(1.0f, maxWidth / naturalWidth);
+    const float drawnHeight = glyphHeight * scale;
+    float x = right - naturalWidth * scale;
+    for (char character : value) {
+        const Texture2D& glyph = glyphFor(character);
+        const float drawnWidth = drawnHeight * glyph.width / glyph.height;
+        DrawTexturePro(glyph,
+            Rectangle{0.0f, 0.0f,
+                static_cast<float>(glyph.width), static_cast<float>(glyph.height)},
+            Rectangle{x, top + (glyphHeight - drawnHeight) / 2.0f,
+                drawnWidth, drawnHeight},
+            Vector2{}, 0.0f, WHITE);
+        x += drawnWidth + spacing * scale;
+    }
+}
+
+Rectangle DesignLevelButton(int width, int height) {
+    const Rectangle playButton = UiButton::PlaySideButton(width, height);
+    return Rectangle{
+        playButton.x,
+        playButton.y - 98.0f,
+        playButton.width,
+        90.0f
+    };
+}
+
 float RoutePreviewProgress(float time) {
     const float t = std::clamp(time, 0.0f, 1.0f);
-    const auto sigmoidDistance = [](float value) {
-        constexpr float sharpness = 10.0f;
-        return std::log1p(std::exp(sharpness * (value - 0.5f)));
-    };
-    const float start = sigmoidDistance(0.0f);
-    const float range = sigmoidDistance(1.0f) - start;
-    const auto accelerated = [&](float value) {
-        return 0.35f * value +
-            0.65f * (sigmoidDistance(value) - start) / range;
-    };
-    constexpr float brakingStart = 0.82f;
-    if (t <= brakingStart) return accelerated(t);
+    return t * t * (3.0f - 2.0f * t);
+}
 
-    // Preserve the accelerating speed at the join, then settle smoothly
-    const float join = accelerated(brakingStart);
-    const float sigmoid = 1.0f / (1.0f + std::exp(-10.0f * (brakingStart - 0.5f)));
-    const float joinVelocity = 0.35f + 6.5f * sigmoid / range;
-    const float span = 1.0f - brakingStart;
-    const float u = (t - brakingStart) / span;
-    const float u2 = u * u;
-    const float u3 = u2 * u;
-    return (2.0f * u3 - 3.0f * u2 + 1.0f) * join +
-        (u3 - 2.0f * u2 + u) * span * joinVelocity +
-        (-2.0f * u3 + 3.0f * u2);
+void MovePreviewCamera(
+    Camera2D& camera,
+    Vector2 from,
+    float fromZoom,
+    Vector2 to,
+    float toZoom,
+    float progress
+) {
+    const float t = RoutePreviewProgress(progress);
+    camera.target = {
+        std::lerp(from.x, to.x, t),
+        std::lerp(from.y, to.y, t)
+    };
+    camera.zoom = std::lerp(fromZoom, toZoom, t);
 }
 
 float CalculateGridFitZoom(
@@ -113,6 +205,7 @@ bool IsOrContainsDriver(const Part* part) {
 struct TrackedPart {
     const Part* part;
     PartRenderState state;
+    bool driverContainer;
 };
 
 void CollectPart(
@@ -120,7 +213,12 @@ void CollectPart(
     const EditorGrid& grid,
     std::vector<TrackedPart>& output
 ) {
-    output.push_back({&part, part.GetRenderState(grid)});
+    output.push_back({
+        &part,
+        part.GetRenderState(grid),
+        part.HasContainedPart() &&
+            part.GetContainedPart()->GetType() == PartType::Driver
+    });
     if (part.HasContainedPart()) {
         CollectPart(*part.GetContainedPart(), grid, output);
     }
@@ -153,23 +251,23 @@ double HorizontalRadius(const PartRenderState& state) {
 }
 
 Rectangle GhostPreviewButton() {
-    return {20.0f, 104.0f, 230.0f, 32.0f};
+    return {20.0f, 122.0f, 230.0f, 32.0f};
 }
 
 Rectangle GhostPanel() {
-    return {14.0f, 76.0f, 350.0f, 126.0f};
+    return {14.0f, 94.0f, 350.0f, 126.0f};
 }
 
 Rectangle GhostPauseButton() {
-    return {258.0f, 104.0f, 100.0f, 32.0f};
+    return {258.0f, 122.0f, 100.0f, 32.0f};
 }
 
 Rectangle GhostRestartButton() {
-    return {20.0f, 142.0f, 110.0f, 30.0f};
+    return {20.0f, 160.0f, 110.0f, 30.0f};
 }
 
 Rectangle GhostCompeteButton() {
-    return {138.0f, 142.0f, 220.0f, 30.0f};
+    return {138.0f, 160.0f, 220.0f, 30.0f};
 }
 
 bool GhostCanBeRequested(GhostLoadStatus status) {
@@ -195,6 +293,7 @@ MainGameScene::MainGameScene(
     m_playSession(
         m_level.GetBuildModel(),
         m_level.GetTerrain(),
+        m_level.GetDefinition().tntObstacles,
         Vector2D{0.0f, m_gravity}
     ),
     m_worldRenderer(*appContext->textureLibrary, GetLevelBackground(specs.levelNumber))
@@ -227,14 +326,47 @@ MainGameScene::MainGameScene(
         static_cast<float>(specs.goal.position.x),
         static_cast<float>(specs.goal.position.y)
     };
+    const Math::AABB content = m_level.GetContentBounds();
+    const float contentWidth = std::max(1.0f,
+        static_cast<float>(content.max.x - content.min.x));
+    const float contentHeight = std::max(1.0f,
+        static_cast<float>(content.max.y - content.min.y));
+    const float availableWidth = std::max(1.0f,
+        static_cast<float>(m_appContext->windowWidth) - 120.0f);
+    const float availableHeight = std::max(1.0f,
+        static_cast<float>(m_appContext->windowHeight) - 170.0f);
+    const float widthFitZoom = availableWidth / contentWidth;
+    const float heightFitZoom = availableHeight / contentHeight;
+    m_routePreviewSplit = widthFitZoom < 0.32f &&
+        widthFitZoom < heightFitZoom;
+    m_routeOverviewZoom = std::min(m_editorCameraZoom,
+        m_routePreviewSplit
+            ? std::min({0.42f, availableWidth / (contentWidth * 0.55f),
+                heightFitZoom})
+            : std::min(widthFitZoom, heightFitZoom));
+    const float centerX = static_cast<float>(content.min.x + content.max.x) / 2.0f;
+    const float centerY = static_cast<float>(content.min.y + content.max.y) / 2.0f;
+    m_routeOverviewTarget = {centerX, centerY};
+    m_routeOverviewSecondTarget = m_routeOverviewTarget;
+    if (m_routePreviewSplit) {
+        const float leftX = static_cast<float>(content.min.x) + contentWidth * 0.25f;
+        const float rightX = static_cast<float>(content.max.x) - contentWidth * 0.25f;
+        const bool goalOnLeft = m_routePreviewStart.x <= m_editorCameraTarget.x;
+        m_routeOverviewTarget.x = goalOnLeft ? leftX : rightX;
+        m_routeOverviewSecondTarget.x = goalOnLeft ? rightX : leftX;
+    }
     const float routeDistance = std::hypot(
         m_routePreviewStart.x - m_editorCameraTarget.x,
         m_routePreviewStart.y - m_editorCameraTarget.y
     );
-    if (routeDistance > specs.grid.cellSize * 2.0f) {
-        m_routePreviewDuration = std::clamp(
-            1.0f + routeDistance / 1100.0f, 1.4f, 3.1f
-        );
+    if (routeDistance > specs.grid.cellSize * 2.0f ||
+        m_routeOverviewZoom < m_editorCameraZoom * 0.85f) {
+        m_routePreviewDuration = m_routePreviewSplit
+            ? PreviewSplitZoomOutSeconds + PreviewSplitHoldSeconds +
+                PreviewSplitPanSeconds + PreviewSplitHoldSeconds +
+                PreviewSplitZoomInSeconds
+            : PreviewZoomOutSeconds + PreviewOverviewHoldSeconds +
+                PreviewZoomInSeconds;
         m_routePreviewActive = true;
         m_camera.target = m_routePreviewStart;
     }
@@ -246,6 +378,10 @@ MainGameScene::MainGameScene(
 
 void MainGameScene::ProcessInput(float dt) {
     if (m_routePreviewActive) {
+        if (m_isEditableDraft && IsKeyPressed(KEY_ESCAPE)) {
+            ReturnToCustomLevelEditor();
+            return;
+        }
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) ||
             IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
             IsKeyPressed(KEY_ESCAPE)) {
@@ -262,49 +398,50 @@ void MainGameScene::ProcessInput(float dt) {
         }
         return;
     }
-    if (m_stateMachine.IsBuildMode() && IsKeyPressed(KEY_ESCAPE)) {
-        ReturnToLevelSelector();
+    if (m_exitConfirmOpen) {
+        const ExitConfirmDialogLayout dialog = GetExitConfirmDialogLayout(
+            m_appContext->windowWidth, m_appContext->windowHeight
+        );
+        if (IsKeyPressed(KEY_ESCAPE) || UiButton::WasClicked(dialog.cancel)) {
+            m_appContext->audioController->PlayUiClick();
+            m_exitConfirmOpen = false;
+            return;
+        }
+        if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(dialog.confirm)) {
+            m_exitConfirmOpen = false;
+            ReturnToLevelSelector();
+            return;
+        }
+        return;
+    }
+
+    if (m_isEditableDraft && m_stateMachine.IsBuildMode() &&
+        IsKeyPressed(KEY_ESCAPE)) {
+        ReturnToCustomLevelEditor();
+        return;
+    }
+
+    if ((m_stateMachine.IsBuildMode() || m_stateMachine.IsPlayMode() ||
+         m_stateMachine.IsViewMode()) && IsKeyPressed(KEY_ESCAPE)) {
+        m_appContext->audioController->PlayUiClick();
+        m_exitConfirmOpen = true;
         return;
     }
     if (m_stateMachine.IsBuildMode() && ProcessGhostControls()) return;
     if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
-        const Rectangle designButton = UiButton::CenteredAbove(
-            UiButton::PlaySideButton(
-                m_appContext->windowWidth, m_appContext->windowHeight
-            ),
-            110.0f,
-            52.0f,
-            8.0f
+        const Rectangle designButton = DesignLevelButton(
+            m_appContext->windowWidth, m_appContext->windowHeight
         );
         if (UiButton::WasClicked(designButton)) {
-            m_appContext->audioController->SetFanActive(false);
-            m_appContext->audioController->SetWheelActive(false);
-            if (m_appContext->activeCustomLevel >= 0 &&
-                m_appContext->activeCustomLevel <
-                    static_cast<int>(m_appContext->customLevels->GetLevels().size())) {
-                m_appContext->audioController->StartLevelEditorMusic(
-                    m_appContext->customLevels->GetLevels()[m_appContext->activeCustomLevel].musicPath,
-                    false
-                );
-            } else {
-                auto scenario = m_appContext->audioController->GetCurrentScenario();
-                if (!scenario.levelEditorTrackName.empty()) {
-                    m_appContext->audioController->SetCurrentScenario(
-                        {Scenario::LevelEditorBuild, -1, scenario.levelEditorTrackName}
-                    );
-                } else {
-                    m_appContext->audioController->SetCurrentScenario({Scenario::PlayLevel});
-                }
-            }
-            m_appContext->returnToCustomDesign = true;
-            m_appContext->sceneRequester->RequestSceneChange({SceneId::MainMenu});
+            ReturnToCustomLevelEditor();
             return;
         }
     }
 
     const Rectangle menuButton = UiButton::GameMenuButton(m_appContext->windowWidth);
     if (UiButton::WasClicked(menuButton)) {
-        ReturnToLevelSelector();
+        m_appContext->audioController->PlayUiClick();
+        m_exitConfirmOpen = true;
         return;
     }
 
@@ -353,7 +490,15 @@ void MainGameScene::ProcessInput(float dt) {
          m_stateMachine.IsViewMode() ||
          (m_stateMachine.IsPlayMode() &&
           input.editorAction == EditorAction::ReturnToBuild))) {
-        switch (input.editorAction.value()) {
+        const EditorAction action = *input.editorAction;
+        if (m_buildSession.HasRepositionedPart() &&
+            (action == EditorAction::MoveUp ||
+             action == EditorAction::MoveRight ||
+             action == EditorAction::MoveDown ||
+             action == EditorAction::MoveLeft)) {
+            m_buildSession.ClearHand();
+        }
+        switch (action) {
             case EditorAction::MoveUp:
                 m_level.GetBuildModel().ShiftContents({0, -1});
                 break;
@@ -367,7 +512,10 @@ void MainGameScene::ProcessInput(float dt) {
                 m_level.GetBuildModel().ShiftContents({-1, 0});
                 break;
             case EditorAction::ClearBuild:
-                if (m_buildSession.HasHandItem()) {
+                if (m_buildSession.HasRepositionedPart()) {
+                    m_buildSession.DiscardRepositionedPart();
+                    m_buildSession.ClearSelection();
+                } else if (m_buildSession.HasHandItem()) {
                     m_buildSession.ClearHand();
                 } else {
                     m_level.GetBuildModel().Clear();
@@ -482,16 +630,17 @@ void MainGameScene::Update(float dt) {
         m_leaderboard.Poll(frameMs);
         m_playSession.Update(dt);
         m_ghostPlayback.Update(frameMs);
-        const auto& parts = m_playSession.GetRuntimeGrid().GetActiveParts();
-        if (!parts.empty()) {
+        const EditorGrid& runtimeGrid = m_playSession.GetRuntimeGrid();
+        const auto& parts = runtimeGrid.GetActiveParts();
+        {
             Vector2 center{};
             std::optional<Vector2> driverPosition;
+            int partCount = 0;
             for (const Part* part : parts) {
-                const auto position = part->GetRenderState(
-                    m_playSession.GetRuntimeGrid()
-                ).position;
+                const auto position = part->GetRenderState(runtimeGrid).position;
                 center.x += static_cast<float>(position.x);
                 center.y += static_cast<float>(position.y);
+                ++partCount;
                 if (!driverPosition && IsOrContainsDriver(part)) {
                     driverPosition = Vector2{
                         static_cast<float>(position.x),
@@ -499,12 +648,28 @@ void MainGameScene::Update(float dt) {
                     };
                 }
             }
-            m_camera.target = ClampToBounds(
-                driverPosition.value_or(Vector2{
-                    center.x / parts.size(), center.y / parts.size()
-                }),
-                m_mapBounds
-            );
+            for (const auto& ejected : m_playSession.GetEjectedParts()) {
+                if (!ejected) continue;
+                const auto position = ejected->GetRenderState(runtimeGrid).position;
+                center.x += static_cast<float>(position.x);
+                center.y += static_cast<float>(position.y);
+                ++partCount;
+                if (ejected->GetType() == PartType::Driver) {
+                    driverPosition = Vector2{
+                        static_cast<float>(position.x),
+                        static_cast<float>(position.y)
+                    };
+                }
+            }
+            if (partCount > 0) {
+                m_camera.target = ClampToBounds(
+                    driverPosition.value_or(Vector2{
+                        center.x / static_cast<float>(partCount),
+                        center.y / static_cast<float>(partCount)
+                    }),
+                    m_mapBounds
+                );
+            }
         }
         UpdateGoalParticles(dt);
         return;
@@ -515,16 +680,46 @@ void MainGameScene::Update(float dt) {
             RoutePreviewHoldSeconds + m_routePreviewDuration) {
             FinishRoutePreview();
         } else if (m_routePreviewElapsed > RoutePreviewHoldSeconds) {
-            const float time = (
-                m_routePreviewElapsed - RoutePreviewHoldSeconds
-            ) / m_routePreviewDuration;
-            const float progress = RoutePreviewProgress(time);
-            m_camera.target = {
-                m_routePreviewStart.x +
-                    (m_editorCameraTarget.x - m_routePreviewStart.x) * progress,
-                m_routePreviewStart.y +
-                    (m_editorCameraTarget.y - m_routePreviewStart.y) * progress
-            };
+            float time = m_routePreviewElapsed - RoutePreviewHoldSeconds;
+            const float zoomOut = m_routePreviewSplit
+                ? PreviewSplitZoomOutSeconds : PreviewZoomOutSeconds;
+            if (time < zoomOut) {
+                MovePreviewCamera(m_camera, m_routePreviewStart,
+                    m_editorCameraZoom, m_routeOverviewTarget,
+                    m_routeOverviewZoom, time / zoomOut);
+            } else {
+                time -= zoomOut;
+                const float firstHold = m_routePreviewSplit
+                    ? PreviewSplitHoldSeconds : PreviewOverviewHoldSeconds;
+                if (time < firstHold) {
+                    m_camera.target = m_routeOverviewTarget;
+                    m_camera.zoom = m_routeOverviewZoom;
+                } else {
+                    time -= firstHold;
+                    if (m_routePreviewSplit && time < PreviewSplitPanSeconds) {
+                        MovePreviewCamera(m_camera, m_routeOverviewTarget,
+                            m_routeOverviewZoom, m_routeOverviewSecondTarget,
+                            m_routeOverviewZoom, time / PreviewSplitPanSeconds);
+                    } else {
+                        if (m_routePreviewSplit) {
+                            time -= PreviewSplitPanSeconds;
+                        }
+                        if (m_routePreviewSplit && time < PreviewSplitHoldSeconds) {
+                            m_camera.target = m_routeOverviewSecondTarget;
+                            m_camera.zoom = m_routeOverviewZoom;
+                        } else {
+                            if (m_routePreviewSplit) {
+                                time -= PreviewSplitHoldSeconds;
+                            }
+                            const float zoomIn = m_routePreviewSplit
+                                ? PreviewSplitZoomInSeconds : PreviewZoomInSeconds;
+                            MovePreviewCamera(m_camera, m_routeOverviewSecondTarget,
+                                m_routeOverviewZoom, m_editorCameraTarget,
+                                m_editorCameraZoom, time / zoomIn);
+                        }
+                    }
+                }
+            }
         }
         UpdateGoalParticles(dt);
         return;
@@ -591,11 +786,23 @@ void MainGameScene::Update(float dt) {
             }
             if (availableBoxes.empty()) continue;
 
-            static std::mt19937 randomEngine{std::random_device{}()};
-            std::uniform_int_distribution<std::size_t> chooseBox(
-                0, availableBoxes.size() - 1
+            const Part* hostPart = *std::min_element(
+                availableBoxes.begin(), availableBoxes.end(),
+                [&passenger, &runtimeGrid](const Part* first, const Part* second) {
+                    const auto firstState = first->GetRenderState(runtimeGrid);
+                    const auto secondState = second->GetRenderState(runtimeGrid);
+                    const double firstDx = firstState.position.x - passenger.position.x;
+                    const double firstDy = firstState.position.y - passenger.position.y;
+                    const double secondDx = secondState.position.x - passenger.position.x;
+                    const double secondDy = secondState.position.y - passenger.position.y;
+                    const double firstDistance = firstDx * firstDx + firstDy * firstDy;
+                    const double secondDistance = secondDx * secondDx + secondDy * secondDy;
+                    if (firstDistance != secondDistance) {
+                        return firstDistance < secondDistance;
+                    }
+                    return first->GetId() < second->GetId();
+                }
             );
-            const Part* hostPart = availableBoxes[chooseBox(randomEngine)];
             hostPart->GetPhysicsBody()->AddMass(GetPartDefinition(PartType::Fan).mass);
             m_passengerCollected[passengerIndex] = true;
             m_carriedPassengers.push_back({
@@ -688,16 +895,48 @@ void MainGameScene::Update(float dt) {
                 m_appContext->audioController->PlayDamageEffect();
                 m_playSession.GetDamageConsumed() = false;
             }
+            if (m_playSession.GetScreamingConsumed()) {
+                m_appContext->audioController->PlayScreamingEffect();
+                m_playSession.GetScreamingConsumed() = false;
+            }
             if (m_playSession.GetBreakageConsumed()) {
                 m_appContext->audioController->PlayBreakageEffect();
                 m_playSession.GetBreakageConsumed() = false;
             }
+            for (const ExplosionVisual& visual : m_playSession.ConsumeExplosionVisuals()) {
+                m_explosionVisuals.push_back(ExplosionVisualInstance{
+                    .position = visual.position,
+                    .radius = visual.radius,
+                    .frame = 0,
+                    .timer = 0.0f
+                });
+            }
+            UpdateExplosionVisuals(dt);
+
+            const float cellSize = runtimeGrid.GetCellSize();
+            for (const DamageVisual& visual : m_playSession.ConsumeDamageVisuals()) {
+                SpawnDamageStarBurst(
+                    visual.position, cellSize,
+                    3, 60.0f, 140.0f, 0.65f, 0.85f, 0.35f, 0.60f, 0.05f
+                );
+            }
+            for (const DamageVisual& visual : m_playSession.ConsumeBreakageVisuals()) {
+                SpawnDamageStarBurst(
+                    visual.position, cellSize,
+                    12, 90.0f, 220.0f, 0.75f, 1.05f, 0.45f, 0.85f, 0.18f
+                );
+            }
+            UpdateDamageParticles(dt);
         }
         UpdateGoalWindow(frameMs);
         if (m_stateMachine.IsPlayMode()) {
             m_capture.RecordFrame(
                 std::llround(m_elapsedMs), runtimeGrid
             );
+        } else {
+            m_playSession.ConsumeExplosionVisuals();
+            m_playSession.ConsumeDamageVisuals();
+            m_playSession.ConsumeBreakageVisuals();
         }
     }
     UpdateGoalParticles(dt);
@@ -712,6 +951,8 @@ void MainGameScene::TransitionToPlayMode() {
     m_goalWindow.Reset();
     m_statistics = {};
     m_score = {};
+    m_explosionVisuals.clear();
+    m_damageParticles.clear();
     const auto& parts = m_level.GetGrid().GetActiveParts();
     const bool hasWheel = std::any_of(
         parts.begin(),
@@ -815,6 +1056,14 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
     const std::vector<TrackedPart> parts = CollectParts(grid);
     std::vector<GoalPartSample> partSamples;
     partSamples.reserve(parts.size() + m_playSession.GetEjectedParts().size());
+    const bool driverIsContained = std::any_of(
+        parts.begin(), parts.end(),
+        [](const TrackedPart& tracked) { return tracked.driverContainer; }
+    );
+    const auto driverContainer = std::find_if(
+        parts.begin(), parts.end(),
+        [](const TrackedPart& tracked) { return tracked.driverContainer; }
+    );
     for (const TrackedPart& tracked : parts) {
         const PartId id = tracked.part->GetId();
         const double currentX = static_cast<double>(tracked.state.position.x);
@@ -834,7 +1083,11 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
             .currentY = currentY,
             .horizontalRadius = HorizontalRadius(tracked.state),
             .initial = m_initialPartIds.contains(id),
-            .driver = tracked.part->GetType() == PartType::Driver
+            .driver = tracked.part->GetType() == PartType::Driver,
+            .driverVehiclePart = driverIsContained &&
+                m_playSession.ArePartsConnected(
+                    driverContainer->part->GetId(), id
+                )
         });
     }
     for (const auto& ejected : m_playSession.GetEjectedParts()) {
@@ -858,7 +1111,8 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
             .currentY = currentY,
             .horizontalRadius = HorizontalRadius(state),
             .initial = false,
-            .driver = ejected->GetType() == PartType::Driver
+            .driver = ejected->GetType() == PartType::Driver,
+            .driverVehiclePart = false
         });
     }
     std::vector<GoalPassengerSample> passengerSamples;
@@ -1004,11 +1258,177 @@ void MainGameScene::RenderGoalParticles() const {
     }
 }
 
+void MainGameScene::UpdateExplosionVisuals(float dt) {
+    const ExplosionAnimation& animation =
+        m_appContext->textureLibrary->GetExplosionAnim();
+    if (!animation.IsValid()) {
+        m_explosionVisuals.clear();
+        return;
+    }
+
+    const float frameDuration = animation.frameDuration;
+    for (ExplosionVisualInstance& instance : m_explosionVisuals) {
+        instance.timer += dt;
+        while (instance.timer >= frameDuration) {
+            instance.timer -= frameDuration;
+            ++instance.frame;
+        }
+    }
+
+    m_explosionVisuals.erase(
+        std::remove_if(
+            m_explosionVisuals.begin(),
+            m_explosionVisuals.end(),
+            [&animation](const ExplosionVisualInstance& instance) {
+                return instance.frame >=
+                    static_cast<int>(animation.frames.size());
+            }
+        ),
+        m_explosionVisuals.end()
+    );
+}
+
+void MainGameScene::RenderExplosionVisuals() const {
+    const ExplosionAnimation& animation =
+        m_appContext->textureLibrary->GetExplosionAnim();
+    if (!animation.IsValid()) return;
+
+    for (const ExplosionVisualInstance& instance : m_explosionVisuals) {
+        if (instance.frame < 0 ||
+            instance.frame >= static_cast<int>(animation.frames.size())) {
+            continue;
+        }
+        const Texture2D& frame = animation.frames[instance.frame];
+        const float size = instance.radius * 2.0f;
+        DrawTexturePro(
+            frame,
+            Rectangle{
+                0.0f,
+                0.0f,
+                static_cast<float>(frame.width),
+                static_cast<float>(frame.height)
+            },
+            Rectangle{
+                static_cast<float>(instance.position.x),
+                static_cast<float>(instance.position.y),
+                size,
+                size
+            },
+            Vector2{size / 2.0f, size / 2.0f},
+            0.0f,
+            WHITE
+        );
+    }
+}
+
+void MainGameScene::SpawnDamageStarBurst(
+    const Math::Vector2D& position,
+    float cellSize,
+    int particleCount,
+    float speedMin,
+    float speedMax,
+    float lifeMin,
+    float lifeMax,
+    float sizeMinScale,
+    float sizeMaxScale,
+    float spread
+) {
+    const int speedMinI = static_cast<int>(speedMin);
+    const int speedMaxI = static_cast<int>(speedMax);
+    const int lifeMinI = static_cast<int>(lifeMin * 100.0f);
+    const int lifeMaxI = static_cast<int>(lifeMax * 100.0f);
+    const int sizeMinI = static_cast<int>(sizeMinScale * 100.0f);
+    const int sizeMaxI = static_cast<int>(sizeMaxScale * 100.0f);
+
+    for (int i = 0; i < particleCount; ++i) {
+        const float angle =
+            (static_cast<float>(GetRandomValue(0, 359)) +
+             static_cast<float>(GetRandomValue(0, 99)) / 100.0f) *
+            DEG2RAD;
+        const float speed = static_cast<float>(GetRandomValue(speedMinI, speedMaxI));
+        const float maxLife =
+            static_cast<float>(GetRandomValue(lifeMinI, lifeMaxI)) / 100.0f;
+        const float sizeScale =
+            static_cast<float>(GetRandomValue(sizeMinI, sizeMaxI)) / 100.0f;
+        const float size = cellSize * sizeScale;
+        const Math::Vector2D direction{std::cos(angle), std::sin(angle)};
+        m_damageParticles.push_back(DamageStarParticle{
+            .position = position + direction * (cellSize * spread),
+            .velocity = direction * speed,
+            .life = maxLife,
+            .maxLife = maxLife,
+            .size = size,
+            .rotation = static_cast<float>(GetRandomValue(0, 359)),
+            .angularVelocity = static_cast<float>(GetRandomValue(-360, 360))
+        });
+    }
+}
+
+void MainGameScene::UpdateDamageParticles(float dt) {
+    for (DamageStarParticle& particle : m_damageParticles) {
+        particle.life -= dt;
+        particle.position.x += particle.velocity.x * dt;
+        particle.position.y += particle.velocity.y * dt;
+        particle.velocity.x *= std::exp(-4.0f * dt);
+        particle.velocity.y *= std::exp(-4.0f * dt);
+        particle.rotation += particle.angularVelocity * dt;
+    }
+
+    m_damageParticles.erase(
+        std::remove_if(
+            m_damageParticles.begin(),
+            m_damageParticles.end(),
+            [](const DamageStarParticle& particle) {
+                return particle.life <= 0.0f;
+            }
+        ),
+        m_damageParticles.end()
+    );
+}
+
+void MainGameScene::RenderDamageParticles() const {
+    const Texture2D& star = m_appContext->textureLibrary->GetDamageStarTexture();
+    if (star.id == 0) return;
+
+    for (const DamageStarParticle& particle : m_damageParticles) {
+        if (particle.life <= 0.0f || particle.maxLife <= 0.0f) continue;
+        const float t = std::clamp(particle.life / particle.maxLife, 0.0f, 1.0f);
+        const float fade = std::sqrt(t);
+        const float scale = 0.7f + 0.3f * t;
+        const float size = particle.size * scale;
+        const unsigned char alpha =
+            static_cast<unsigned char>(std::clamp(fade * 255.0f, 0.0f, 255.0f));
+
+        DrawTexturePro(
+            star,
+            Rectangle{
+                0.0f,
+                0.0f,
+                static_cast<float>(star.width),
+                static_cast<float>(star.height)
+            },
+            Rectangle{
+                static_cast<float>(particle.position.x),
+                static_cast<float>(particle.position.y),
+                size,
+                size
+            },
+            Vector2{size / 2.0f, size / 2.0f},
+            particle.rotation,
+            Color{255, 255, 255, alpha}
+        );
+    }
+}
+
 void MainGameScene::ResetToBuildMode() {
     m_elapsedMs = 0.0;
     m_goalWindow.Reset();
     m_previousPartPositions.clear();
     m_capture.Clear();
+    m_explosionVisuals.clear();
+    m_damageParticles.clear();
+    m_playSession.ConsumeDamageVisuals();
+    m_playSession.ConsumeBreakageVisuals();
     if (m_competeAgainstGhost) m_ghostPlayback.PrepareCompetition();
     else m_ghostPlayback.StopAndRewind();
     m_leaderboard.Reset();
@@ -1039,6 +1459,22 @@ void MainGameScene::ResetEditorCamera() {
 void MainGameScene::FinishRoutePreview() {
     m_routePreviewActive = false;
     ResetEditorCamera();
+}
+
+void MainGameScene::ReturnToCustomLevelEditor() {
+    m_appContext->audioController->PlayUiClick();
+    m_appContext->audioController->SetFanActive(false);
+    m_appContext->audioController->SetWheelActive(false);
+    if (m_appContext->activeCustomLevel >= 0 &&
+        m_appContext->activeCustomLevel <
+            static_cast<int>(m_appContext->customLevels->GetLevels().size())) {
+        m_appContext->audioController->StartLevelEditorMusic(
+            m_appContext->customLevels->GetLevels()[m_appContext->activeCustomLevel].musicPath,
+            false
+        );
+    }
+    m_appContext->focusCustomEditorCamera = true;
+    m_appContext->sceneRequester->RequestSceneChange({SceneId::CustomLevelEditor});
 }
 
 void MainGameScene::ReturnToLevelSelector() {
@@ -1098,41 +1534,72 @@ bool MainGameScene::ProcessGhostControls() {
 void MainGameScene::RenderGhostControls() const {
     const GhostLoadStatus status = m_ghostPlayback.GetStatus();
     const bool canUse = GhostCanBeRequested(status);
-    DrawRectangleRec(GhostPanel(), Fade(DARKBLUE, 0.84f));
-    DrawRectangleLinesEx(GhostPanel(), 2.0f, SKYBLUE);
-    DrawTextFont("FANTASMA DEL CAMPEÓN", 22, 82, 14, WHITE);
-    UiButton::Draw(
+    const Rectangle panel = GhostPanel();
+    const Color accentBlue{91, 212, 246, 255};
+    const Color accentYellow{243, 237, 33, 255};
+    DrawRectangleRec(panel, Color{9, 27, 54, 239});
+    DrawRectangleLinesEx(panel, 2.0f, accentBlue);
+    DrawRectangle(static_cast<int>(panel.x + 2.0f),
+        static_cast<int>(panel.y + 2.0f),
+        static_cast<int>(panel.width - 4.0f), 23,
+        Color{20, 58, 91, 255});
+    DrawRectangle(static_cast<int>(panel.x + 6.0f),
+        static_cast<int>(panel.y + 25.0f),
+        static_cast<int>(panel.width - 12.0f), 2, accentBlue);
+    DrawRectangle(static_cast<int>(panel.x + 6.0f),
+        static_cast<int>(panel.y + 25.0f), 70, 2, accentYellow);
+    DrawTextFont("FANTASMA DEL CAMPEÓN", 22,
+        static_cast<int>(panel.y + 6.0f), 14, WHITE);
+
+    const auto drawGhostButton = [&](Rectangle bounds, const char* label,
+        bool enabled, bool active, int fontSize) {
+        const bool hovered = enabled && UiButton::IsHovered(bounds);
+        DrawRectangleRec(bounds,
+            !enabled ? Color{24, 40, 58, 235}
+            : hovered ? Color{42, 103, 143, 245}
+            : active ? Color{29, 88, 126, 245}
+            : Color{20, 58, 91, 245});
+        DrawRectangleLinesEx(bounds, active ? 2.0f : 1.0f,
+            enabled ? (active ? accentYellow : accentBlue)
+                    : Color{65, 107, 127, 255});
+        DrawTextFont(label,
+            static_cast<int>(bounds.x +
+                (bounds.width - MeasureTextFont(label, fontSize)) / 2.0f),
+            static_cast<int>(bounds.y + (bounds.height - fontSize) / 2.0f),
+            fontSize, enabled ? WHITE : Color{150, 175, 188, 255});
+    };
+    drawGhostButton(
         GhostPreviewButton(),
         m_competeAgainstGhost
             ? "LISTO PARA COMPETIR"
             : m_ghostPlayback.IsPlaying()
             ? "REPRODUCIENDO RECORRIDO"
             : "VER RECORRIDO DEL CAMPEÓN",
-        canUse && !m_competeAgainstGhost ? DARKGREEN : DARKGRAY,
-        canUse && !m_competeAgainstGhost ? WHITE : GRAY,
+        canUse && !m_competeAgainstGhost,
+        m_ghostPlayback.IsPlaying(),
         11
     );
-    UiButton::Draw(
+    drawGhostButton(
         GhostPauseButton(),
         "PARAR",
-        m_ghostPlayback.IsPlaying() ? MAROON : DARKGRAY,
-        WHITE,
+        m_ghostPlayback.IsPlaying(),
+        false,
         12
     );
-    UiButton::Draw(
+    drawGhostButton(
         GhostRestartButton(),
         "REINICIAR",
-        canUse && !m_competeAgainstGhost ? ORANGE : DARKGRAY,
-        canUse && !m_competeAgainstGhost ? WHITE : GRAY,
+        canUse && !m_competeAgainstGhost,
+        false,
         12
     );
-    UiButton::Draw(
+    drawGhostButton(
         GhostCompeteButton(),
         m_competeAgainstGhost
             ? "COMPETIR CON FANTASMA: SÍ"
             : "COMPETIR CON FANTASMA: NO",
-        m_competeAgainstGhost ? DARKGREEN : DARKGRAY,
-        canUse ? WHITE : GRAY,
+        canUse,
+        m_competeAgainstGhost,
         10
     );
 
@@ -1164,28 +1631,27 @@ void MainGameScene::RenderGhostControls() const {
             break;
         case GhostLoadStatus::Incompatible:
             message = "Grabación incompatible con esta versión";
-            messageColor = ORANGE;
+            messageColor = accentYellow;
             break;
         case GhostLoadStatus::Error:
             message = "Sin conexión: edición y juego siguen disponibles";
-            messageColor = ORANGE;
+            messageColor = accentYellow;
             break;
         case GhostLoadStatus::Idle:
             message = "Fantasma no disponible";
             break;
     }
-    DrawTextFont(message.c_str(), 22, 180, 11, messageColor);
+    DrawRectangle(static_cast<int>(panel.x + 6.0f),
+        static_cast<int>(panel.y + 100.0f),
+        static_cast<int>(panel.width - 12.0f), 1,
+        Fade(accentBlue, 0.65f));
+    DrawTextFont(message.c_str(), 22,
+        static_cast<int>(panel.y + 104.0f), 11, messageColor);
 }
 
 void MainGameScene::Render() const {
     BeginDrawing();
     ClearBackground(RAYWHITE);
-
-    if (m_stateMachine.IsResultsMode()) {
-        RenderResults();
-        EndDrawing();
-        return;
-    }
 
     const auto renderPassengersBeforeVehicle = [&]() {
         const std::vector<TrackedPart> trackedParts = CollectParts(
@@ -1292,6 +1758,8 @@ void MainGameScene::Render() const {
     };
 
     RenderGoalParticles();
+    RenderExplosionVisuals();
+    RenderDamageParticles();
     DrawTexturePro(
         goalTexture,
         Rectangle{0.0f, 0.0f, static_cast<float>(goalTexture.width), static_cast<float>(goalTexture.height)},
@@ -1355,27 +1823,27 @@ void MainGameScene::Render() const {
         );
         const float centerX = m_appContext->windowWidth / 2.0f;
         const float centerY = m_appContext->windowHeight / 2.0f;
-        DrawRectangle(
-            0, 0,
-            m_appContext->windowWidth,
-            m_appContext->windowHeight,
-            Fade(DARKGRAY, 0.5f)
+        const char* label = "¡Ya llegó el chofer, causa!";
+        const int labelX = static_cast<int>(
+            centerX - MeasureTextFont(label, 30) / 2
         );
-        const char* label = "Ya llego el chofer, causa!";
+        DrawTextFont(label, labelX + 2,
+            static_cast<int>(centerY - 88.0f), 30, BLACK);
         DrawTextFont(
             label,
-            static_cast<int>(centerX - MeasureTextFont(label, 30) / 2),
+            labelX,
             static_cast<int>(centerY - 90.0f),
             30,
             WHITE
         );
-        const char* number = TextFormat("%d", count);
-        DrawTextFont(
+        const Texture2D& number = m_appContext->textureLibrary->GetUi()
+            .game.countdownNumbers[static_cast<std::size_t>(count - 1)];
+        DrawTexturePro(
             number,
-            static_cast<int>(centerX - MeasureTextFont(number, 120) / 2),
-            static_cast<int>(centerY - 35.0f),
-            120,
-            WHITE
+            Rectangle{0.0f, 0.0f,
+                static_cast<float>(number.width), static_cast<float>(number.height)},
+            Rectangle{centerX - 80.0f, centerY - 30.0f, 160.0f, 160.0f},
+            Vector2{}, 0.0f, WHITE
         );
     }
     UiButton::DrawTextured(
@@ -1385,21 +1853,74 @@ void MainGameScene::Render() const {
         "Menú"
     );
     if (m_isEditableDraft && m_stateMachine.IsBuildMode()) {
-        UiButton::DrawTextured(
-            UiButton::CenteredAbove(
-                UiButton::PlaySideButton(
-                    m_appContext->windowWidth, m_appContext->windowHeight
-                ),
-                110.0f,
-                50.0f,
-                // 100.0f,
-                // 52.0f,
-                8.0f
-            ),
-            m_appContext->textureLibrary->GetUi().game.navDiseno,
-            true,
-            "DISEÑO"
+        const Rectangle designButton = DesignLevelButton(
+            m_appContext->windowWidth, m_appContext->windowHeight
         );
+        const UiGameTextures& gameUi = m_appContext->textureLibrary->GetUi().game;
+        UiButton::DrawTextureFit(gameUi.toolbarSlot.normal, designButton);
+        DrawTexturePro(
+            gameUi.navDiseno.normal,
+            Rectangle{116.0f, 18.0f, 168.0f, 151.0f},
+            Rectangle{designButton.x + 54.0f, designButton.y + 3.0f,
+                62.0f, 58.0f},
+            Vector2{}, 0.0f, WHITE
+        );
+        const bool hovered = UiButton::IsHovered(designButton);
+        if (hovered) {
+            DrawRectangleRec(Rectangle{
+                designButton.x + 4.0f, designButton.y + 4.0f,
+                designButton.width - 8.0f, designButton.height - 8.0f
+            }, Fade(WHITE, IsMouseButtonDown(MOUSE_BUTTON_LEFT) ? 0.10f : 0.18f));
+        }
+        const char* label = "Diseñar nivel";
+        DrawTextFont(label,
+            static_cast<int>(designButton.x +
+                (designButton.width - MeasureTextFont(label, 17)) / 2.0f),
+            static_cast<int>(designButton.y + 66.0f),
+            17, WHITE);
+    }
+
+    if (m_exitConfirmOpen) {
+        const int width = m_appContext->windowWidth;
+        const int height = m_appContext->windowHeight;
+        DrawRectangle(0, 0, width, height, Fade(BLACK, 0.62f));
+        const ExitConfirmDialogLayout layout =
+            GetExitConfirmDialogLayout(width, height);
+        const Rectangle& dialog = layout.dialog;
+        const Color accentGreen{129, 195, 71, 255};
+        const Color accentPink{237, 18, 121, 255};
+        const Color mutedText{190, 201, 203, 255};
+        const UiTextures& ui = m_appContext->textureLibrary->GetUi();
+
+        DrawRectangleRec(
+            Rectangle{dialog.x + 7.0f, dialog.y + 8.0f, dialog.width, dialog.height},
+            Fade(BLACK, 0.55f)
+        );
+        DrawRectangleRec(dialog, Color{12, 17, 24, 250});
+        DrawRectangleLinesEx(dialog, 3.0f, accentGreen);
+        DrawRectangle(
+            static_cast<int>(dialog.x + 3.0f),
+            static_cast<int>(dialog.y + 84.0f),
+            static_cast<int>(dialog.width - 6.0f),
+            3,
+            accentPink
+        );
+        DrawTextFont(
+            "¿SALIR DEL NIVEL?",
+            static_cast<int>(dialog.x + 24.0f),
+            static_cast<int>(dialog.y + 18.0f),
+            28,
+            GOLD
+        );
+        DrawTextFont(
+            "Volverás al selector y perderás el progreso no guardado.",
+            static_cast<int>(dialog.x + 24.0f),
+            static_cast<int>(dialog.y + 57.0f),
+            16,
+            mutedText
+        );
+        DrawExitConfirmAction(layout.cancel, ui.menuDialogCancel, "ESC: CANCELAR", true);
+        DrawExitConfirmAction(layout.confirm, ui.menuDialogAccept, "ENTER: SALIR", true);
     }
 
     EndDrawing();
@@ -1420,7 +1941,8 @@ void MainGameScene::RenderResults() const {
     const float panelWidth = (width - 96.0f) / 2.0f;
     const Rectangle rankingPanel{30.0f, 82.0f, panelWidth, height - 180.0f};
     const Rectangle scorePanel{
-        rankingPanel.x + panelWidth + 36.0f, 82.0f,
+        rankingPanel.x + panelWidth + 36.0f,
+        rankingPanel.y + (rankingPanel.height - 430.0f) / 2.0f,
         panelWidth, 430.0f
     };
     DrawRectangleRec(rankingPanel, Fade(BLACK, 0.86f));
@@ -1497,7 +2019,8 @@ void MainGameScene::RenderResults() const {
 
     const int panelX = static_cast<int>(scorePanel.x + 22.0f);
     const int valueX = static_cast<int>(scorePanel.x + scorePanel.width - 22.0f);
-    DrawTextFont("PUNTUACIÓN", panelX, 106, 28, GOLD);
+    const int scoreY = static_cast<int>(scorePanel.y);
+    DrawTextFont("PUNTUACIÓN", panelX, scoreY + 24, 28, GOLD);
     const auto row = [panelX, valueX, bodyText, accentPink](
         const std::string& label,
         std::int64_t value,
@@ -1517,64 +2040,90 @@ void MainGameScene::RenderResults() const {
         "Pasajeros recogidos (" +
             std::to_string(m_statistics.passengersCollected) + ")",
         m_score.passengerPickup,
-        150
+        scoreY + 68
     );
     row(
         "Pasajeros entregados (" +
             std::to_string(m_statistics.passengersDelivered) + ")",
         m_score.passengerDelivery,
-        186
+        scoreY + 104
     );
     row(
         "Piezas entregadas (" +
             std::to_string(m_statistics.partsDelivered) + "/" +
             std::to_string(m_statistics.initialParts) + ")",
         m_score.partDelivery,
-        222
+        scoreY + 140
     );
     row(
         "Construcción (" +
             std::to_string(m_statistics.initialParts) + " piezas)",
         m_score.constructionPenalty,
-        258
+        scoreY + 176
     );
     row(
         "Rapidez (" + std::to_string(m_statistics.driverTimeMs) + " ms)",
         m_score.speed,
-        294
+        scoreY + 212
     );
-    DrawLine(panelX, 365, valueX, 365, accentGreen);
-    DrawTextFont("TOTAL", panelX, 382, 42, GOLD);
+    DrawLine(panelX, scoreY + 283, valueX, scoreY + 283, accentGreen);
+    const UiTextures& ui = m_appContext->textureLibrary->GetUi();
+    const Texture2D& totalLabel = ui.scoreTotalLabel;
+    constexpr float totalLabelHeight = 54.0f;
+    const float totalLabelWidth = totalLabelHeight *
+        totalLabel.width / totalLabel.height;
+    UiButton::DrawTextureFit(totalLabel,
+        Rectangle{static_cast<float>(panelX), static_cast<float>(scoreY + 294),
+            totalLabelWidth, totalLabelHeight});
     const std::string total = std::to_string(m_score.total);
-    DrawTextFont(
-        total.c_str(),
-        static_cast<int>(valueX - MeasureTextFont(total.c_str(), 52)),
-        376,
-        52,
-        GOLD
+    DrawScoreValue(total, ui, static_cast<float>(valueX),
+        static_cast<float>(scoreY + 292),
+        std::max(20.0f, valueX - panelX - totalLabelWidth - 16.0f)
     );
     if (leaderboard.personalBest.available) {
         const std::string personal = "Récord personal local: " +
             std::to_string(leaderboard.personalBest.total);
-        DrawTextFont(personal.c_str(), panelX, 435, 16, bodyText);
+        DrawTextFont(personal.c_str(), panelX, scoreY + 353, 16, bodyText);
         DrawTextFont(
             leaderboard.personalBest.currentAttempt
                 ? "Nueva mejor marca local"
                 : "Tu mejor marca local anterior sigue vigente",
             panelX,
-            460,
+            scoreY + 378,
             13,
             leaderboard.personalBest.currentAttempt ? accentGreen : mutedText
         );
     }
 
+    const Rectangle returnButton = ResultsReturnButton(width, height);
     UiButton::DrawTextured(
-        ResultsReturnButton(width, height),
+        returnButton,
         m_appContext->textureLibrary->GetUi().resultsBack,
         true,
         "Volver"
     );
-    DrawTextFont("ENTER", width / 2 + 118, height - 52, 11, bodyText);
+    constexpr int enterSize = 11;
+    const char* enterLabel = "ENTER";
+    DrawTextFont(
+        enterLabel,
+        static_cast<int>(returnButton.x + returnButton.width -
+            MeasureTextFont(enterLabel, enterSize) - 10.0f),
+        static_cast<int>(returnButton.y + 8.0f),
+        enterSize,
+        bodyText
+    );
+    if (m_isEditableDraft && m_appContext->activeCustomLevel >= 0 &&
+        m_appContext->customLevels->HasValidApproval(
+            static_cast<std::size_t>(m_appContext->activeCustomLevel))) {
+        const char* publishMessage = "¡Ya puedes publicar tu nivel!";
+        const int messageX = static_cast<int>(
+            returnButton.x + returnButton.width + 18.0f
+        );
+        const int messageY = static_cast<int>(returnButton.y + 22.0f);
+        DrawTextFont(publishMessage, messageX + 1,
+            messageY + 1, 17, BLACK);
+        DrawTextFont(publishMessage, messageX, messageY, 17, GOLD);
+    }
 }
 
 std::optional<std::string> MainGameScene::PersonalRecordOwner() const {

@@ -41,6 +41,12 @@ if(EMSCRIPTEN)
     # --- WebAssembly Configuration ---
 
     configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/textures/ui/loading/cargando.png"
+        "${CMAKE_CURRENT_BINARY_DIR}/loading-cargando.png"
+        COPYONLY
+    )
+
+    configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Matcha Style.ttf"
         "${CMAKE_CURRENT_BINARY_DIR}/MatchaStyle.ttf"
         COPYONLY

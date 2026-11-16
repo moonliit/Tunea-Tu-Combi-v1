@@ -18,6 +18,7 @@ public:
     void Clear();
     void Assemble(BuildModel& model, std::unique_ptr<I_PhysicsWorld>& physics);
     std::size_t GetJointCount() const { return m_joints.size(); }
+    bool ArePartsConnected(PartId first, PartId second) const;
     std::vector<std::pair<PartId, PartId>> ConsumeBrokenConnections();
 };
 

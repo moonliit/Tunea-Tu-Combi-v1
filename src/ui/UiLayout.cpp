@@ -89,6 +89,7 @@ std::vector<UiControl> UiLayout::BuildControls(
     GameState state,
     const ActivationRegistry& activationRegistry,
     const EditorGrid& grid,
+    bool hasHandItem,
     int screenWidth,
     int screenHeight
 ) {
@@ -246,7 +247,7 @@ std::vector<UiControl> UiLayout::BuildControls(
             EditorAction::ClearSelection,
             "",
             DARKGRAY,
-            true,
+            hasHandItem,
             Rectangle{
                 static_cast<float>(screenWidth - 140),
                 static_cast<float>(screenHeight) / 2 + 90,

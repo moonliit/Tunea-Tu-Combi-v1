@@ -4,12 +4,13 @@
 #include "math/Vector2D.hpp"
 #include <raylib.h>
 #include <optional>
+#include <string>
 #include <vector>
 struct AppContext;
 class CustomLevelEditorScene final : public I_Scene {
     AppContext* m_context;
     Camera2D m_designCamera{};
-    enum class DesignTool { Terrain, Grid, Goal, Eraser, Passenger };
+    enum class DesignTool { Terrain, Grid, Goal, Eraser, Passenger, TntObstacle };
     DesignTool m_designTool = DesignTool::Terrain;
     std::optional<Math::Vector2D> m_gridAnchor;
     Math::Vector2D m_gridPreviewCursor{};
@@ -21,6 +22,7 @@ class CustomLevelEditorScene final : public I_Scene {
     bool m_rightPressOnCanvas = false;
     std::vector<Math::Vector2D> m_erasedPassengerPositions;
     bool m_musicPickerOpen = false;
+    std::string m_publishFeedbackDraftId;
     int m_musicCategory = 0;
     int m_musicTrack = 0;
     float m_musicListScroll = 0.0f;

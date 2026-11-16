@@ -32,6 +32,7 @@ constexpr const char* fontPath = "assets/fonts/Matcha Style.ttf";
 constexpr const char* PassengerSkirtlessPath = "assets/textures/passengers/passenger_skirtless.png";
 constexpr const char* PassengerSkirtPath = "assets/textures/passengers/passenger_skirt.png";
 constexpr const char* PassengerFacesDir = "assets/textures/passengers/faces";
+constexpr const char* ExplosionFramesDir = "assets/textures/vfx/explosion";
 
 Texture2D LoadSmoothTexture(const char* path, bool useBilinearFilter = true) {
     const Texture2D texture = LoadTexture(path);
@@ -148,6 +149,26 @@ void TextureLibrary::Initialize() {
         );
     }
 
+    m_explosionAnim.frames.clear();
+    if (DirectoryExists(ExplosionFramesDir)) {
+        FilePathList files = LoadDirectoryFilesEx(ExplosionFramesDir, ".png", false);
+        std::vector<std::string> paths;
+        paths.reserve(files.count);
+        for (unsigned int index = 0; index < files.count; ++index) {
+            paths.emplace_back(files.paths[index]);
+        }
+        UnloadDirectoryFiles(files);
+        std::sort(paths.begin(), paths.end());
+
+        for (const std::string& path : paths) {
+            const Texture2D texture = LoadTexture(path.c_str());
+            if (texture.id == 0) continue;
+            SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+            m_explosionAnim.frames.push_back(texture);
+        }
+    }
+    m_damageStarTexture = LoadSmoothTexture("assets/textures/vfx/star.png", true);
+
     // UI textures (static, startup-loaded; missing files fall back to missing texture)
     m_ui.logo = LoadSmoothTexture("assets/textures/ui/branding/logo.png");
 
@@ -164,15 +185,29 @@ void TextureLibrary::Initialize() {
     m_ui.menuReset = LoadButtonSkin("assets/textures/ui/main_menu/buttons/reiniciar");
     m_ui.menuEditorLevels = LoadButtonSkin("assets/textures/ui/main_menu/buttons/editor_de_niveles");
     m_ui.menuCreateLevel = LoadButtonSkin("assets/textures/ui/main_menu/buttons/crear_nivel");
+    m_ui.menuCreatePlus = LoadSmoothTexture("assets/textures/ui/main_menu/buttons/add_level_plus.png");
     m_ui.menuBack = LoadButtonSkin("assets/textures/ui/main_menu/buttons/menu");
     m_ui.resultsBack = LoadButtonSkin("assets/textures/ui/results/volver");
+    m_ui.scoreTotalLabel = LoadSmoothTexture("assets/textures/ui/numbers/total.png");
+    for (std::size_t index = 0; index < m_ui.scoreDigits.size(); ++index) {
+        const std::string path = std::format(
+            "assets/textures/ui/numbers/{}.png", index
+        );
+        m_ui.scoreDigits[index] = LoadSmoothTexture(path.c_str());
+    }
+    m_ui.scoreMinus = LoadSmoothTexture("assets/textures/ui/numbers/minus.png");
     m_ui.menuEditAndPlay = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/editar_y_jugar");
     m_ui.menuPublish = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/publicar");
     m_ui.menuDelete = LoadButtonSkin("assets/textures/ui/main_menu/custom_levels/borrar");
+    m_ui.menuDialogAccept = LoadButtonSkin("assets/textures/ui/main_menu/dialog/aceptar");
     m_ui.menuDialogCancel = LoadButtonSkin("assets/textures/ui/main_menu/dialog/cancelar");
     m_ui.menuDialogCreate = LoadButtonSkin("assets/textures/ui/main_menu/dialog/crear");
     m_ui.menuCommunity = LoadButtonSkin("assets/textures/ui/main_menu/nav/community");
     m_ui.menuMyLevels = LoadButtonSkin("assets/textures/ui/main_menu/nav/my_levels");
+    m_ui.communityPreviousLabel = LoadSmoothTexture(
+        "assets/textures/ui/main_menu/community/anterior.png");
+    m_ui.communityNextLabel = LoadSmoothTexture(
+        "assets/textures/ui/main_menu/community/siguiente.png");
 
     for (std::size_t index = 0; index < m_ui.menuLevelTitles.size(); ++index) {
         m_ui.menuLevelTitles[index] = LoadButtonSkin(
@@ -183,6 +218,12 @@ void TextureLibrary::Initialize() {
     // main game UI
     m_ui.game.toolbarSlot = LoadButtonSkin("assets/textures/ui/game/toolbar/slot");
     m_ui.game.editHammer = LoadSmoothTexture("assets/textures/ui/level_editor/edit_hammer.png");
+    for (std::size_t index = 0; index < m_ui.game.countdownNumbers.size(); ++index) {
+        const std::string path = std::format(
+            "assets/textures/ui/numbers/countdown_{}.png", index + 1
+        );
+        m_ui.game.countdownNumbers[index] = LoadSmoothTexture(path.c_str());
+    }
     m_ui.game.modePlay = LoadButtonSkin("assets/textures/ui/game/mode/play");
     m_ui.game.modeEdit = LoadButtonSkin("assets/textures/ui/game/mode/edit");
     m_ui.game.clearSelection = LoadButtonSkin("assets/textures/ui/game/actions/clear_selection_drop");
@@ -230,18 +271,30 @@ void TextureLibrary::Shutdown() {
     UnloadUiSkin(m_ui.menuReset);
     UnloadUiSkin(m_ui.menuEditorLevels);
     UnloadUiSkin(m_ui.menuCreateLevel);
+    UnloadTexture(m_ui.menuCreatePlus);
     UnloadUiSkin(m_ui.menuBack);
     UnloadUiSkin(m_ui.resultsBack);
+    UnloadTexture(m_ui.scoreTotalLabel);
+    for (Texture2D& digit : m_ui.scoreDigits) {
+        UnloadTexture(digit);
+    }
+    UnloadTexture(m_ui.scoreMinus);
     UnloadUiSkin(m_ui.menuEditAndPlay);
     UnloadUiSkin(m_ui.menuPublish);
     UnloadUiSkin(m_ui.menuDelete);
+    UnloadUiSkin(m_ui.menuDialogAccept);
     UnloadUiSkin(m_ui.menuDialogCancel);
     UnloadUiSkin(m_ui.menuDialogCreate);
     UnloadUiSkin(m_ui.menuCommunity);
     UnloadUiSkin(m_ui.menuMyLevels);
+    UnloadTexture(m_ui.communityPreviousLabel);
+    UnloadTexture(m_ui.communityNextLabel);
 
     UnloadUiSkin(m_ui.game.toolbarSlot);
     UnloadTexture(m_ui.game.editHammer);
+    for (Texture2D& number : m_ui.game.countdownNumbers) {
+        UnloadTexture(number);
+    }
     UnloadUiSkin(m_ui.game.modePlay);
     UnloadUiSkin(m_ui.game.modeEdit);
     UnloadUiSkin(m_ui.game.clearSelection);
@@ -254,6 +307,13 @@ void TextureLibrary::Shutdown() {
     UnloadUiSkin(m_ui.game.navMenu);
     UnloadUiSkin(m_ui.game.navDiseno);
     UnloadTexture(m_ui.game.toolbarSelected);
+
+    for (Texture2D& frame : m_explosionAnim.frames) {
+        UnloadTexture(frame);
+    }
+    m_explosionAnim.frames.clear();
+    UnloadTexture(m_damageStarTexture);
+    m_damageStarTexture = Texture2D{};
 
     m_initialized = false;
 }

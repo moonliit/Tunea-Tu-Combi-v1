@@ -13,6 +13,7 @@ public:
         m_textures(textures) {}
 
     void Render(const PartRenderState& state) const;
+    void RenderStaticTnt(Math::Vector2D position, float cellSize) const;
     void RenderContained(
         const Part& part,
         const EditorGrid& grid,

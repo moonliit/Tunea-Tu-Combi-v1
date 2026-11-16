@@ -7,7 +7,6 @@
 #include <string>
 #include <unordered_map>
 #include <optional>
-#include <print>
 
 struct Scenario {
     enum Type {
@@ -102,6 +101,7 @@ class AudioController {
     Sound m_partPlace{};
     Sound m_sailSound{};
     std::array<Sound, 9> m_damageSounds{};
+    std::array<Sound, 12> m_screamingSounds{};
     std::array<Sound, 4> m_breakageSounds{};
     Sound m_explosionSound{};
     std::array<Sound, 3> m_horns{};
@@ -125,6 +125,8 @@ class AudioController {
     bool m_initialized = false;
     float m_damageSoundsTimeCooldown = 1.0f;
     float m_damageSoundsTimer = 0.0f;
+    float m_screamingSoundsTimeCooldown = 0.5f;
+    float m_screamingSoundsTimer = 0.0f;
 
     void BeginTransition(Scenario target);
     const MusicWithPath& GetMusicFromScenario(Scenario scenario) const;
@@ -148,6 +150,7 @@ public:
     void PlaySail();
     void PlayDriverHorn();
     void PlayDamageEffect();
+    void PlayScreamingEffect();
     void PlayBreakageEffect();
     void PlayTntExplosion(int amount);
     void SetFanActive(bool active);

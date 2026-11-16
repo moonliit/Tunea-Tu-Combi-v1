@@ -13,21 +13,14 @@
 
 namespace {
 
-void DrawHotkeyBadge(Rectangle bounds, int hotkey) {
-    const Rectangle badge{
-        bounds.x + bounds.width - 23.0f,
-        bounds.y + 5.0f,
-        18.0f,
-        18.0f
-    };
-    DrawRectangleRec(badge, Fade(BLACK, 0.75f));
-    DrawTextFont(
-        TextFormat("%d", hotkey),
-        static_cast<int>(badge.x + 5.0f),
-        static_cast<int>(badge.y + 2.0f),
-        12,
-        WHITE
-    );
+void DrawRaisedText(const char* text, int x, int y, int fontSize, Color face) {
+    const Color outline{12, 14, 18, 255};
+    DrawTextFont(text, x + 3, y + 4, fontSize, outline);
+    DrawTextFont(text, x - 1, y, fontSize, outline);
+    DrawTextFont(text, x + 1, y, fontSize, outline);
+    DrawTextFont(text, x, y - 1, fontSize, outline);
+    DrawTextFont(text, x, y + 1, fontSize, outline);
+    DrawTextFont(text, x, y, fontSize, face);
 }
 
 void DrawCenteredTexture(const Texture2D& texture, Rectangle bounds, float padding, Color tint) {
@@ -67,6 +60,58 @@ void DrawActionTexture(const Texture2D& texture, Rectangle bounds, float rotatio
     );
 }
 
+void DrawCancelPieceIcon(
+    Rectangle bounds,
+    const Texture2D& piece,
+    bool enabled,
+    bool hovered
+) {
+    const Rectangle pieceBounds{bounds.x + 18.0f, bounds.y + 7.0f,
+        43.0f, 43.0f};
+    UiButton::DrawTextureFit(piece, pieceBounds,
+        enabled ? WHITE : Color{120, 120, 120, 180});
+    DrawRectangleLinesEx(pieceBounds, 2.0f,
+        enabled ? Color{243, 237, 33, 255} : Color{105, 105, 105, 255});
+
+    const Vector2 badge{bounds.x + 69.0f, bounds.y + 28.0f};
+    DrawCircleV(badge, 16.0f,
+        enabled ? Color{18, 22, 27, 255} : Color{38, 38, 38, 255});
+    DrawCircleLines(static_cast<int>(badge.x), static_cast<int>(badge.y),
+        15.0f, enabled
+            ? (hovered ? WHITE : Color{237, 18, 121, 255})
+            : Color{105, 105, 105, 255});
+    const Color crossColor = enabled
+        ? Color{237, 18, 121, 255} : Color{105, 105, 105, 255};
+    DrawLineEx({badge.x - 7.0f, badge.y - 7.0f},
+        {badge.x + 7.0f, badge.y + 7.0f}, 3.0f, crossColor);
+    DrawLineEx({badge.x + 7.0f, badge.y - 7.0f},
+        {badge.x - 7.0f, badge.y + 7.0f}, 3.0f, crossColor);
+
+    const char* label = "Cancelar";
+    const int fontSize = 11;
+    DrawTextFont(label,
+        static_cast<int>(bounds.x +
+            (bounds.width - MeasureTextFont(label, fontSize)) / 2.0f),
+        static_cast<int>(bounds.y + 55.0f), fontSize,
+        enabled ? WHITE : GRAY);
+}
+
+void DrawDriverRequirement(Rectangle bounds, bool missing) {
+    const char* label = "¡OBLIGATORIO!";
+    const float width = std::max(bounds.width,
+        MeasureTextFont(label, 11) + 12.0f);
+    const Rectangle badge{bounds.x + (bounds.width - width) / 2.0f,
+        bounds.y - 20.0f, width, 20.0f};
+    DrawRectangleRec(badge, Fade(BLACK, 0.9f));
+    DrawRectangleLinesEx(badge, 1.0f,
+        missing ? Color{237, 18, 121, 255} : Color{129, 195, 71, 255});
+    DrawTextFont(label,
+        static_cast<int>(badge.x +
+            (badge.width - MeasureTextFont(label, 11)) / 2.0f),
+        static_cast<int>(badge.y + 4.0f), 11,
+        missing ? GOLD : Color{153, 183, 135, 255});
+}
+
 PartType ToolbarToPartType(ToolbarPart part) {
     return static_cast<PartType>(part);
 }
@@ -78,7 +123,7 @@ const UiButtonSkin& SkinForEditorAction(const UiGameTextures& game, EditorAction
         case EditorAction::MoveUp: return game.moveUp;
         case EditorAction::MoveDown: return game.moveDown;
         case EditorAction::ClearBuild: return game.clearBuild;
-        case EditorAction::ClearSelection: return game.clearSelection;
+        case EditorAction::ClearSelection: return game.toolbarSlot;
         case EditorAction::EnterView: return game.enterView;
         case EditorAction::StartPlay: return game.modePlay;
         case EditorAction::ReturnToBuild: return game.modeEdit;
@@ -144,18 +189,6 @@ void DrawTexturedControl(
             );
         }
     }
-    if (control.type == UiControlType::Activation) {
-        DrawRectangleRec(
-            Rectangle{
-                control.bounds.x + 2.0f,
-                control.bounds.y + control.bounds.height - 20.0f,
-                control.bounds.width - 4.0f,
-                18.0f
-            },
-            Fade(BLACK, 0.65f)
-        );
-    }
-
     // label overlay (kept for clarity; can be hidden when art includes text)
     if (!control.label.empty()) {
         const char* label = control.label.data();
@@ -172,7 +205,7 @@ void DrawTexturedControl(
     }
 
     if (hotkey.has_value()) {
-        DrawHotkeyBadge(control.bounds, hotkey.value());
+        UiButton::DrawHotkeyNumber(control.bounds, hotkey.value());
     }
 }
 
@@ -203,6 +236,7 @@ void GameUiRenderer::Render(
         state,
         activationRegistry,
         grid,
+        buildSession.HasHandItem(),
         screenWidth,
         screenHeight
     );
@@ -252,6 +286,16 @@ void GameUiRenderer::Render(
             control, *skin, gameUi, selected, contentTexture,
             contentRotation, hotkey
         );
+        if (control.type == UiControlType::Editor &&
+            control.editorAction == EditorAction::ClearSelection) {
+            DrawCancelPieceIcon(control.bounds,
+                textures.GetPartTexture(PartType::SquareBlock),
+                control.enabled, UiButton::IsHovered(control.bounds));
+        }
+        if (control.type == UiControlType::ToolbarPart &&
+            control.toolbarPart == ToolbarPart::DriverBox) {
+            DrawDriverRequirement(control.bounds, control.enabled);
+        }
     }
 
     // ENTER badge for main mode button (play/edit side button) when present
@@ -305,15 +349,15 @@ void GameUiRenderer::Render(
     if (state == GameState::Build) {
         modeText = "MODO: DISEÑO";
         modeControlsText = "(Clic izq.: colocar, clic der.: borrar, ENTER: jugar)";
-        modeTextColor = DARKGREEN;
+        modeTextColor = Color{129, 195, 71, 255};
     } else if (state == GameState::View) {
         modeText = "MODO: VISTA";
         modeControlsText = "(Arrastra para mover la cámara, ESC: diseñar)";
-        modeTextColor = DARKPURPLE;
+        modeTextColor = Color{137, 211, 237, 255};
     } else {
         modeText = "MODO: JUEGO";
         modeControlsText = "(Pulsa ENTER para volver al diseño)";
-        modeTextColor = MAROON;
+        modeTextColor = Color{237, 78, 150, 255};
     }
 
     const int modeTextFontSize = 30;
@@ -323,6 +367,8 @@ void GameUiRenderer::Render(
     const int verticalPadding = 4;
     const int modeControlsTextY = modeTextY + verticalPadding + modeTextFontSize;
 
-    DrawTextFont(modeText.c_str(), modeTextX, modeTextY, modeTextFontSize, modeTextColor);
-    DrawTextFont(modeControlsText.c_str(), modeTextX, modeControlsTextY, modeControlsFontSize, modeTextColor);
+    DrawRaisedText(modeText.c_str(), modeTextX, modeTextY,
+        modeTextFontSize, modeTextColor);
+    DrawRaisedText(modeControlsText.c_str(), modeTextX,
+        modeControlsTextY, modeControlsFontSize, WHITE);
 }

@@ -117,6 +117,7 @@ deploy_web() {
         esac
     done
     upload "$web/thumbnail.jpg" thumbnail.jpg image/jpeg
+    upload "$web/loading-cargando.png" loading-cargando.png image/png
     aws cloudfront create-invalidation --distribution-id "$distribution" --paths '/*' >/dev/null
 }
 

@@ -129,6 +129,13 @@ void PartRenderer::Render(const PartRenderState& state) const {
     );
 }
 
+void PartRenderer::RenderStaticTnt(Math::Vector2D position, float cellSize) const {
+    DrawSprite(
+        m_textures.GetPartTexture(PartType::TNTBarrel),
+        position.ToRayVec(), cellSize, 0.0f, WHITE
+    );
+}
+
 void PartRenderer::RenderContained(
     const Part& part,
     const EditorGrid& grid,

@@ -9,7 +9,9 @@
 
 namespace {
 
+constexpr float TntObstacleArmingSeconds = 0.5f;
 constexpr float DamageImpulseThreshold = 150.0f;
+constexpr float PassengerHurtImpulseThreshold = 80.0f;
 constexpr float TntImpactImpulseThreshold = 10.0f;
 constexpr float ContainerEjectDamageThreshold = 150.0f;
 
@@ -68,9 +70,19 @@ PlaySession::PlaySession(
     const Math::TerrainDefinition& terrain,
     Math::Vector2D gravity
 ):
+    PlaySession(model, terrain, std::vector<TntObstacleDefinition>{}, gravity) {}
+
+PlaySession::PlaySession(
+    BuildModel& model,
+    const Math::TerrainDefinition& terrain,
+    const std::vector<TntObstacleDefinition>& tntObstacles,
+    Math::Vector2D gravity
+):
     m_model(model),
     m_runtimeModel(model),
     m_terrainDefinition(terrain),
+    m_tntObstacles(tntObstacles),
+    m_initialTntObstacles(tntObstacles),
     m_gravity(gravity)
 {
     CreatePhysicsWorld(SampleTerrain(terrain), true);
@@ -84,6 +96,7 @@ void PlaySession::CreatePhysicsWorld(
     constexpr int velocityIterations = 8;
     constexpr int positionIterations = 3;
 
+    m_tntObstacleParts.clear();
     m_physics = std::make_unique<Physics::World>(
         m_gravity, subStepCount, velocityIterations, positionIterations
     );
@@ -125,6 +138,25 @@ void PlaySession::CreatePhysicsWorld(
             }
         }
     }
+    for (const auto& obstacle : m_tntObstacles) {
+        auto part = std::make_unique<Part>(
+            Math::GridCoord{0, 0}, PartType::TNTBarrel,
+            PartOrientation::Up, static_cast<PartId>(1000000 + m_tntObstacleParts.size())
+        );
+        auto body = m_physics->CreateBox(
+            obstacle.position,
+            0.0f,
+            Math::Vector2D{
+                m_model.GetGrid().GetCellSize(),
+                m_model.GetGrid().GetCellSize()
+            },
+            1.0f,
+            BodyType::Dynamic
+        );
+        part->AdoptPhysicsBody(body, m_physics.get(), nullptr);
+        part->SetActivationEnabled(false);
+        m_tntObstacleParts.push_back(std::move(part));
+    }
     m_terrainVertices = terrainSections.empty()
         ? std::vector<Math::Vector2D>{}
         : terrainSections.front();
@@ -132,6 +164,11 @@ void PlaySession::CreatePhysicsWorld(
 
 void PlaySession::Start() {
     m_ejectedParts.clear();
+    m_tntObstacleLandingProtection = true;
+    m_tntObstacleArmingRemaining = TntObstacleArmingSeconds;
+    for (const auto& obstacle : m_tntObstacleParts) {
+        if (obstacle) obstacle->SetActivationEnabled(false);
+    }
     if (m_physics) {
         for (const auto& passenger : m_ejectedPassengers) {
             if (passenger.body) m_physics->RemoveBody(passenger.body);
@@ -140,6 +177,13 @@ void PlaySession::Start() {
     m_ejectedPassengers.clear();
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
+    m_explosionVisuals.clear();
+    m_damageVisuals.clear();
+    m_breakageVisuals.clear();
+    m_tntConsumedAmount = 0;
+    m_damageConsumed = false;
+    m_breakageConsumed = false;
+    m_screamingConsumed = false;
     m_runtimeModel = m_model;
     m_assembler.Assemble(m_runtimeModel, m_physics);
     BuildActivationSubscriptions();
@@ -147,6 +191,9 @@ void PlaySession::Start() {
 
 void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_terrainDefinition = terrain;
+    m_tntObstacles = m_initialTntObstacles;
+    m_tntObstacleLandingProtection = true;
+    m_tntObstacleArmingRemaining = TntObstacleArmingSeconds;
     m_assembler.Clear();
     for (Part* part : m_runtimeModel.GetGrid().GetActiveParts()) {
         part->ResetPhysicsBody();
@@ -160,6 +207,13 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_ejectedPassengers.clear();
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
+    m_explosionVisuals.clear();
+    m_damageVisuals.clear();
+    m_breakageVisuals.clear();
+    m_tntConsumedAmount = 0;
+    m_damageConsumed = false;
+    m_breakageConsumed = false;
+    m_screamingConsumed = false;
 
     CreatePhysicsWorld(SampleTerrain(terrain), true);
     m_activationRegistry.Clear();
@@ -167,7 +221,26 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
 
 void PlaySession::Update(float deltaTime) {
     m_activationRegistry.Update(deltaTime);
+    if (m_tntObstacleArmingRemaining > 0.0f) {
+        m_tntObstacleArmingRemaining = std::max(
+            0.0f, m_tntObstacleArmingRemaining - deltaTime
+        );
+        if (m_tntObstacleArmingRemaining <= 0.0f) {
+            for (const auto& obstacle : m_tntObstacleParts) {
+                if (obstacle) obstacle->SetActivationEnabled(true);
+            }
+        }
+    }
+    for (const auto& obstacle : m_tntObstacleParts) {
+        if (obstacle) obstacle->UpdateActivation(deltaTime);
+    }
     m_physics->Step(deltaTime);
+    for (std::size_t index = 0; index < m_tntObstacleParts.size(); ++index) {
+        const auto& body = m_tntObstacleParts[index]->GetPhysicsBody();
+        if (body && index < m_tntObstacles.size()) {
+            m_tntObstacles[index].position = body->GetPosition();
+        }
+    }
     ProcessImpacts();
     RemoveConsumedTnt();
 }
@@ -181,8 +254,24 @@ void PlaySession::ProcessImpacts() {
     const bool landingProtectionActive =
         m_physics && m_physics->IsLandingImpactProtectionActive();
 
-    for (const PhysicsImpact& impact : m_physics->ConsumeImpactEvents()) {
+    const auto impacts = m_physics->ConsumeImpactEvents();
+    const auto isLevelObstacle = [this](Part* part) {
+        return std::any_of(
+            m_tntObstacleParts.begin(), m_tntObstacleParts.end(),
+            [part](const std::unique_ptr<Part>& obstacle) {
+                return obstacle.get() == part;
+            }
+        );
+    };
+
+    for (const PhysicsImpact& impact : impacts) {
         if (impact.part == nullptr) continue;
+
+        // cualquier golpe fuerte asusta a los pasajeros a bordo
+        if (!m_carriedPassengersByHost.empty() &&
+            impact.impulse >= DamageImpulseThreshold) {
+            m_screamingConsumed = true;
+        }
 
         // container hit: explode contained tnt or eject contained part on strong impact
         if (GetPartDefinition(impact.part->GetType()).role == PartRole::Container &&
@@ -192,9 +281,8 @@ void PlaySession::ProcessImpacts() {
             Part* contained = impact.part->GetContainedPart();
             if (contained != nullptr && contained->GetType() == PartType::TNTBarrel) {
                 if (!landingProtectionActive) {
-                    contained->Activate();
                     if (impactedPartsForTnt.find(contained) == impactedPartsForTnt.end()) {
-                        m_tntConsumedAmount++;
+                        contained->Activate();
                         impactedPartsForTnt.insert(contained);
                     }
                     m_damageConsumed = true;
@@ -208,30 +296,46 @@ void PlaySession::ProcessImpacts() {
             continue;
         }
 
-        // carried passenger hit: eject passenger from carrying block on strong impact
+        // carried passenger hit: hurt (scream + damage) and eject on strong impact
         if (!landingProtectionActive &&
             impact.part->GetType() == PartType::SquareBlock &&
-            impact.impulse >= ContainerEjectDamageThreshold &&
             passengerEjectedHosts.find(impact.part) == passengerEjectedHosts.end() &&
             m_carriedPassengersByHost.find(impact.part->GetId()) != m_carriedPassengersByHost.end()) {
-            passengerHostsToEject.push_back(impact.part);
-            m_damageConsumed = true;
-            passengerEjectedHosts.insert(impact.part);
-            continue;
+            if (impact.impulse >= ContainerEjectDamageThreshold) {
+                passengerHostsToEject.push_back(impact.part);
+                m_damageConsumed = true;
+                m_screamingConsumed = true;
+                m_breakageConsumed = true;
+                passengerEjectedHosts.insert(impact.part);
+                continue;
+            }
+            if (impact.impulse >= PassengerHurtImpulseThreshold) {
+                m_damageConsumed = true;
+                m_screamingConsumed = true;
+                continue;
+            }
         }
 
         if (
             impact.part->GetType() == PartType::TNTBarrel &&
+            (!isLevelObstacle(impact.part) || !m_tntObstacleLandingProtection) &&
             impact.impulse >= TntImpactImpulseThreshold
         ) {
-            // todo: draw explosion effect
-            impact.part->Activate();
             if (impactedPartsForTnt.find(impact.part) == impactedPartsForTnt.end()) {
-                m_tntConsumedAmount++;
+                impact.part->Activate();
                 impactedPartsForTnt.insert(impact.part);
             }
         } else if (impact.impulse >= DamageImpulseThreshold) {
-            // todo: draw damage effect
+            Math::Vector2D damagePosition{0.0f, 0.0f};
+            if (impact.part != nullptr) {
+                if (auto body = impact.part->GetPhysicsBody()) {
+                    damagePosition = body->GetPosition();
+                } else {
+                    damagePosition =
+                        impact.part->GetRenderState(m_runtimeModel.GetGrid()).position;
+                }
+            }
+            m_damageVisuals.push_back(DamageVisual{.position = damagePosition});
             m_damageConsumed = true;
         }
     }
@@ -252,9 +356,10 @@ void PlaySession::ProcessImpacts() {
     }
 
     for (const Math::Vector2D& breakagePos : m_physics->ConsumeBreakagePositions()) {
-        // todo: draw breakage effect
+        m_breakageVisuals.push_back(DamageVisual{.position = breakagePos});
         m_breakageConsumed = true;
     }
+    m_tntObstacleLandingProtection = false;
 }
 
 void PlaySession::RemoveConsumedTnt() {
@@ -276,7 +381,15 @@ void PlaySession::RemoveConsumedTnt() {
         }
     }
 
+    const float cellSize = m_runtimeModel.GetGrid().GetCellSize();
     for (Part* root : containedToRemove) {
+        const PartRenderState state =
+            root->GetRenderState(m_runtimeModel.GetGrid());
+        m_tntConsumedAmount++;
+        m_explosionVisuals.push_back(ExplosionVisual{
+            .position = state.position,
+            .radius = cellSize * 4.0f
+        });
         std::unique_ptr<Part> contained = root->RemoveContainedPart();
         if (contained == nullptr) continue;
         m_physics->RemoveBody(contained->GetPhysicsBody());
@@ -285,8 +398,31 @@ void PlaySession::RemoveConsumedTnt() {
     for (const Math::GridCoord coord : rootsToRemove) {
         const auto& part = m_runtimeModel.GetGrid().GetPart(coord);
         if (!part.has_value()) continue;
+        m_tntConsumedAmount++;
+        m_explosionVisuals.push_back(ExplosionVisual{
+            .position = part->GetRenderState(m_runtimeModel.GetGrid()).position,
+            .radius = cellSize * 3.0f
+        });
         m_physics->RemoveBody(part->GetPhysicsBody());
         m_runtimeModel.GetGrid().RemovePart(coord);
+    }
+    for (std::size_t index = 0; index < m_tntObstacleParts.size();) {
+        Part& obstacle = *m_tntObstacleParts[index];
+        if (!obstacle.IsRemovalRequested()) {
+            ++index;
+            continue;
+        }
+        const Math::Vector2D position = obstacle.GetPhysicsBody()
+            ? obstacle.GetPhysicsBody()->GetPosition()
+            : Math::Vector2D{0.0f, 0.0f};
+        m_tntConsumedAmount++;
+        m_explosionVisuals.push_back(ExplosionVisual{
+            .position = position,
+            .radius = m_runtimeModel.GetGrid().GetCellSize() * 3.0f
+        });
+        m_physics->RemoveBody(obstacle.GetPhysicsBody());
+        m_tntObstacleParts.erase(m_tntObstacleParts.begin() + index);
+        m_tntObstacles.erase(m_tntObstacles.begin() + index);
     }
     if (!rootsToRemove.empty() || !containedToRemove.empty()) {
         BuildActivationSubscriptions();

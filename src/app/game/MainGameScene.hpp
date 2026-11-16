@@ -40,6 +40,10 @@ private:
     Vector2 m_editorCameraTarget;
     float m_editorCameraZoom = 1.0f;
     Vector2 m_routePreviewStart{};
+    Vector2 m_routeOverviewTarget{};
+    Vector2 m_routeOverviewSecondTarget{};
+    float m_routeOverviewZoom = 1.0f;
+    bool m_routePreviewSplit = false;
     float m_routePreviewElapsed = 0.0f;
     float m_routePreviewDuration = 0.0f;
     bool m_routePreviewActive = false;
@@ -55,6 +59,7 @@ private:
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
     bool m_levelCompleted = false;
+    bool m_exitConfirmOpen = false;
     IdentityScope m_runIdentity;
     double m_elapsedMs = 0.0;
     std::vector<bool> m_passengerCollected;
@@ -73,6 +78,41 @@ private:
     std::vector<GoalParticle> m_goalParticles;
     void UpdateGoalParticles(float dt);
     void RenderGoalParticles() const;
+
+    struct ExplosionVisualInstance {
+        Math::Vector2D position{0.0f, 0.0f};
+        float radius = 1.0f;
+        int frame = 0;
+        float timer = 0.0f;
+    };
+    std::vector<ExplosionVisualInstance> m_explosionVisuals;
+    void UpdateExplosionVisuals(float dt);
+    void RenderExplosionVisuals() const;
+
+    struct DamageStarParticle {
+        Math::Vector2D position{0.0f, 0.0f};
+        Math::Vector2D velocity{0.0f, 0.0f};
+        float life = 0.0f;
+        float maxLife = 1.0f;
+        float size = 1.0f;
+        float rotation = 0.0f;
+        float angularVelocity = 0.0f;
+    };
+    std::vector<DamageStarParticle> m_damageParticles;
+    void SpawnDamageStarBurst(
+        const Math::Vector2D& position,
+        float cellSize,
+        int particleCount,
+        float speedMin,
+        float speedMax,
+        float lifeMin,
+        float lifeMax,
+        float sizeMinScale,
+        float sizeMaxScale,
+        float spread
+    );
+    void UpdateDamageParticles(float dt);
+    void RenderDamageParticles() const;
     GoalWindowTracker m_goalWindow;
     Scoring::RunStatistics m_statistics;
     Scoring::ScoreBreakdown m_score;
@@ -84,6 +124,7 @@ private:
     void ResetToBuildMode();
     void ResetEditorCamera();
     void FinishRoutePreview();
+    void ReturnToCustomLevelEditor();
     void ReturnToLevelSelector();
     void TransitionToPlayMode();
     void UpdateGoalWindow(double frameMs);

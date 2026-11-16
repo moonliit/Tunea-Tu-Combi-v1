@@ -33,6 +33,10 @@ struct PassengerDefinition {
     std::string face;
 };
 
+struct TntObstacleDefinition {
+    Math::Vector2D position;
+};
+
 struct GridDefinition {
     Math::GridCoord dims;
     Math::Vector2D worldPos;
@@ -47,6 +51,7 @@ struct LevelDefinition {
     std::optional<CameraDefinition> initialCamera;
     GoalDefinition goal;
     std::vector<PassengerDefinition> passengers;
+    std::vector<TntObstacleDefinition> tntObstacles;
     std::vector<Math::Vector2D> terrainControlPoints;
     int catmullRomResolution = 8;
 

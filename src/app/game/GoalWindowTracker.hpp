@@ -17,6 +17,7 @@ struct GoalPartSample {
     double horizontalRadius;
     bool initial;
     bool driver;
+    bool driverVehiclePart;
 };
 
 struct GoalPassengerSample {

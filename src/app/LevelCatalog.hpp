@@ -12,24 +12,69 @@ struct LevelMenuEntry {
 inline constexpr std::array OfficialLevels{
     LevelMenuEntry{
         .levelIndex = 1,
-        .jsonPath = "assets/levels/level_1.json",
-        .customMusicPath = "assets/audio/custom/N1 - La Colegiala.ogg",
+        .jsonPath = "assets/levels/level_01.json",
+        .customMusicPath = "assets/audio/custom/Elsa.ogg",
     },
     LevelMenuEntry{
         .levelIndex = 2,
-        .jsonPath = "assets/levels/level_2.json",
-        .customMusicPath = "assets/audio/custom/N2 - Soy Provinciano.ogg",
+        .jsonPath = "assets/levels/level_02.json",
+        .customMusicPath = "assets/audio/custom/Nunca Pense Llorar.ogg",
     },
     LevelMenuEntry{
         .levelIndex = 3,
-        .jsonPath = "assets/levels/level_3.json",
-        .customMusicPath = "assets/audio/custom/N3 - El Aguajal.ogg",
+        .jsonPath = "assets/levels/level_03.json",
+        .customMusicPath = "assets/audio/custom/La Colegiala.ogg",
     },
     LevelMenuEntry{
         .levelIndex = 4,
-        .jsonPath = "assets/levels/level_4.json",
-        .customMusicPath = "assets/audio/custom/N4 - A Patricia.ogg",
-    }
+        .jsonPath = "assets/levels/level_04.json",
+        .customMusicPath = "assets/audio/custom/El Embrujo.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 5,
+        .jsonPath = "assets/levels/level_05.json",
+        .customMusicPath = "assets/audio/custom/Soy Provinciano.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 6,
+        .jsonPath = "assets/levels/level_06.json",
+        .customMusicPath = "assets/audio/custom/Lo Que Pasó, Pasó.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 7,
+        .jsonPath = "assets/levels/level_07.json",
+        .customMusicPath = "assets/audio/custom/El Aguajal.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 8,
+        .jsonPath = "assets/levels/level_08.json",
+        .customMusicPath = "assets/audio/custom/Kulikitaka.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 9,
+        .jsonPath = "assets/levels/level_09.json",
+        .customMusicPath = "assets/audio/custom/El Aguajal.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 10,
+        .jsonPath = "assets/levels/level_10.json",
+        .customMusicPath = "assets/audio/custom/Gasolina.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 11,
+        .jsonPath = "assets/levels/level_11.json",
+        .customMusicPath = "assets/audio/custom/La Dueña del Swing.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 12,
+        .jsonPath = "assets/levels/level_12.json",
+        .customMusicPath = "assets/audio/custom/CHOP SUEY.ogg",
+    },
+    LevelMenuEntry{
+        .levelIndex = 13,
+        .jsonPath = "assets/levels/level_13.json",
+        .customMusicPath = "assets/audio/custom/DONT USE THIS SONG I BEG YOU.ogg",
+    },
 };
 
 inline constexpr int OfficialLevelCount =

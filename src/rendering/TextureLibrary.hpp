@@ -21,6 +21,7 @@ struct UiButtonSkin {
 struct UiGameTextures {
     UiButtonSkin toolbarSlot;
     Texture2D editHammer{};
+    std::array<Texture2D, 3> countdownNumbers{};
     UiButtonSkin modePlay;
     UiButtonSkin modeEdit;
     UiButtonSkin clearSelection; // DROP
@@ -52,15 +53,22 @@ struct UiTextures {
     UiButtonSkin menuReset;
     UiButtonSkin menuEditorLevels;
     UiButtonSkin menuCreateLevel;
+    Texture2D menuCreatePlus{};
     UiButtonSkin menuBack;
     UiButtonSkin resultsBack;
+    Texture2D scoreTotalLabel{};
+    std::array<Texture2D, 10> scoreDigits{};
+    Texture2D scoreMinus{};
     UiButtonSkin menuEditAndPlay;
     UiButtonSkin menuPublish;
     UiButtonSkin menuDelete;
+    UiButtonSkin menuDialogAccept;
     UiButtonSkin menuDialogCancel;
     UiButtonSkin menuDialogCreate;
     UiButtonSkin menuCommunity;
     UiButtonSkin menuMyLevels;
+    Texture2D communityPreviousLabel{};
+    Texture2D communityNextLabel{};
     std::array<UiButtonSkin, MaxOfficialLevelCount> menuLevelTitles{};
 
     UiGameTextures game;
@@ -70,6 +78,13 @@ struct UiTextures {
 struct PassengerFace {
     std::string name;
     Texture2D texture{};
+};
+
+struct ExplosionAnimation {
+    std::vector<Texture2D> frames;
+    float frameDuration = 0.06f;
+
+    bool IsValid() const { return !frames.empty(); }
 };
 
 // loaded once at startup, MainGameScene is rebuilt for every level
@@ -84,6 +99,8 @@ private:
     Texture2D m_terrainTexture{};
     Texture2D m_levelGoalTexture{};
     UiTextures m_ui{};
+    ExplosionAnimation m_explosionAnim{};
+    Texture2D m_damageStarTexture{};
     Font m_font{};
     bool m_initialized = false;
 
@@ -103,6 +120,8 @@ public:
     const Texture2D& GetPassenngerSkirtless() const { return m_passengerSkirtless; }
     const Texture2D& GetPassenngerSkirt() const { return m_passengerSkirt; }
     const UiTextures& GetUi() const { return m_ui; }
+    const ExplosionAnimation& GetExplosionAnim() const { return m_explosionAnim; }
+    const Texture2D& GetDamageStarTexture() const { return m_damageStarTexture; }
 
     // todas las imágenes de assets/textures/passengers/faces, ordenadas por nombre
     const std::vector<PassengerFace>& GetPassengerFaces() const {

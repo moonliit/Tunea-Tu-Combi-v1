@@ -19,12 +19,32 @@ constexpr const char* StartupLevelPath = "assets/levels/default.json";
 constexpr SceneId StartupScene = SceneId::MainMenu;
 
 void ShowLoadingScreen(int width, int height) {
-    constexpr const char* text = "Cargando...";
-    constexpr int fontSize = 40;
+    const Texture2D loadingText = LoadTexture(
+        "assets/textures/ui/loading/cargando.png"
+    );
     BeginDrawing();
     ClearBackground(BLACK);
-    DrawText(text, (width - MeasureText(text, fontSize)) / 2, (height - fontSize) / 2, fontSize, RAYWHITE);
+    if (loadingText.id != 0) {
+        const float drawWidth = std::min(
+            static_cast<float>(loadingText.width), width * 0.65f
+        );
+        const float drawHeight = drawWidth * loadingText.height / loadingText.width;
+        DrawTexturePro(loadingText,
+            Rectangle{0.0f, 0.0f,
+                static_cast<float>(loadingText.width),
+                static_cast<float>(loadingText.height)},
+            Rectangle{(width - drawWidth) / 2.0f,
+                (height - drawHeight) / 2.0f, drawWidth, drawHeight},
+            Vector2{}, 0.0f, WHITE);
+    } else {
+        constexpr const char* fallback = "Cargando...";
+        constexpr int fontSize = 40;
+        DrawText(fallback,
+            (width - MeasureText(fallback, fontSize)) / 2,
+            (height - fontSize) / 2, fontSize, RAYWHITE);
+    }
     EndDrawing();
+    if (loadingText.id != 0) UnloadTexture(loadingText);
 #ifdef __EMSCRIPTEN__
     emscripten_sleep(0);  // lets the browser show it before the loading starts
 #endif

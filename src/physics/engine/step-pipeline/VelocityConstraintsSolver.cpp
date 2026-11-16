@@ -272,7 +272,7 @@ void ResolveManifoldVelocities(vector<Manifold>& manifolds, float dt) {
                 RealNum lambdaTangent = -vTangent / tangentDenom;
 
                 // max friction force is proportional to normal impulse (coloumbs law)
-                RealNum maxTangentImpulse = friction * coll.normalImpulse;
+                RealNum maxTangentImpulse = abs(friction * coll.normalImpulse);
 
                 RealNum oldTangentImpulse = coll.tangentImpulse;
                 coll.tangentImpulse = clamp(
