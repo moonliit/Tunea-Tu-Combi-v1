@@ -7,6 +7,7 @@ using namespace Math;
 namespace {
 
 constexpr float FanForce = 750.0f;
+constexpr float WheelFriction = 1.75f;
 
 constexpr float WindSailForce = 1750.0f;
 constexpr float WindSailActiveDuration = 0.75f;
@@ -35,6 +36,7 @@ Vector2D RotateLocalOffset(Vector2D offset, PartOrientation orientation) {
 
 void Part::Activate() {
     if (!m_physicsBody && !m_attachmentBody) return;
+    if (!m_activationEnabled) return;
 
     switch (m_type) {
         case PartType::Fan:
@@ -190,6 +192,7 @@ Part::Part(const Part& other):
     m_id(other.m_id),
     m_propulsionActive(false),
     m_activationActive(false),
+    m_activationEnabled(other.m_activationEnabled),
     m_activeTimeRemaining(0.0f),
     m_cooldownRemaining(0.0f),
     m_removalRequested(false) {
@@ -207,6 +210,7 @@ Part& Part::operator=(const Part& other) {
     m_id = other.m_id;
     m_propulsionActive = false;
     m_activationActive = false;
+    m_activationEnabled = other.m_activationEnabled;
     m_activeTimeRemaining = 0.0f;
     m_cooldownRemaining = 0.0f;
     m_removalRequested = false;
@@ -307,6 +311,9 @@ void Part::SetPhysicsBody(
 
     m_physicsBody = body;
     if (m_physicsBody) {
+        if (m_type == PartType::CircleWheel) {
+            m_physicsBody->SetFriction(WheelFriction);
+        }
         m_physicsBody->m_part = this;
     }
     m_physicsWorld = physics.get();

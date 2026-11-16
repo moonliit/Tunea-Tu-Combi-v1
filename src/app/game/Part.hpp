@@ -101,6 +101,7 @@ public:
         EditorGrid* grid
     );
     void SetPropulsionActive(bool active) { m_propulsionActive = active; }
+    void SetActivationEnabled(bool enabled) { m_activationEnabled = enabled; }
     void Activate();
     void UpdateActivation(float deltaTime);
     bool IsActivationActive() const { return m_activationActive; }
@@ -154,6 +155,7 @@ private:
     Math::RealNum m_attachmentRotationOffset = 0.0f;
     bool m_propulsionActive = false;
     bool m_activationActive = false;
+    bool m_activationEnabled = true;
     float m_activeTimeRemaining = 0.0f;
     float m_cooldownRemaining = 0.0f;
     bool m_removalRequested = false;

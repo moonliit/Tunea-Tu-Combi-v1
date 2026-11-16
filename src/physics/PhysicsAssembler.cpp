@@ -1,6 +1,7 @@
 #include "physics/PhysicsAssembler.hpp"
 
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -93,6 +94,37 @@ void PhysicsAssembler::Assemble(
             m_reportedBroken.push_back(false);
         }
     }
+}
+
+bool PhysicsAssembler::ArePartsConnected(PartId first, PartId second) const {
+    if (first == second) return true;
+
+    std::unordered_map<PartId, std::vector<PartId>> graph;
+    for (std::size_t index = 0; index < m_jointParts.size(); ++index) {
+        if (index < m_joints.size() && m_joints[index] &&
+            m_joints[index]->IsBroken()) {
+            continue;
+        }
+        const auto [left, right] = m_jointParts[index];
+        graph[left].push_back(right);
+        graph[right].push_back(left);
+    }
+
+    std::vector<PartId> pending{first};
+    std::unordered_set<PartId> visited{first};
+    while (!pending.empty()) {
+        const PartId current = pending.back();
+        pending.pop_back();
+        const auto iterator = graph.find(current);
+        if (iterator == graph.end()) continue;
+        for (const PartId neighbor : iterator->second) {
+            if (neighbor == second) return true;
+            if (visited.insert(neighbor).second) {
+                pending.push_back(neighbor);
+            }
+        }
+    }
+    return false;
 }
 
 std::vector<std::pair<PartId, PartId>>

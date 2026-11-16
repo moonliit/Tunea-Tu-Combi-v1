@@ -10,7 +10,7 @@ struct AppContext;
 class CustomLevelEditorScene final : public I_Scene {
     AppContext* m_context;
     Camera2D m_designCamera{};
-    enum class DesignTool { Terrain, Grid, Goal, Eraser, Passenger };
+    enum class DesignTool { Terrain, Grid, Goal, Eraser, Passenger, TntObstacle };
     DesignTool m_designTool = DesignTool::Terrain;
     std::optional<Math::Vector2D> m_gridAnchor;
     Math::Vector2D m_gridPreviewCursor{};

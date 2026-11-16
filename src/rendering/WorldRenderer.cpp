@@ -152,6 +152,12 @@ void WorldRenderer::Render(
         RenderTerrainMesh(m_textures, mesh, playSession.GetTerrainVisual());
     }
 
+    for (const auto& obstacle : playSession.GetTntObstacles()) {
+        m_partRenderer.RenderStaticTnt(
+            obstacle.position, grid.GetCellSize()
+        );
+    }
+
     if (!showParts) {
         EndMode2D();
         return;
