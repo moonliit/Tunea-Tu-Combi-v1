@@ -55,6 +55,7 @@ private:
     WorldRenderer m_worldRenderer;
     GameUiRenderer m_uiRenderer;
     bool m_levelCompleted = false;
+    bool m_exitConfirmOpen = false;
     IdentityScope m_runIdentity;
     double m_elapsedMs = 0.0;
     std::vector<bool> m_passengerCollected;
