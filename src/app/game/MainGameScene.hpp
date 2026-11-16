@@ -73,6 +73,16 @@ private:
     std::vector<GoalParticle> m_goalParticles;
     void UpdateGoalParticles(float dt);
     void RenderGoalParticles() const;
+
+    struct ExplosionVisualInstance {
+        Math::Vector2D position{0.0f, 0.0f};
+        float radius = 1.0f;
+        int frame = 0;
+        float timer = 0.0f;
+    };
+    std::vector<ExplosionVisualInstance> m_explosionVisuals;
+    void UpdateExplosionVisuals(float dt);
+    void RenderExplosionVisuals() const;
     GoalWindowTracker m_goalWindow;
     Scoring::RunStatistics m_statistics;
     Scoring::ScoreBreakdown m_score;

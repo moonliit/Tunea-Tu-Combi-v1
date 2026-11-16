@@ -32,6 +32,7 @@ constexpr const char* fontPath = "assets/fonts/Matcha Style.ttf";
 constexpr const char* PassengerSkirtlessPath = "assets/textures/passengers/passenger_skirtless.png";
 constexpr const char* PassengerSkirtPath = "assets/textures/passengers/passenger_skirt.png";
 constexpr const char* PassengerFacesDir = "assets/textures/passengers/faces";
+constexpr const char* ExplosionFramesDir = "assets/textures/vfx/explosion";
 
 Texture2D LoadSmoothTexture(const char* path, bool useBilinearFilter = true) {
     const Texture2D texture = LoadTexture(path);
@@ -143,6 +144,25 @@ void TextureLibrary::Initialize() {
                 return first.name < second.name;
             }
         );
+    }
+
+    m_explosionAnim.frames.clear();
+    if (DirectoryExists(ExplosionFramesDir)) {
+        FilePathList files = LoadDirectoryFilesEx(ExplosionFramesDir, ".png", false);
+        std::vector<std::string> paths;
+        paths.reserve(files.count);
+        for (unsigned int index = 0; index < files.count; ++index) {
+            paths.emplace_back(files.paths[index]);
+        }
+        UnloadDirectoryFiles(files);
+        std::sort(paths.begin(), paths.end());
+
+        for (const std::string& path : paths) {
+            const Texture2D texture = LoadTexture(path.c_str());
+            if (texture.id == 0) continue;
+            SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+            m_explosionAnim.frames.push_back(texture);
+        }
     }
 
     // UI textures (static, startup-loaded; missing files fall back to missing texture)
@@ -281,6 +301,11 @@ void TextureLibrary::Shutdown() {
     UnloadUiSkin(m_ui.game.navMenu);
     UnloadUiSkin(m_ui.game.navDiseno);
     UnloadTexture(m_ui.game.toolbarSelected);
+
+    for (Texture2D& frame : m_explosionAnim.frames) {
+        UnloadTexture(frame);
+    }
+    m_explosionAnim.frames.clear();
 
     m_initialized = false;
 }

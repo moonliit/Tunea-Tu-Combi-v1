@@ -79,6 +79,13 @@ struct PassengerFace {
     Texture2D texture{};
 };
 
+struct ExplosionAnimation {
+    std::vector<Texture2D> frames;
+    float frameDuration = 0.06f;
+
+    bool IsValid() const { return !frames.empty(); }
+};
+
 // loaded once at startup, MainGameScene is rebuilt for every level
 class TextureLibrary {
 private:
@@ -91,6 +98,7 @@ private:
     Texture2D m_terrainTexture{};
     Texture2D m_levelGoalTexture{};
     UiTextures m_ui{};
+    ExplosionAnimation m_explosionAnim{};
     Font m_font{};
     bool m_initialized = false;
 
@@ -110,6 +118,7 @@ public:
     const Texture2D& GetPassenngerSkirtless() const { return m_passengerSkirtless; }
     const Texture2D& GetPassenngerSkirt() const { return m_passengerSkirt; }
     const UiTextures& GetUi() const { return m_ui; }
+    const ExplosionAnimation& GetExplosionAnim() const { return m_explosionAnim; }
 
     // todas las imágenes de assets/textures/passengers/faces, ordenadas por nombre
     const std::vector<PassengerFace>& GetPassengerFaces() const {
