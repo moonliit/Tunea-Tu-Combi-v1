@@ -1485,15 +1485,6 @@ void MainGameScene::RenderResults() const {
             rowY += 53;
         }
         DrawTextFont(
-            leaderboard.submissionConfirmed
-                ? "Puntos recalculados; física no verificada."
-                : "Resultado local no enviado al ranking.",
-            46,
-            static_cast<int>(rankingPanel.y + rankingPanel.height - 27.0f),
-            11,
-            mutedText
-        );
-        DrawTextFont(
             leaderboard.championRunRef.empty()
                 ? "Fantasma campeón: no disponible."
                 : "Fantasma campeón: grabación lista.",
