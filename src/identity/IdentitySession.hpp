@@ -13,9 +13,11 @@ class IdentitySession {
     bool m_authenticated = false;
     std::string m_id;
     std::uint64_t m_epoch = 0;
+    int m_unlockedLevel = 1;
 public:
     void Poll();
     bool IsAuthenticated() const { return m_authenticated; }
+    int GetUnlockedLevel() const { return m_unlockedLevel; }
     IdentityScope CaptureResultScope() const { return {m_authenticated ? m_id : "", m_epoch}; }
     std::optional<std::string> ResultOwner(const IdentityScope& scope) const {
         if (!m_authenticated || scope.combiId.empty() || scope.combiId != m_id || scope.epoch != m_epoch)

@@ -63,6 +63,11 @@ export const container = {
             );
         }),
 
+    progress: () => memo('progress', async () => {
+        const { createProgressService } = await import('./progress.mjs');
+        return createProgressService(await store());
+    }),
+
     recordings: () => memo('recordings', async () => {
         const { createRecordingService } = await import('./recordings.mjs');
         return createRecordingService(await store(), await objectStore());

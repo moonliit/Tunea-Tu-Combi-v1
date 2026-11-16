@@ -7,6 +7,7 @@ import {
     validateStatistics
 } from './leaderboard.mjs';
 import { RULES_VERSION } from './scoring.mjs';
+import { officialLevelNumber } from './level-id.mjs';
 
 export const RECORDING_MEDIA_TYPE = 'application/vnd.tunea-tu-combi.run+gzip';
 export const SAMPLE_INTERVAL_MS = 50;
@@ -16,7 +17,8 @@ export const MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
 export const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const LEVEL = /^(official:[1-4]|public:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/;
+const PUBLIC_LEVEL = /^public:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const isLevelId = (value) => officialLevelNumber(value) !== null || PUBLIC_LEVEL.test(value);
 const exactKeys = (value, keys) => value && typeof value === 'object' &&
     !Array.isArray(value) &&
     JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
@@ -39,7 +41,7 @@ export function validateRecordingCapture(value, expected) {
     if (
         !UUID.test(value.attemptId ?? '') ||
         typeof value.combiId !== 'string' ||
-        !LEVEL.test(value.levelId ?? '') ||
+        !isLevelId(value.levelId ?? '') ||
         value.attemptId !== expected.attemptId ||
         value.combiId !== expected.combiId ||
         value.levelId !== expected.levelId
@@ -173,7 +175,7 @@ export function decodeRecording(body) {
 
 export function createRecordingService(store, objects, clock = () => Date.now()) {
     async function requireActiveLevel(levelId) {
-        if (!LEVEL.test(levelId ?? '')) throw new ApiError(400, 'INVALID_LEVEL');
+        if (!isLevelId(levelId ?? '')) throw new ApiError(400, 'INVALID_LEVEL');
         if (levelId.startsWith('public:') &&
             !(await store.isPublicLevel(levelId.slice('public:'.length)))) {
             throw new ApiError(404, 'LEVEL_NOT_FOUND');

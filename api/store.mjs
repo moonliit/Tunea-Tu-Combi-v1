@@ -129,6 +129,22 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
         getPublishedDraft: (authorId, draftId) =>
             get(`PUBLISHED_DRAFT#${authorId}#${draftId}`),
         getLeaderboard: (levelId) => get(`LEADERBOARD#${levelId}`),
+        getProgress: (combiId) => get(`PROGRESS#${combiId}`),
+
+        // Only ever goes up: replaying an old win never locks a level again.
+        async raiseProgress(combiId, unlockedLevel, now) {
+            try {
+                await client.send(new UpdateCommand({
+                    TableName: table,
+                    Key: key(`PROGRESS#${combiId}`),
+                    UpdateExpression: 'SET unlockedLevel = :level, updatedAt = :now',
+                    ConditionExpression: 'attribute_not_exists(unlockedLevel) OR unlockedLevel < :level',
+                    ExpressionAttributeValues: { ':level': unlockedLevel, ':now': now }
+                }));
+            } catch (error) {
+                if (error?.name !== 'ConditionalCheckFailedException') throw error;
+            }
+        },
 
         async replaceLeaderboard(levelId, expectedRevision, next, publicId = null) {
             const putBoard = {

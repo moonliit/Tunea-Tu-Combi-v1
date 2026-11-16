@@ -389,7 +389,6 @@ void MainMenuScene::ProcessInput(float) {
         m_selectingLevel = false;
         m_editingLevels = false;
         m_browsingCommunity = false;
-        m_selectedLevel = 0;
         return;
     }
 
@@ -412,7 +411,6 @@ void MainMenuScene::ProcessInput(float) {
         m_context->audioController->PlayUiClick();
         m_context->audioController->ResetToMenu();
         m_selectingLevel = false;
-        m_selectedLevel = 0;
         return;
     }
 
@@ -424,6 +422,7 @@ void MainMenuScene::ProcessInput(float) {
         m_context->audioController->SetCurrentScenario({Scenario::LevelSelect});
         m_selectingLevel = true;
         m_editingLevels = false;
+        m_selectedLevel = std::clamp(m_context->unlockedLevel - 1, 0, OfficialLevelCount - 1);
         return;
     }
     if (!m_selectingLevel && UiButton::WasClicked(buttons.community)) {
@@ -445,6 +444,9 @@ void MainMenuScene::ProcessInput(float) {
     }
 
     const int previousUnlockedLevel = m_context->unlockedLevel;
+    // what the server remembers
+    const int serverLevel = std::min(OfficialLevelCount, m_context->identity.GetUnlockedLevel());
+    m_context->unlockedLevel = std::max(m_context->unlockedLevel, serverLevel);
     if (m_context->completedLevel > 0) {
         m_context->unlockedLevel = std::max(
             m_context->unlockedLevel,
@@ -648,7 +650,6 @@ void MainMenuScene::ProcessLevelEditorInput() {
         m_context->audioController->ResetToMenu();
         m_selectingLevel = false;
         m_editingLevels = false;
-        m_selectedLevel = 0;
         return;
     }
 

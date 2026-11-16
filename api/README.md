@@ -22,13 +22,14 @@ cliente (`src/web/api.js`).
 
 El nivel va en la URL como `{levelId}`, que puede ser:
 
-- `official:1` hasta `official:4`: los niveles del juego.
+- `official:1` hasta `official:20`: los niveles del juego (el mismo máximo que
+  `MaxOfficialLevelCount` en `src/app/LevelCatalog.hpp`).
 - `public:<uuid>`: los que publican los jugadores.
 
 | Función (`functions/<archivo>.handler`) | Solicitud | Respuesta |
 |---|---|---|
 | `health` | `GET /health` | 200 |
-| `session-get` | `GET /session` | 200, o 401 si no hay sesión |
+| `session-get` | `GET /session` | 200 con `identity` y `progress.unlockedLevel`, o 401 si no hay sesión |
 | `session-create` | `POST /session` | 201 si crea la identidad (y la cookie), 200 si la cookie sigue válida |
 | `identity-rename` | `PUT /identities/{identityId}/name` `{name}` | 200, o 409 si la cookie es de otra identidad |
 | `leaderboard-get` | `GET /levels/{levelId}/leaderboard` | 200 |

@@ -16,6 +16,9 @@ void IdentitySession::Poll() {
     std::free(raw);
     m_authenticated = !state.is_discarded() && state.value("status", "local") == "ready";
     m_id = m_authenticated ? state.value("id", "") : "";
-    if (!state.is_discarded()) m_epoch = state.value("epoch", std::uint64_t{0});
+    if (!state.is_discarded()) {
+        m_epoch = state.value("epoch", std::uint64_t{0});
+        m_unlockedLevel = state.value("unlockedLevel", 1);
+    }
 #endif
 }

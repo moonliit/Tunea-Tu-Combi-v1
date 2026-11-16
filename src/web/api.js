@@ -7,6 +7,7 @@ Module['api'] = (() => {
     let identity = null;
     let status = 'local';
     let epoch = 0;
+    let unlockedLevel = 1;
     let busy = false;
     let notice = '';
     let updateUi = () => {};
@@ -114,6 +115,8 @@ Module['api'] = (() => {
                     channel?.postMessage('changed');
                 }
                 accept(result.identity);
+                if (Number.isInteger(result.progress?.unlockedLevel))
+                    unlockedLevel = result.progress.unlockedLevel;
                 notice = '';
             });
         } catch (error) { fail(error); }
@@ -149,7 +152,7 @@ Module['api'] = (() => {
         } finally { busy = false; updateUi(); }
     }
     function snapshot() {
-        return { status, id: identity?.id ?? '', name: identity?.name ?? '', epoch, canPublish: false };
+        return { status, id: identity?.id ?? '', name: identity?.name ?? '', epoch, unlockedLevel, canPublish: false };
     }
     function captureResultScope() {
         return Object.freeze({ id: identity?.id ?? '', epoch });

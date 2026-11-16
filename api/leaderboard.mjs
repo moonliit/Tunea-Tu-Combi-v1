@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { ApiError } from './identity.mjs';
 import { calculateScore, RULES_VERSION } from './scoring.mjs';
+import { officialLevelNumber } from './level-id.mjs';
+import { createProgressService } from './progress.mjs';
 
 export const CAPTURE_FORMAT_VERSION = 'run-v2';
 export const PHYSICS_VERSION = 'custom-physics-v1';
@@ -8,7 +10,6 @@ export const PHYSICS_VERSION = 'custom-physics-v1';
 const MAX_ENTRIES = 5;
 const MAX_RECEIPTS = 32;
 const MAX_ATTEMPTS = 8;
-const OFFICIAL_LEVELS = new Set(['official:1', 'official:2', 'official:3', 'official:4']);
 const PUBLIC_LEVEL = /^public:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/;
 const ATTEMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const STAT_KEYS = [
@@ -35,7 +36,7 @@ const exactKeys = (value, keys) =>
 
 function parseLevelId(value) {
     if (typeof value !== 'string') throw new ApiError(400, 'INVALID_LEVEL');
-    if (OFFICIAL_LEVELS.has(value)) return { levelId: value, publicId: null };
+    if (officialLevelNumber(value) !== null) return { levelId: value, publicId: null };
     const match = value.match(PUBLIC_LEVEL);
     if (!match) throw new ApiError(400, 'INVALID_LEVEL');
     return { levelId: value, publicId: match[1] };
@@ -175,6 +176,8 @@ export function createLeaderboardService(
     pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
     objects = null
 ) {
+    const progress = createProgressService(store, clock);
+
     async function validateLevel(level) {
         if (level.publicId && !(await store.isPublicLevel(level.publicId)))
             throw new ApiError(404, 'LEVEL_NOT_FOUND');
@@ -192,6 +195,9 @@ export function createLeaderboardService(
         async submit(identity, body) {
             const parsed = parseSubmission(body);
             await validateLevel(parsed);
+            // A valid win unlocks the next official level, whatever its place in the ranking.
+            const official = officialLevelNumber(parsed.levelId);
+            if (official !== null) await progress.unlockAfter(identity.id, official);
             const submissionFingerprint = attemptFingerprint(identity.id, body);
             const submittedAt = clock();
 
