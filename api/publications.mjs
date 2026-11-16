@@ -348,7 +348,10 @@ function validateCapture(value, identityId, draft) {
         let driverState = null;
         const frameIds = new Set();
         for (const state of frame.parts) {
-            if (!exactKeys(state, ['id', 'rotationMilli', 'xMilli', 'yMilli']))
+            const stateKeys = state?.attachmentRotationMilli === undefined
+                ? ['id', 'rotationMilli', 'xMilli', 'yMilli']
+                : ['attachmentRotationMilli', 'id', 'rotationMilli', 'xMilli', 'yMilli'];
+            if (!exactKeys(state, stateKeys))
                 throw new ApiError(400, 'INVALID_CAPTURE');
             if (!parts.has(state.id) || frameIds.has(state.id))
                 throw new ApiError(400, 'INVALID_CAPTURE');
@@ -356,6 +359,8 @@ function validateCapture(value, identityId, draft) {
             integer(state.xMilli, -100000000, 100000000, 'INVALID_CAPTURE');
             integer(state.yMilli, -100000000, 100000000, 'INVALID_CAPTURE');
             integer(state.rotationMilli, -100000000, 100000000, 'INVALID_CAPTURE');
+            if (state.attachmentRotationMilli !== undefined)
+                integer(state.attachmentRotationMilli, -100000000, 100000000, 'INVALID_CAPTURE');
             if (state.id === driverId) driverState = state;
         }
         if (frame.timeMs > value.statistics.driverTimeMs) {

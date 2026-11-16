@@ -120,9 +120,13 @@ std::vector<World::PendingLaunchImpulse> World::ProcessPendingExplosions() {
 }
 
 void World::Step(float deltaTime) {
+    constexpr float FirstLandingProtectionSeconds = 0.35f;
     m_impactEvents.clear();
     if (m_subStepCount <= 0 || deltaTime <= 0.0f) return;
-    const float subDt = deltaTime / static_cast<float>(m_subStepCount);
+    
+    float subDt = deltaTime / m_subStepCount;
+    bool protectFirstLanding = m_firstLandingProtectionRemaining > 0.0f;
+
     const float linearDamping = std::max(0.0f, m_linearDamping);
     const float angularDamping = std::max(0.0f, m_angularDamping);
     const float linearDampFactor = std::exp(-linearDamping * subDt);
@@ -197,6 +201,16 @@ void World::Step(float deltaTime) {
                 impulse += std::abs(static_cast<float>(point.normalImpulse));
             }
             if (impulse <= 0.0f) continue;
+            const auto isTerrain = [](const BaseRigidBody& body) {
+                return body.GetRbShape() == RbShape::Edge ||
+                    body.GetRbShape() == RbShape::TerrainMesh;
+            };
+            if (!m_firstTerrainContactSeen &&
+                (isTerrain(*bodyA) != isTerrain(*bodyB))) {
+                m_firstTerrainContactSeen = true;
+                m_firstLandingProtectionRemaining = FirstLandingProtectionSeconds;
+                protectFirstLanding = true;
+            }
             if (bodyA->GetPart() != nullptr) {
                 m_impactEvents.push_back({bodyA->GetPart(), impulse});
             }
@@ -227,7 +241,18 @@ void World::Step(float deltaTime) {
         body->GetForceMut() = Vector2D::Zero();
     }
 
-    CleanupBrokenJoints(m_joints, m_jointConnectedCache, m_breakagePositions);
+    // Keep collision impulses and effects, but ignore joint stress from the
+    // first touchdown and its immediate bounces.
+    if (protectFirstLanding) {
+        for (const auto& joint : m_joints) {
+            if (joint) joint->ResetStress();
+        }
+    } else {
+        CleanupBrokenJoints(m_joints, m_jointConnectedCache, m_breakagePositions);
+    }
+    m_firstLandingProtectionRemaining = std::max(
+        0.0f, m_firstLandingProtectionRemaining - deltaTime
+    );
 }
 
 std::vector<PhysicsImpact> World::ConsumeImpactEvents() {

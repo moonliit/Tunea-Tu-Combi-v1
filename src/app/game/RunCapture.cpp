@@ -140,12 +140,17 @@ void RunCapture::RecordFrame(
     VisitGrid(grid, [&](const Part& part, PartId) {
         current.insert(part.GetId());
         const PartRenderState state = part.GetRenderState(grid);
-        states.push_back({
+        nlohmann::json recordedState = {
             {"id", part.GetId()},
             {"xMilli", std::llround(static_cast<double>(state.position.x) * 1000.0)},
             {"yMilli", std::llround(static_cast<double>(state.position.y) * 1000.0)},
             {"rotationMilli", std::llround(static_cast<double>(state.rotation) * 1000.0)}
-        });
+        };
+        if (part.GetType() == PartType::CircleWheel) {
+            recordedState["attachmentRotationMilli"] =
+                std::llround(static_cast<double>(state.attachmentRotation) * 1000.0);
+        }
+        states.push_back(std::move(recordedState));
     });
     for (const PartId id : current) {
         if (!m_visibleParts.contains(id)) {

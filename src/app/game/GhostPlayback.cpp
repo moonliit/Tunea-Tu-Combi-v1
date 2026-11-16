@@ -59,6 +59,15 @@ bool GhostPlayback::Load(const nlohmann::json& capture) {
                 .orientation = static_cast<PartOrientation>(part.at("orientation").get<int>())
             });
         }
+        for (const auto& connection : capture.at("connections")) {
+            const PartId first = connection.at("first").get<PartId>();
+            const PartId second = connection.at("second").get<PartId>();
+            if (m_definitions.at(first).type == PartType::CircleWheel) {
+                m_legacyWheelHosts.try_emplace(first, second);
+            } else if (m_definitions.at(second).type == PartType::CircleWheel) {
+                m_legacyWheelHosts.try_emplace(second, first);
+            }
+        }
         for (const auto& passenger : capture.at("levelDefinition").at("passengers")) {
             m_passengerSkirts.push_back(passenger.value("hasSkirt", false));
         }
@@ -78,13 +87,18 @@ bool GhostPlayback::Load(const nlohmann::json& capture) {
                 frame.parts.emplace(state.at("id").get<PartId>(), Transform{
                     .x = state.at("xMilli").get<double>() / 1000.0,
                     .y = state.at("yMilli").get<double>() / 1000.0,
-                    .rotation = state.at("rotationMilli").get<double>() / 1000.0
+                    .rotation = state.at("rotationMilli").get<double>() / 1000.0,
+                    .attachmentRotation = state.value(
+                        "attachmentRotationMilli", state.at("rotationMilli").get<double>()
+                    ) / 1000.0,
+                    .hasAttachmentRotation = state.contains("attachmentRotationMilli")
                 });
             }
             m_frames.push_back(std::move(frame));
         }
     } catch (const nlohmann::json::exception&) {
         m_definitions.clear();
+        m_legacyWheelHosts.clear();
         m_frames.clear();
         m_passengerSkirts.clear();
         m_passengerPickups.clear();
@@ -92,6 +106,7 @@ bool GhostPlayback::Load(const nlohmann::json& capture) {
     }
     if (m_frames.size() < 2 || m_frames.front().timeMs != 0) {
         m_definitions.clear();
+        m_legacyWheelHosts.clear();
         m_frames.clear();
         m_passengerSkirts.clear();
         m_passengerPickups.clear();
@@ -176,6 +191,15 @@ void GhostPlayback::Restart() {
     if (m_loaded) Sample();
 }
 
+void GhostPlayback::PrepareCompetition() {
+    m_timeMs = 0.0;
+    m_visible = true;
+    m_playing = false;
+    m_advanceWhileLoading = false;
+    EnsureLoaded();
+    if (m_loaded) Sample();
+}
+
 void GhostPlayback::StartCompetition() {
     m_timeMs = 0.0;
     m_visible = true;
@@ -233,14 +257,42 @@ void GhostPlayback::Sample() {
         const Transform state = next == second.parts.end() ? firstState : Transform{
             .x = firstState.x + (next->second.x - firstState.x) * amount,
             .y = firstState.y + (next->second.y - firstState.y) * amount,
-            .rotation = InterpolateAngle(firstState.rotation, next->second.rotation, amount)
+            .rotation = InterpolateAngle(firstState.rotation, next->second.rotation, amount),
+            .attachmentRotation = InterpolateAngle(
+                firstState.attachmentRotation, next->second.attachmentRotation, amount
+            ),
+            .hasAttachmentRotation = firstState.hasAttachmentRotation
         };
+        double attachmentRotation = state.attachmentRotation;
+        if (definition->second.type == PartType::CircleWheel &&
+            !state.hasAttachmentRotation) {
+            const auto host = m_legacyWheelHosts.find(id);
+            if (host != m_legacyWheelHosts.end()) {
+                const auto initialWheel = m_frames.front().parts.find(id);
+                const auto initialHost = m_frames.front().parts.find(host->second);
+                const auto hostFirst = first.parts.find(host->second);
+                const auto hostSecond = second.parts.find(host->second);
+                if (initialWheel != m_frames.front().parts.end() &&
+                    initialHost != m_frames.front().parts.end() &&
+                    hostFirst != first.parts.end()) {
+                    const double hostRotation = hostSecond == second.parts.end()
+                        ? hostFirst->second.rotation
+                        : InterpolateAngle(
+                            hostFirst->second.rotation,
+                            hostSecond->second.rotation,
+                            amount
+                        );
+                    attachmentRotation = initialWheel->second.rotation +
+                        (hostRotation - initialHost->second.rotation);
+                }
+            }
+        }
         m_renderStates.push_back({
             .id = id,
             .type = definition->second.type,
             .position = {state.x, state.y},
             .rotation = state.rotation,
-            .attachmentRotation = state.rotation,
+            .attachmentRotation = attachmentRotation,
             .cellSize = m_cellSize
         });
     }
@@ -271,6 +323,7 @@ void GhostPlayback::Reset() {
     m_advanceWhileLoading = false;
     m_status = GhostLoadStatus::Idle;
     m_definitions.clear();
+    m_legacyWheelHosts.clear();
     m_frames.clear();
     m_renderStates.clear();
     m_passengerSkirts.clear();

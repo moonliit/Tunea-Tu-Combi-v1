@@ -70,7 +70,15 @@ void UnloadUiSkin(UiButtonSkin& skin) {
 }
 
 void DrawTextFont(const char *text, int posX, int posY, float fontSize, Color color) {
-    static const Font font = LoadFont(fontPath);
+    static const Font font = [] {
+        // LoadFont() only rasterizes raylib's default ASCII set.
+        // Fixed for allowing Spanish punctuation and accents render:
+        int codepoints[95 + 96];
+        int count = 0;
+        for (int cp = 32; cp <= 126; ++cp) codepoints[count++] = cp;
+        for (int cp = 160; cp <= 255; ++cp) codepoints[count++] = cp;
+        return LoadFontEx(fontPath, 32, codepoints, count);
+    }();
     float spacing = fontSize / 10.0f;
     DrawTextEx(font, text, (Vector2){ (float)posX, (float)posY }, fontSize, spacing, color);
 }
