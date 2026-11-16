@@ -154,6 +154,56 @@ inline void DrawTextured(
     }
 }
 
+inline void DrawGraphicModeToggle(
+    Rectangle bounds,
+    bool active,
+    const UiTextures& ui
+) {
+    const bool hovered = IsHovered(bounds);
+    const Texture2D& frame = ResolveButtonTexture(
+        ui.game.toolbarSlot, active, hovered,
+        hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT)
+    );
+    DrawTextureFit(frame, bounds);
+    if (!active && hovered) {
+        DrawRectangleLinesEx(bounds, 2.0f, LIGHTGRAY);
+    }
+
+    const bool compact = bounds.width < 150.0f;
+    const float iconWidth = compact ? 39.0f : 52.0f;
+    const float iconHeight = iconWidth * 236.0f / 320.0f;
+    const float iconX = bounds.x + (compact ? 5.0f : 10.0f);
+    const Texture2D& icon = active
+        ? ui.graphicModeGeometryColor : ui.graphicModeGeometryGray;
+    DrawTextureFit(icon, Rectangle{iconX,
+        bounds.y + (bounds.height - iconHeight) / 2.0f,
+        iconWidth, iconHeight});
+
+    const int textX = static_cast<int>(iconX + iconWidth +
+        (compact ? 3.0f : 8.0f));
+    const float textWidth = bounds.x + bounds.width - 5.0f - textX;
+    int fontSize = compact ? 12 : 18;
+    while (fontSize > 8 && MeasureTextFont("GRÁFICO", fontSize) > textWidth) {
+        --fontSize;
+    }
+    const int textY = static_cast<int>(bounds.y +
+        (bounds.height - (2 * fontSize + 4)) / 2.0f);
+    const Color textColor = active ? GOLD : LIGHTGRAY;
+    DrawTextFont("MODO", textX, textY, fontSize, textColor);
+    DrawTextFont("GRÁFICO", textX, textY + fontSize + 4,
+        fontSize, textColor);
+
+    const char* status = active ? "ON" : "OFF";
+    const int statusFontSize = compact ? 10 : 11;
+    const int statusX = static_cast<int>(bounds.x + bounds.width -
+        MeasureTextFont(status, statusFontSize) - 7.0f);
+    const int statusY = static_cast<int>(bounds.y + 5.0f);
+    DrawTextFont(status, statusX + 1, statusY + 1,
+        statusFontSize, BLACK);
+    DrawTextFont(status, statusX, statusY, statusFontSize,
+        active ? GOLD : GRAY);
+}
+
 }
 
 #endif

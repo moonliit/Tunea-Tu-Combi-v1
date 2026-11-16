@@ -129,6 +129,15 @@ Rectangle DesignLevelButton(int width, int height) {
     };
 }
 
+Rectangle GraphicModeBuildButton(int width, int height) {
+    return Rectangle{
+        static_cast<float>(width - 190),
+        static_cast<float>(height) - UIBarHeight + 12.0f,
+        170.0f,
+        56.0f
+    };
+}
+
 float RoutePreviewProgress(float time) {
     const float t = std::clamp(time, 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
@@ -442,6 +451,13 @@ void MainGameScene::ProcessInput(float dt) {
     if (UiButton::WasClicked(menuButton)) {
         m_appContext->audioController->PlayUiClick();
         m_exitConfirmOpen = true;
+        return;
+    }
+    if (m_stateMachine.IsBuildMode() && UiButton::WasClicked(
+            GraphicModeBuildButton(m_appContext->windowWidth,
+                m_appContext->windowHeight))) {
+        m_appContext->graphicMode = !m_appContext->graphicMode;
+        m_appContext->audioController->PlayUiClick();
         return;
     }
 
@@ -1727,7 +1743,9 @@ void MainGameScene::Render() const {
         m_buildSession.GetRepositionedPartType(),
         m_buildSession.GetRepositionedOrientation(),
         m_appContext->windowHeight,
-        renderPassengersBeforeVehicle
+        renderPassengersBeforeVehicle,
+        true,
+        m_appContext->graphicMode
     );
     BeginMode2D(m_camera);
     if (m_ghostPlayback.IsVisible()) {
@@ -1809,6 +1827,13 @@ void MainGameScene::Render() const {
         m_playSession.GetActivationRegistry(),
         *m_appContext->textureLibrary
     );
+    if (m_stateMachine.IsBuildMode()) {
+        UiButton::DrawGraphicModeToggle(
+            GraphicModeBuildButton(m_appContext->windowWidth,
+                m_appContext->windowHeight),
+            m_appContext->graphicMode,
+            m_appContext->textureLibrary->GetUi());
+    }
     if (m_stateMachine.IsBuildMode() && !m_levelId.empty()) {
         RenderGhostControls();
     }

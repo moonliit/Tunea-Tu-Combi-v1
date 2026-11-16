@@ -40,7 +40,8 @@ public:
         PartOrientation repositionedOrientation,
         int screenHeight,
         const std::function<void()>& beforePlayParts = {},
-        bool showParts = true
+        bool showParts = true,
+        bool graphicMode = false
     ) const;
     void RenderGhostPlayback(const std::vector<GhostRenderState>& states) const;
 };

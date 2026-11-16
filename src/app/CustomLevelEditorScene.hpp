@@ -16,6 +16,10 @@ class CustomLevelEditorScene final : public I_Scene {
     Math::Vector2D m_gridPreviewCursor{};
     int m_gridAnchorLevel = -1;
     std::vector<Math::Vector2D> m_terrainWorkPoints;
+    std::vector<bool> m_terrainCurveEdges;
+    bool m_terrainCurveMode = false;
+    std::optional<std::size_t> m_dragTerrainVertex;
+    bool m_terrainCloseRejected = false;
     std::optional<Vector2> m_lastEraserMouseScreen;
     std::optional<Vector2> m_rightDragStart;
     bool m_rightDragged = false;

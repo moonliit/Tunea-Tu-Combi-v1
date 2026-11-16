@@ -103,6 +103,9 @@ public:
     const std::vector<TntObstacleDefinition>& GetTntObstacles() const {
         return m_tntObstacles;
     }
+    const Math::TerrainDefinition& GetTerrainDefinition() const {
+        return m_terrainDefinition;
+    }
     const Math::TerrainVisualDefinition& GetTerrainVisual() const {
         return m_terrainVisual;
     }

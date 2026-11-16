@@ -1,9 +1,69 @@
 #include "rendering/WorldRenderer.hpp"
 #include "rlgl.h"
+#include "math/Spline.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 
 namespace {
+
+float DistanceToPolyline(const Math::Vector2D& point,
+                         const std::vector<Math::Vector2D>& polyline) {
+    float nearest = INFINITY;
+    for (size_t i = 1; i < polyline.size(); ++i) {
+        const float ax = float(polyline[i-1].x);
+        const float ay = float(polyline[i-1].y);
+        const float dx = float(polyline[i].x) - ax;
+        const float dy = float(polyline[i].y) - ay;
+        const float lengthSquared = dx*dx + dy*dy;
+        const float t = lengthSquared > 0.0f
+            ? std::clamp(((float(point.x)-ax)*dx + (float(point.y)-ay)*dy)
+                / lengthSquared, 0.0f, 1.0f)
+            : 0.0f;
+        nearest = std::min(nearest,
+            std::hypot(float(point.x)-ax-t*dx, float(point.y)-ay-t*dy));
+    }
+    return nearest;
+}
+
+struct SamplingComparison {
+    size_t fixedSegments = 0;
+    size_t adaptiveSegments = 0;
+    float fixedError = 0.0f;
+    float adaptiveError = 0.0f;
+};
+
+SamplingComparison CompareSampling(const Math::TerrainDefinition& terrain) {
+    SamplingComparison comparison;
+    for (const auto& polygon : terrain.polygons) {
+        for (const auto& segment : polygon.segments) {
+            if (segment.type != Math::TerrainSegmentType::CatmullRom ||
+                segment.points.size() < 2) continue;
+            const auto fixed = Math::SampleCatmullRom(
+                segment.points, std::max(1, segment.resolution));
+            const auto adaptive = Math::SampleCatmullRomAdaptive(
+                segment.points, Math::TerrainCurveTolerance);
+            comparison.fixedSegments += fixed.size()-1;
+            comparison.adaptiveSegments += adaptive.size()-1;
+            for (size_t i = 0; i+1 < segment.points.size(); ++i) {
+                const auto p0 = segment.points[i == 0 ? i : i-1];
+                const auto p1 = segment.points[i];
+                const auto p2 = segment.points[i+1];
+                const auto p3 = segment.points[
+                    i+2 < segment.points.size() ? i+2 : i+1];
+                for (int sample = 1; sample < 64; ++sample) {
+                    const auto reference = Math::EvaluateCatmullRom(
+                        p0,p1,p2,p3,float(sample)/64.0f);
+                    comparison.fixedError = std::max(comparison.fixedError,
+                        DistanceToPolyline(reference, fixed));
+                    comparison.adaptiveError = std::max(comparison.adaptiveError,
+                        DistanceToPolyline(reference, adaptive));
+                }
+            }
+        }
+    }
+    return comparison;
+}
 
 Color ToRaylibColor(
     std::uint8_t red,
@@ -139,7 +199,8 @@ void WorldRenderer::Render(
     PartOrientation repositionedOrientation,
     int screenHeight,
     const std::function<void()>& beforePlayParts,
-    bool showParts
+    bool showParts,
+    bool graphicMode
 ) const {
     RenderBackground(
         m_textures.GetBackground(m_background),
@@ -150,6 +211,35 @@ void WorldRenderer::Render(
 
     for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {
         RenderTerrainMesh(m_textures, mesh, playSession.GetTerrainVisual());
+        if (graphicMode) {
+            for (size_t i = 0; i+2 < mesh.indices.size(); i += 3) {
+                DrawTriangleLines(
+                    mesh.vertices[mesh.indices[i]].ToRayVec(),
+                    mesh.vertices[mesh.indices[i+1]].ToRayVec(),
+                    mesh.vertices[mesh.indices[i+2]].ToRayVec(),
+                    Color{65,190,255,255});
+            }
+            for (size_t i = 1; i < mesh.top.size(); ++i) {
+                DrawLineEx(mesh.top[i-1].ToRayVec(), mesh.top[i].ToRayVec(),
+                    2.0f, SKYBLUE);
+            }
+        }
+    }
+    if (graphicMode) {
+        for (const auto& polygon : playSession.GetTerrainDefinition().polygons) {
+            for (const auto& segment : polygon.segments) {
+                if (segment.type != Math::TerrainSegmentType::CatmullRom) continue;
+                const auto fixed = Math::SampleCatmullRom(
+                    segment.points, std::max(1, segment.resolution));
+                for (size_t i = 1; i < fixed.size(); ++i) {
+                    DrawLineEx(fixed[i-1].ToRayVec(), fixed[i].ToRayVec(),
+                        4.0f, ORANGE);
+                }
+                for (const auto& point : segment.points) {
+                    DrawCircleV(point.ToRayVec(), 5.0f, GOLD);
+                }
+            }
+        }
     }
 
     for (const auto& obstacle : playSession.GetTntObstacles()) {
@@ -245,6 +335,50 @@ void WorldRenderer::Render(
     }
 
     EndMode2D();
+    if (graphicMode && showParts) {
+        const auto comparison = CompareSampling(playSession.GetTerrainDefinition());
+        const bool hasCurves = comparison.fixedSegments > 0;
+        constexpr int fontSize = 13;
+        constexpr int textX = 18;
+        constexpr int textY = 148;
+        const char* cyanLabel = "Celeste: ";
+        const char* cyanDetail = "triángulos del terreno";
+        const char* orangeLabel = "Naranja: ";
+        const char* orangeDetail = hasCurves
+            ? "curvas Catmull-Rom"
+            : "curvas (pero este nivel no cuenta con curvas Catmull-Rom)";
+        const std::string cyanLine = std::string(cyanLabel) + cyanDetail;
+        const std::string orangeLine = std::string(orangeLabel) + orangeDetail;
+        const std::string fixedLine = hasCurves
+            ? TextFormat("Fijo: %d segmentos, error ~%.2f u",
+                static_cast<int>(comparison.fixedSegments), comparison.fixedError)
+            : "";
+        const std::string adaptiveLine = hasCurves
+            ? TextFormat("Adaptativo: %d segmentos, error ~%.2f u",
+                static_cast<int>(comparison.adaptiveSegments), comparison.adaptiveError)
+            : "";
+        const float textWidth = std::max({
+            MeasureTextFont(cyanLine.c_str(), fontSize),
+            MeasureTextFont(orangeLine.c_str(), fontSize),
+            MeasureTextFont(fixedLine.c_str(), fontSize),
+            MeasureTextFont(adaptiveLine.c_str(), fontSize)
+        });
+        DrawRectangle(10, 140, static_cast<int>(std::ceil(textWidth)) + 16,
+            hasCurves ? 96 : 53, Fade(BLACK, 0.78f));
+        DrawTextFont(cyanLabel, textX, textY, fontSize, SKYBLUE);
+        DrawTextFont(cyanDetail,
+            textX + static_cast<int>(MeasureTextFont(cyanLabel, fontSize)),
+            textY, fontSize, WHITE);
+        DrawTextFont(orangeLabel, textX, textY + 21, fontSize, ORANGE);
+        DrawTextFont(orangeDetail,
+            textX + static_cast<int>(MeasureTextFont(orangeLabel, fontSize)),
+            textY + 21, fontSize, WHITE);
+        if (hasCurves) {
+            DrawTextFont(fixedLine.c_str(), textX, textY + 42, fontSize, ORANGE);
+            DrawTextFont(adaptiveLine.c_str(), textX, textY + 63,
+                fontSize, SKYBLUE);
+        }
+    }
 }
 
 void WorldRenderer::RenderGhostPlayback(

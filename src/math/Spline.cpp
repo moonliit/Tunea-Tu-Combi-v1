@@ -1,4 +1,6 @@
 #include "math/Spline.hpp"
+#include <algorithm>
+#include <cmath>
 
 namespace Math {
 
@@ -42,6 +44,42 @@ std::vector<Vector2D> SampleCatmullRom(const std::vector<Vector2D>& controlPoint
 
     sampledVertices.push_back({controlPoints.back().x, controlPoints.back().y});
     return sampledVertices;
+}
+
+std::vector<Vector2D> SampleCatmullRomAdaptive(
+    const std::vector<Vector2D>& controlPoints, float tolerance) {
+    std::vector<Vector2D> sampled;
+    if (controlPoints.size() < 2) return sampled;
+    const float limit = std::max(tolerance, 0.01f);
+    const auto refine = [&](const auto& self, Vector2D p0, Vector2D p1,
+                            Vector2D p2, Vector2D p3, float t0, float t1,
+                            Vector2D a, Vector2D b, int depth) -> void {
+        const float tm = (t0 + t1) * 0.5f;
+        const Vector2D mid = EvaluateCatmullRom(p0,p1,p2,p3,tm);
+        const Vector2D quarter = EvaluateCatmullRom(p0,p1,p2,p3,(t0+tm)*0.5f);
+        const Vector2D threeQuarter = EvaluateCatmullRom(p0,p1,p2,p3,(tm+t1)*0.5f);
+        const auto error = [&](const Vector2D& curvePoint, float fraction) {
+            return std::hypot(
+                float(curvePoint.x) - (float(a.x)+(float(b.x)-float(a.x))*fraction),
+                float(curvePoint.y) - (float(a.y)+(float(b.y)-float(a.y))*fraction));
+        };
+        if (depth < 12 && std::max({error(quarter,0.25f),
+                error(mid,0.5f), error(threeQuarter,0.75f)}) > limit) {
+            self(self,p0,p1,p2,p3,t0,tm,a,mid,depth+1);
+            self(self,p0,p1,p2,p3,tm,t1,mid,b,depth+1);
+        } else {
+            sampled.push_back(b);
+        }
+    };
+    sampled.push_back(controlPoints.front());
+    for (size_t i = 0; i+1 < controlPoints.size(); ++i) {
+        const Vector2D p0 = controlPoints[i == 0 ? i : i-1];
+        const Vector2D p1 = controlPoints[i];
+        const Vector2D p2 = controlPoints[i+1];
+        const Vector2D p3 = controlPoints[i+2 < controlPoints.size() ? i+2 : i+1];
+        refine(refine,p0,p1,p2,p3,0.0f,1.0f,p1,p2,0);
+    }
+    return sampled;
 }
 
 }

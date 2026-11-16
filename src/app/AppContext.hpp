@@ -29,6 +29,7 @@ struct AppContext {
     std::shared_ptr<CustomLevelCatalog> customLevels;
     int activeCustomLevel = -1;
     bool openCustomMusicPicker = false;
+    bool graphicMode = false;
     IdentitySession identity;
     PublicationClient publications;
 };

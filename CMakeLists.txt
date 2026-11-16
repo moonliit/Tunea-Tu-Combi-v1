@@ -37,6 +37,38 @@ file(GLOB_RECURSE SOURCES src/*.cpp)
 # Define the executable target
 add_executable(ray ${SOURCES})
 
+option(BUILD_PROOFS "Build geometry proof programs" ON)
+if(BUILD_PROOFS AND NOT EMSCRIPTEN)
+    add_executable(terrain_geometry_proof EXCLUDE_FROM_ALL
+        proofs/terrain_geometry_proof.cpp
+        src/math/Terrain.cpp
+        src/math/Spline.cpp
+        src/math/Vector2D.cpp)
+    target_compile_definitions(terrain_geometry_proof PRIVATE
+        TERRAIN_PROOF_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+    file(GLOB_RECURSE TERRAIN_BENCHMARK_PHYSICS
+        CONFIGURE_DEPENDS src/physics/engine/*.cpp)
+    add_executable(terrain_sampling_proof EXCLUDE_FROM_ALL
+        proofs/terrain_sampling_proof.cpp
+        src/math/Terrain.cpp
+        src/math/Spline.cpp
+        src/math/Vector2D.cpp
+        src/math/Matrix2x2.cpp
+        src/app/game/Part.cpp
+        src/app/game/PartDefinition.cpp
+        src/app/game/EditorGrid.cpp
+        ${TERRAIN_BENCHMARK_PHYSICS})
+    target_compile_definitions(terrain_sampling_proof PRIVATE
+        TERRAIN_PROOF_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    if(APPLE)
+        target_link_libraries(terrain_sampling_proof PRIVATE raylib)
+    else()
+        target_link_libraries(terrain_sampling_proof PRIVATE
+            raylib GL m pthread dl rt X11)
+    endif()
+endif()
+
 if(EMSCRIPTEN)
     # --- WebAssembly Configuration ---
 

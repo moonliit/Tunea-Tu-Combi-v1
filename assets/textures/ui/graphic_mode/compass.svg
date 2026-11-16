@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>Formas geométricas</title>
+  <g fill="none" stroke="#fff" stroke-width="8" stroke-linejoin="round">
+    <circle cx="83" cy="38" r="18"/>
+    <rect x="75" y="73" width="33" height="33" rx="2"/>
+  </g>
+  <path fill="#fff" d="M16 105 42 54 68 105Z"/>
+</svg>

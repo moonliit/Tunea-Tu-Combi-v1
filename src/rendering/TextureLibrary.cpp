@@ -110,6 +110,10 @@ float MeasureTextFont(const char *text, float fontSize) {
 }
 
 void TextureLibrary::Initialize() {
+    m_ui.graphicModeGeometryColor = LoadSmoothTexture(
+        "assets/textures/ui/graphic_mode/geometry_color.png");
+    m_ui.graphicModeGeometryGray = LoadSmoothTexture(
+        "assets/textures/ui/graphic_mode/geometry_gray.png");
     for (const PartTextureFile& file : PartTextureFiles) {
         m_partTextures[file.type] = LoadSmoothTexture(file.path, false);
     }
@@ -260,6 +264,8 @@ void TextureLibrary::Shutdown() {
     UnloadTexture(m_levelGoalTexture);
 
     UnloadTexture(m_ui.logo);
+    UnloadTexture(m_ui.graphicModeGeometryColor);
+    UnloadTexture(m_ui.graphicModeGeometryGray);
     UnloadTexture(m_ui.arrowLeft);
     UnloadTexture(m_ui.arrowRight);
     UnloadTexture(m_ui.keyEnterBadge);

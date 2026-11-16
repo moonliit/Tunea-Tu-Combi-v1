@@ -54,6 +54,10 @@ MainMenuButtons GetMainMenuButtons(int width, int height) {
     };
 }
 
+Rectangle GraphicModeMenuButton(int width) {
+    return Rectangle{static_cast<float>(width - 205), 20.0f, 185.0f, 64.0f};
+}
+
 Rectangle CommunityRow(int width, int index) {
     return Rectangle{
         (width - 820.0f) / 2.0f,
@@ -355,6 +359,12 @@ void MainMenuScene::Update(float deltaTime) {
 }
 
 void MainMenuScene::ProcessInput(float) {
+    if (!m_selectingLevel && !m_browsingCommunity &&
+        UiButton::WasClicked(GraphicModeMenuButton(m_context->windowWidth))) {
+        m_context->graphicMode = !m_context->graphicMode;
+        m_context->audioController->PlayUiClick();
+        return;
+    }
     if (m_context->returnedToSelector) {
         m_context->returnedToSelector = false;
         m_selectedLevel = std::clamp(m_context->unlockedLevel - 1, 0, OfficialLevelCount - 1);
@@ -769,6 +779,9 @@ void MainMenuScene::Render() const {
         DrawMenuChoiceLabel("COMUNIDAD", buttons.community, 17);
         DrawMenuChoiceLabel("JUGAR", buttons.play, 21);
         DrawMenuChoiceLabel("MIS NIVELES", buttons.myLevels, 17);
+        UiButton::DrawGraphicModeToggle(
+            GraphicModeMenuButton(m_context->windowWidth),
+            m_context->graphicMode, ui);
     } else if (m_browsingCommunity) {
         const PublicCatalogSnapshot& catalog =
             m_context->publications.GetCatalogSnapshot();

@@ -74,14 +74,5 @@
       "configurePreset": "web-release",
       "jobs": 0
     }
-  ],
-  "testPresets": [
-    {
-      "name": "native-debug",
-      "configurePreset": "native-debug",
-      "output": {
-        "outputOnFailure": true
-      }
-    }
   ]
 }

@@ -7,6 +7,8 @@
 
 namespace Math {
 
+inline constexpr float TerrainCurveTolerance = 1.0f;
+
 enum class TerrainSegmentType {
     Line,
     CatmullRom
@@ -56,6 +58,25 @@ struct TerrainMesh {
     std::vector<Math::Vector2D> bottom;
     bool closed = false;
 };
+
+enum class PolygonIssue { None, TooFewVertices, ShortEdge, SmallArea,
+    SelfIntersection, TriangulationFailed };
+
+struct PolygonValidation {
+    PolygonIssue issue = PolygonIssue::None;
+    std::vector<std::size_t> badEdges;
+    std::vector<std::size_t> badVertices;
+    bool valid() const { return issue == PolygonIssue::None; }
+};
+
+struct PolygonTriangulation {
+    PolygonValidation validation;
+    std::vector<std::uint32_t> indices;
+};
+
+PolygonValidation ValidateTerrainPolygon(const std::vector<Vector2D>& polygon);
+PolygonTriangulation TriangulateTerrainPolygon(const std::vector<Vector2D>& polygon);
+const char* PolygonIssueMessage(PolygonIssue issue);
 
 std::vector<std::vector<Math::Vector2D>> SampleTerrain(
     const TerrainDefinition& definition

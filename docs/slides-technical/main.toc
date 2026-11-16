@@ -1,8 +1,0 @@
-\beamer@sectionintoc {1}{Juego y experiencia}{3}{0}{1}
-\beamer@sectionintoc {2}{Construcción y contenido}{7}{0}{2}
-\beamer@sectionintoc {3}{Puntuación y ranking}{11}{0}{3}
-\beamer@sectionintoc {4}{Motor de física y pipeline}{13}{0}{4}
-\beamer@sectionintoc {5}{Colisiones y respuesta}{18}{0}{5}
-\beamer@sectionintoc {6}{Activaciones y eventos importantes}{21}{0}{6}
-\beamer@sectionintoc {7}{Joints y estrés estructural}{23}{0}{7}
-\beamer@sectionintoc {8}{Detalles relevantes y cierre}{28}{0}{8}

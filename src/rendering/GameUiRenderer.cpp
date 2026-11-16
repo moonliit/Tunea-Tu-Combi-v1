@@ -96,20 +96,19 @@ void DrawCancelPieceIcon(
         enabled ? WHITE : GRAY);
 }
 
-void DrawDriverRequirement(Rectangle bounds, bool missing) {
+void DrawDriverRequirement(Rectangle bounds) {
     const char* label = "¡OBLIGATORIO!";
     const float width = std::max(bounds.width,
         MeasureTextFont(label, 11) + 12.0f);
     const Rectangle badge{bounds.x + (bounds.width - width) / 2.0f,
         bounds.y - 20.0f, width, 20.0f};
     DrawRectangleRec(badge, Fade(BLACK, 0.9f));
-    DrawRectangleLinesEx(badge, 1.0f,
-        missing ? Color{237, 18, 121, 255} : Color{129, 195, 71, 255});
+    DrawRectangleLinesEx(badge, 1.0f, Color{237, 18, 121, 255});
     DrawTextFont(label,
         static_cast<int>(badge.x +
             (badge.width - MeasureTextFont(label, 11)) / 2.0f),
         static_cast<int>(badge.y + 4.0f), 11,
-        missing ? GOLD : Color{153, 183, 135, 255});
+        GOLD);
 }
 
 PartType ToolbarToPartType(ToolbarPart part) {
@@ -288,13 +287,17 @@ void GameUiRenderer::Render(
         );
         if (control.type == UiControlType::Editor &&
             control.editorAction == EditorAction::ClearSelection) {
+            const PartType handPart = selectedPartType.has_value()
+                ? *selectedPartType
+                : buildSession.GetRepositionedPartType().value_or(
+                    PartType::SquareBlock);
             DrawCancelPieceIcon(control.bounds,
-                textures.GetPartTexture(PartType::SquareBlock),
+                textures.GetPartTexture(handPart),
                 control.enabled, UiButton::IsHovered(control.bounds));
         }
         if (control.type == UiControlType::ToolbarPart &&
-            control.toolbarPart == ToolbarPart::DriverBox) {
-            DrawDriverRequirement(control.bounds, control.enabled);
+            control.toolbarPart == ToolbarPart::DriverBox && control.enabled) {
+            DrawDriverRequirement(control.bounds);
         }
     }
 

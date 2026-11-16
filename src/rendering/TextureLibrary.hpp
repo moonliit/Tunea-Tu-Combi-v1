@@ -38,6 +38,8 @@ struct UiGameTextures {
 
 struct UiTextures {
     Texture2D logo{};
+    Texture2D graphicModeGeometryColor{};
+    Texture2D graphicModeGeometryGray{};
 
     UiButtonSkin primary;
     UiButtonSkin secondary;

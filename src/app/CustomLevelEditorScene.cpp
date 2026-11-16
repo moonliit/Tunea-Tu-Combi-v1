@@ -8,6 +8,7 @@
 #include "app/game/Level.hpp"
 #include "rendering/TextureLibrary.hpp"
 #include "rendering/PassengerRenderer.hpp"
+#include "math/Spline.hpp"
 #include "ui/UiButton.hpp"
 #include <raylib.h>
 #include <algorithm>
@@ -68,7 +69,7 @@ Rectangle EditorCombiButton(int width, int height) {
 }
 
 Rectangle EditorToolbarButton(int index) {
-    return Rectangle{20.0f + index * 118.0f, 14.0f, 110.0f, 78.0f};
+    return Rectangle{20.0f + index * 100.0f, 14.0f, 94.0f, 78.0f};
 }
 
 Rectangle LevelEditorMenuButton(int width) {
@@ -78,7 +79,56 @@ Rectangle LevelEditorMenuButton(int width) {
 
 Rectangle LevelEditorPublishButton(int width) {
     const Rectangle menu = LevelEditorMenuButton(width);
-    return Rectangle{menu.x - 150.0f, menu.y, 138.0f, menu.height};
+    return Rectangle{menu.x - 132.0f, menu.y, 120.0f, menu.height};
+}
+
+Rectangle GraphicModeButton(int width) {
+    const Rectangle publish = LevelEditorPublishButton(width);
+    return Rectangle{publish.x - 130.0f, publish.y,
+        publish.width, publish.height};
+}
+
+Rectangle TerrainCurveButton(int width, int height) {
+    return Rectangle{static_cast<float>(width - 590),
+        static_cast<float>(height - 48), 270.0f, 38.0f};
+}
+
+Math::TerrainPolygon BuildTerrainPolygon(
+    const std::vector<Math::Vector2D>& points,
+    const std::vector<bool>& curveEdges
+) {
+    Math::TerrainPolygon polygon;
+    if (points.size() < 3) return polygon;
+    std::vector<Math::Vector2D> closed = points;
+    closed.push_back(points.front());
+    for (std::size_t begin = 0; begin < points.size();) {
+        const bool curved = begin < curveEdges.size() && curveEdges[begin];
+        std::size_t end = begin + 1;
+        while (end < points.size() &&
+               (end < curveEdges.size() && curveEdges[end]) == curved) {
+            ++end;
+        }
+        Math::TerrainSegment segment;
+        segment.type = curved ? Math::TerrainSegmentType::CatmullRom
+                              : Math::TerrainSegmentType::Line;
+        segment.resolution = curved ? 12 : 1;
+        segment.points.assign(closed.begin() + begin, closed.begin() + end + 1);
+        polygon.segments.push_back(std::move(segment));
+        begin = end;
+    }
+    return polygon;
+}
+
+Math::PolygonTriangulation ValidateTerrainDraft(
+    const std::vector<Math::Vector2D>& points,
+    const std::vector<bool>& curveEdges
+) {
+    if (points.size() < 3) return Math::TriangulateTerrainPolygon(points);
+    Math::TerrainDefinition terrain;
+    terrain.polygons.push_back(BuildTerrainPolygon(points, curveEdges));
+    auto boundary = Math::SampleTerrain(terrain).front();
+    if (boundary.front() == boundary.back()) boundary.pop_back();
+    return Math::TriangulateTerrainPolygon(boundary);
 }
 
 void DrawEditorToolButton(
@@ -346,6 +396,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
             m_designCamera.target = m_designCamera.offset;
         }
         m_terrainWorkPoints.clear();
+        m_terrainCurveEdges.clear();
         m_gridAnchor.reset();
         m_lastEraserMouseScreen.reset();
     }
@@ -369,6 +420,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         if (m_designTool == DesignTool::Terrain &&
             tool != DesignTool::Terrain) {
             m_terrainWorkPoints.clear();
+            m_terrainCurveEdges.clear();
         }
         m_gridAnchor.reset();
         m_designTool = tool;
@@ -430,6 +482,9 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Rectangle passengerButton = EditorToolbarButton(5);
     const Rectangle tntButton = EditorToolbarButton(6);
     const Rectangle publishButton = LevelEditorPublishButton(m_context->windowWidth);
+    const Rectangle graphicButton = GraphicModeButton(m_context->windowWidth);
+    const Rectangle curveButton = TerrainCurveButton(
+        m_context->windowWidth, m_context->windowHeight);
     const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
     const Rectangle editButton = EditorCombiButton(
         m_context->windowWidth, m_context->windowHeight
@@ -438,6 +493,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         m_gridAnchor.reset();
         m_gridAnchorLevel = -1;
         m_terrainWorkPoints.clear();
+        m_terrainCurveEdges.clear();
         m_musicPickerOpen = false;
         m_context->requestedCustomSelector = true;
         m_context->requestedCommunitySelector = false;
@@ -447,6 +503,18 @@ void CustomLevelEditorScene::ProcessInput(float) {
     };
     if (IsKeyPressed(KEY_ESCAPE)) {
         returnToMyLevels();
+        return;
+    }
+    if (!m_musicPickerOpen && UiButton::WasClicked(graphicButton)) {
+        m_context->graphicMode = !m_context->graphicMode;
+        m_context->audioController->PlayUiClick();
+        return;
+    }
+    if (!m_musicPickerOpen && m_designTool == DesignTool::Terrain &&
+        (IsKeyPressed(KEY_C) || UiButton::WasClicked(curveButton))) {
+        m_terrainCurveMode = !m_terrainCurveMode;
+        m_terrainCloseRejected = false;
+        m_context->audioController->PlayUiClick();
         return;
     }
 
@@ -470,6 +538,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         (IsKeyPressed(KEY_FOUR) || UiButton::WasClicked(musicButton))) {
         m_gridAnchor.reset();
         m_terrainWorkPoints.clear();
+        m_terrainCurveEdges.clear();
         m_musicCategory = 0;
         m_musicTrack = 0;
         LocateMusic(custom.musicPath, m_musicCategory, m_musicTrack);
@@ -769,23 +838,52 @@ void CustomLevelEditorScene::ProcessInput(float) {
     }
 
     if (m_designTool == DesignTool::Terrain &&
+        IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        m_dragTerrainVertex.reset();
+    }
+    if (m_designTool == DesignTool::Terrain &&
+        IsMouseButtonDown(MOUSE_BUTTON_LEFT) && m_dragTerrainVertex.has_value()) {
+        m_terrainWorkPoints[*m_dragTerrainVertex] = point;
+        m_terrainCloseRejected = false;
+        return;
+    }
+    if (m_designTool == DesignTool::Terrain &&
+        IsKeyPressed(KEY_BACKSPACE) && !m_terrainWorkPoints.empty()) {
+        m_terrainWorkPoints.pop_back();
+        if (!m_terrainCurveEdges.empty()) m_terrainCurveEdges.pop_back();
+        m_terrainCloseRejected = false;
+        return;
+    }
+    if (m_designTool == DesignTool::Terrain &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {
+            const auto screen = GetWorldToScreen2D(m_terrainWorkPoints[i].ToRayVec(), m_designCamera);
+            if (std::hypot(screen.x-screenMouse.x, screen.y-screenMouse.y) <= 12.0f) {
+                m_dragTerrainVertex = i;
+                m_terrainCloseRejected = false;
+                return;
+            }
+        }
+        if (!m_terrainWorkPoints.empty()) {
+            m_terrainCurveEdges.push_back(m_terrainCurveMode);
+        }
         m_terrainWorkPoints.push_back(point);
+        m_terrainCloseRejected = false;
     } else if (m_designTool == DesignTool::Terrain &&
-               finishTerrainClick &&
-               m_terrainWorkPoints.size() >= 3) {
-        Math::TerrainPolygon polygon;
-        std::vector<Math::Vector2D> points = m_terrainWorkPoints;
-        points.push_back(points.front());
-        polygon.segments.push_back(Math::TerrainSegment{
-            .type = Math::TerrainSegmentType::Line,
-            .points = std::move(points),
-            .resolution = 1
-        });
-        custom.definition.terrain.polygons.push_back(std::move(polygon));
+               finishTerrainClick) {
+        const auto triangulation = ValidateTerrainDraft(
+            m_terrainWorkPoints, m_terrainCurveEdges);
+        if (!triangulation.validation.valid()) {
+            m_terrainCloseRejected = true;
+            return;
+        }
+        custom.definition.terrain.polygons.push_back(
+            BuildTerrainPolygon(m_terrainWorkPoints, m_terrainCurveEdges));
         custom.hasTerrain = true;
         m_terrainWorkPoints.clear();
+        m_terrainCurveEdges.clear();
         RepositionTntObstacles(custom);
+        m_terrainCloseRejected = false;
         if (custom.hasGoal) {
             const auto surfaceY = FindTerrainSurfaceY(
                 custom.definition.terrain,
@@ -861,6 +959,27 @@ void CustomLevelEditorScene::Render() const {
                 terrainOutline
             );
         }
+        if (m_context->graphicMode) {
+            for (std::size_t i = 0; i+2 < mesh.indices.size(); i += 3) {
+                const auto a = mesh.vertices[mesh.indices[i]].ToRayVec();
+                const auto b = mesh.vertices[mesh.indices[i+1]].ToRayVec();
+                const auto c = mesh.vertices[mesh.indices[i+2]].ToRayVec();
+                DrawTriangleLines(a,b,c,Color{65,190,255,255});
+            }
+        }
+    }
+    if (m_designTool == DesignTool::Terrain || m_context->graphicMode) {
+        for (const auto& polygon : custom.definition.terrain.polygons) {
+            for (const auto& segment : polygon.segments) {
+                if (segment.type != Math::TerrainSegmentType::CatmullRom) continue;
+                const auto curve = Math::SampleCatmullRom(
+                    segment.points, std::max(1, segment.resolution));
+                for (std::size_t i = 1; i < curve.size(); ++i) {
+                    DrawLineEx(curve[i - 1].ToRayVec(), curve[i].ToRayVec(),
+                        4.0f / m_designCamera.zoom, ORANGE);
+                }
+            }
+        }
     }
     for (const auto& passenger : custom.definition.passengers) {
         DrawPassenger(
@@ -905,11 +1024,49 @@ void CustomLevelEditorScene::Render() const {
             );
         }
     }
+    const auto workValidation = Math::ValidateTerrainPolygon(m_terrainWorkPoints);
+    const auto draftValidation = ValidateTerrainDraft(
+        m_terrainWorkPoints, m_terrainCurveEdges).validation;
+    const bool curvedShapeInvalid = m_terrainWorkPoints.size() >= 3 &&
+        workValidation.valid() && !draftValidation.valid();
+    const Color terrainDraftBlue{39, 78, 235, 255};
+    const auto drawTerrainDraftEdge = [&](Vector2 start, Vector2 end, bool invalid) {
+        DrawLineEx(start, end, 7.0f / m_designCamera.zoom, BLACK);
+        DrawLineEx(start, end, 4.5f / m_designCamera.zoom,
+            invalid ? RED : terrainDraftBlue);
+    };
     for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {
         const Vector2 point = m_terrainWorkPoints[i].ToRayVec();
-        DrawCircleV(point, 5.0f, RED);
+        const bool badVertex = std::find(workValidation.badVertices.begin(),
+            workValidation.badVertices.end(), i) != workValidation.badVertices.end();
+        DrawCircleV(point, (badVertex ? 10.0f : 8.0f) /
+            m_designCamera.zoom, BLACK);
+        DrawCircleV(point, (badVertex ? 8.0f : 6.0f) /
+            m_designCamera.zoom, badVertex ? RED : terrainDraftBlue);
         if (i > 0) {
-            DrawLineV(m_terrainWorkPoints[i - 1].ToRayVec(), point, RED);
+            const bool badEdge = std::find(workValidation.badEdges.begin(),
+                workValidation.badEdges.end(), i-1) != workValidation.badEdges.end();
+            drawTerrainDraftEdge(m_terrainWorkPoints[i - 1].ToRayVec(),
+                point, badEdge || curvedShapeInvalid);
+        }
+    }
+    if (m_terrainWorkPoints.size() >= 3) {
+        const std::size_t last = m_terrainWorkPoints.size()-1;
+        const bool badEdge = std::find(workValidation.badEdges.begin(),
+            workValidation.badEdges.end(), last) != workValidation.badEdges.end();
+        drawTerrainDraftEdge(m_terrainWorkPoints[last].ToRayVec(),
+            m_terrainWorkPoints.front().ToRayVec(),
+            badEdge || curvedShapeInvalid);
+        const auto draftPolygon = BuildTerrainPolygon(
+            m_terrainWorkPoints, m_terrainCurveEdges);
+        for (const auto& segment : draftPolygon.segments) {
+            if (segment.type != Math::TerrainSegmentType::CatmullRom) continue;
+            const auto curve = Math::SampleCatmullRom(segment.points, 12);
+            for (std::size_t i = 1; i < curve.size(); ++i) {
+                DrawLineEx(curve[i - 1].ToRayVec(), curve[i].ToRayVec(),
+                    5.0f / m_designCamera.zoom,
+                    draftValidation.valid() ? ORANGE : RED);
+            }
         }
     }
 
@@ -1010,6 +1167,7 @@ void CustomLevelEditorScene::Render() const {
     const Rectangle passengerButton = EditorToolbarButton(5);
     const Rectangle tntButton = EditorToolbarButton(6);
     const Rectangle publishButton = LevelEditorPublishButton(m_context->windowWidth);
+    const Rectangle graphicButton = GraphicModeButton(m_context->windowWidth);
     const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
     const UiTextures& ui = m_context->textureLibrary->GetUi();
     DrawRectangle(0, 0, m_context->windowWidth, 129, Fade(BLACK, 0.88f));
@@ -1040,6 +1198,8 @@ void CustomLevelEditorScene::Render() const {
         static_cast<std::size_t>(m_context->activeCustomLevel)
     );
     UiButton::DrawTextured(publishButton, ui.menuPublish, approved, "Publicar");
+    UiButton::DrawGraphicModeToggle(graphicButton,
+        m_context->graphicMode, ui);
     UiButton::DrawTextured(menuButton,
         ui.menuBack, true, "Menú");
     const Rectangle editButton = EditorCombiButton(
@@ -1065,6 +1225,23 @@ void CustomLevelEditorScene::Render() const {
         m_context->windowWidth, 58, Fade(BLACK, 0.88f));
     DrawRectangle(0, m_context->windowHeight - 58,
         m_context->windowWidth, 3, Color{237, 18, 121, 255});
+    if (m_designTool == DesignTool::Terrain) {
+        const Rectangle curveButton = TerrainCurveButton(
+            m_context->windowWidth, m_context->windowHeight);
+        const bool hovered = UiButton::IsHovered(curveButton);
+        DrawRectangleRec(curveButton,
+            Fade(m_terrainCurveMode ? ORANGE : DARKGRAY,
+                hovered ? 0.55f : 0.35f));
+        DrawRectangleLinesEx(curveButton, hovered ? 2.0f : 1.0f,
+            m_terrainCurveMode ? ORANGE : LIGHTGRAY);
+        DrawTextFont("CURVA CATMULL-ROM [C]",
+            static_cast<int>(curveButton.x + 10),
+            static_cast<int>(curveButton.y + 11), 13, WHITE);
+        DrawTextFont(m_terrainCurveMode ? "ON" : "OFF",
+            static_cast<int>(curveButton.x + curveButton.width - 39),
+            static_cast<int>(curveButton.y + 11), 13,
+            m_terrainCurveMode ? GOLD : LIGHTGRAY);
+    }
 
     std::string instructions;
     if (m_designTool == DesignTool::Grid) {
@@ -1084,7 +1261,7 @@ void CustomLevelEditorScene::Render() const {
         }
     } else {
         instructions = m_designTool == DesignTool::Terrain
-            ? "Clic izquierdo: puntos | clic derecho: cerrar | arrastra clic derecho: mover vista"
+            ? "Terreno: clic para puntos | C: curva en próximos tramos | clic derecho: cerrar | arrastra derecho: mover"
             : m_designTool == DesignTool::Eraser
             ? "Borrador: clic en pasajero, meta, cuadrícula o terreno | arrastra para borrar varios"
             : m_designTool == DesignTool::Passenger
@@ -1093,7 +1270,12 @@ void CustomLevelEditorScene::Render() const {
             ? "Haz clic sobre el terreno para colocar un TNT estático"
             : "Haz clic sobre el terreno para colocar la meta en su superficie";
     }
-    DrawTextFont(instructions.c_str(), 20, 106, 15, WHITE);
+    if (m_terrainCloseRejected && !draftValidation.valid()) {
+        instructions = std::string(Math::PolygonIssueMessage(draftValidation.issue)) +
+            " | arrastra vértices o Backspace para corregir";
+    }
+    DrawTextFont(instructions.c_str(), 20, 106, 15,
+        m_terrainCloseRejected ? RED : WHITE);
     DrawTextFont(
         TextFormat(
             "Terreno %s   Cuadrícula %s   Meta %s   TNT %d",
