@@ -755,12 +755,23 @@ void MainGameScene::Update(float dt) {
                 m_appContext->audioController->PlayBreakageEffect();
                 m_playSession.GetBreakageConsumed() = false;
             }
+            for (const ExplosionVisual& visual : m_playSession.ConsumeExplosionVisuals()) {
+                m_explosionVisuals.push_back(ExplosionVisualInstance{
+                    .position = visual.position,
+                    .radius = visual.radius,
+                    .frame = 0,
+                    .timer = 0.0f
+                });
+            }
+            UpdateExplosionVisuals(dt);
         }
         UpdateGoalWindow(frameMs);
         if (m_stateMachine.IsPlayMode()) {
             m_capture.RecordFrame(
                 std::llround(m_elapsedMs), runtimeGrid
             );
+        } else {
+            m_playSession.ConsumeExplosionVisuals();
         }
     }
     UpdateGoalParticles(dt);
@@ -775,6 +786,7 @@ void MainGameScene::TransitionToPlayMode() {
     m_goalWindow.Reset();
     m_statistics = {};
     m_score = {};
+    m_explosionVisuals.clear();
     const auto& parts = m_level.GetGrid().GetActiveParts();
     const bool hasWheel = std::any_of(
         parts.begin(),
@@ -1067,11 +1079,75 @@ void MainGameScene::RenderGoalParticles() const {
     }
 }
 
+void MainGameScene::UpdateExplosionVisuals(float dt) {
+    const ExplosionAnimation& animation =
+        m_appContext->textureLibrary->GetExplosionAnim();
+    if (!animation.IsValid()) {
+        m_explosionVisuals.clear();
+        return;
+    }
+
+    const float frameDuration = animation.frameDuration;
+    for (ExplosionVisualInstance& instance : m_explosionVisuals) {
+        instance.timer += dt;
+        while (instance.timer >= frameDuration) {
+            instance.timer -= frameDuration;
+            ++instance.frame;
+        }
+    }
+
+    m_explosionVisuals.erase(
+        std::remove_if(
+            m_explosionVisuals.begin(),
+            m_explosionVisuals.end(),
+            [&animation](const ExplosionVisualInstance& instance) {
+                return instance.frame >=
+                    static_cast<int>(animation.frames.size());
+            }
+        ),
+        m_explosionVisuals.end()
+    );
+}
+
+void MainGameScene::RenderExplosionVisuals() const {
+    const ExplosionAnimation& animation =
+        m_appContext->textureLibrary->GetExplosionAnim();
+    if (!animation.IsValid()) return;
+
+    for (const ExplosionVisualInstance& instance : m_explosionVisuals) {
+        if (instance.frame < 0 ||
+            instance.frame >= static_cast<int>(animation.frames.size())) {
+            continue;
+        }
+        const Texture2D& frame = animation.frames[instance.frame];
+        const float size = instance.radius * 2.0f;
+        DrawTexturePro(
+            frame,
+            Rectangle{
+                0.0f,
+                0.0f,
+                static_cast<float>(frame.width),
+                static_cast<float>(frame.height)
+            },
+            Rectangle{
+                static_cast<float>(instance.position.x),
+                static_cast<float>(instance.position.y),
+                size,
+                size
+            },
+            Vector2{size / 2.0f, size / 2.0f},
+            0.0f,
+            WHITE
+        );
+    }
+}
+
 void MainGameScene::ResetToBuildMode() {
     m_elapsedMs = 0.0;
     m_goalWindow.Reset();
     m_previousPartPositions.clear();
     m_capture.Clear();
+    m_explosionVisuals.clear();
     if (m_competeAgainstGhost) m_ghostPlayback.PrepareCompetition();
     else m_ghostPlayback.StopAndRewind();
     m_leaderboard.Reset();
@@ -1383,6 +1459,7 @@ void MainGameScene::Render() const {
     };
 
     RenderGoalParticles();
+    RenderExplosionVisuals();
     DrawTexturePro(
         goalTexture,
         Rectangle{0.0f, 0.0f, static_cast<float>(goalTexture.width), static_cast<float>(goalTexture.height)},

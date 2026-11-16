@@ -141,6 +141,7 @@ void PlaySession::Start() {
     m_ejectedPassengers.clear();
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
+    m_explosionVisuals.clear();
     m_tntConsumedAmount = 0;
     m_damageConsumed = false;
     m_breakageConsumed = false;
@@ -165,6 +166,7 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_ejectedPassengers.clear();
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
+    m_explosionVisuals.clear();
     m_tntConsumedAmount = 0;
     m_damageConsumed = false;
     m_breakageConsumed = false;
@@ -209,9 +211,8 @@ void PlaySession::ProcessImpacts() {
             Part* contained = impact.part->GetContainedPart();
             if (contained != nullptr && contained->GetType() == PartType::TNTBarrel) {
                 if (!landingProtectionActive) {
-                    contained->Activate();
                     if (impactedPartsForTnt.find(contained) == impactedPartsForTnt.end()) {
-                        m_tntConsumedAmount++;
+                        contained->Activate();
                         impactedPartsForTnt.insert(contained);
                     }
                     m_damageConsumed = true;
@@ -249,10 +250,8 @@ void PlaySession::ProcessImpacts() {
             impact.part->GetType() == PartType::TNTBarrel &&
             impact.impulse >= TntImpactImpulseThreshold
         ) {
-            // todo: draw explosion effect
-            impact.part->Activate();
             if (impactedPartsForTnt.find(impact.part) == impactedPartsForTnt.end()) {
-                m_tntConsumedAmount++;
+                impact.part->Activate();
                 impactedPartsForTnt.insert(impact.part);
             }
         } else if (impact.impulse >= DamageImpulseThreshold) {
@@ -301,7 +300,15 @@ void PlaySession::RemoveConsumedTnt() {
         }
     }
 
+    const float cellSize = m_runtimeModel.GetGrid().GetCellSize();
     for (Part* root : containedToRemove) {
+        const PartRenderState state =
+            root->GetRenderState(m_runtimeModel.GetGrid());
+        m_tntConsumedAmount++;
+        m_explosionVisuals.push_back(ExplosionVisual{
+            .position = state.position,
+            .radius = cellSize * 4.0f
+        });
         std::unique_ptr<Part> contained = root->RemoveContainedPart();
         if (contained == nullptr) continue;
         m_physics->RemoveBody(contained->GetPhysicsBody());
@@ -310,6 +317,11 @@ void PlaySession::RemoveConsumedTnt() {
     for (const Math::GridCoord coord : rootsToRemove) {
         const auto& part = m_runtimeModel.GetGrid().GetPart(coord);
         if (!part.has_value()) continue;
+        m_tntConsumedAmount++;
+        m_explosionVisuals.push_back(ExplosionVisual{
+            .position = part->GetRenderState(m_runtimeModel.GetGrid()).position,
+            .radius = cellSize * 3.0f
+        });
         m_physics->RemoveBody(part->GetPhysicsBody());
         m_runtimeModel.GetGrid().RemovePart(coord);
     }
