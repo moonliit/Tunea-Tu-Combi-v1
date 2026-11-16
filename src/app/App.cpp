@@ -4,6 +4,7 @@
 #include "app/MainMenuScene.hpp"
 #include "app/CustomLevelCatalog.hpp"
 #include "app/CustomLevelEditorScene.hpp"
+#include "app/OfficialProgressStore.hpp"
 
 #include <algorithm>
 #include <raylib.h>
@@ -71,6 +72,9 @@ App::App(int width, int height, const std::string& title):
         .textureLibrary = &m_textureLibrary,
         .customLevels = std::make_shared<CustomLevelCatalog>()
     };
+#ifndef __EMSCRIPTEN__
+    m_appContext.unlockedLevel = OfficialProgressStore::LoadUnlockedLevel();
+#endif
     m_sceneManager.SetAppContext(&m_appContext);
     LevelDefinition emptyDef = LevelDefinition::FromJsonPath(StartupLevelPath);
 

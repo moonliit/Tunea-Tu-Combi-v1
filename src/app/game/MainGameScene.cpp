@@ -9,6 +9,8 @@
 #include "app/AppContext.hpp"
 #include "app/AudioController.hpp"
 #include "app/CustomLevelCatalog.hpp"
+#include "app/LevelCatalog.hpp"
+#include "app/OfficialProgressStore.hpp"
 #include "rendering/Background.hpp"
 #include "rendering/PassengerRenderer.hpp"
 #include <optional>
@@ -1213,6 +1215,15 @@ void MainGameScene::CompleteRun() {
     m_appContext->audioController->SetWheelActive(false);
     if (m_level.GetDefinition().levelNumber > 0) {
         m_appContext->completedLevel = m_level.GetDefinition().levelNumber;
+        m_appContext->unlockedLevel = std::max(
+            m_appContext->unlockedLevel,
+            std::min(OfficialLevelCount, m_appContext->completedLevel + 1)
+        );
+#ifndef __EMSCRIPTEN__
+        if (!OfficialProgressStore::SaveUnlockedLevel(m_appContext->unlockedLevel)) {
+            TraceLog(LOG_WARNING, "No se pudo guardar el progreso local de niveles");
+        }
+#endif
     }
     m_stateMachine.EnterResults();
 }

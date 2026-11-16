@@ -61,6 +61,12 @@ incremental. CMake genera `compile_commands.json` dentro del build nativo y
 | `just aws-destroy` | Borra todo en AWS, incluidos los datos de los jugadores (pide confirmación)    |
 | `just clean` | Elimina los artefactos compilados                                              |
 
+Al jugar con `just run` desde la raíz del proyecto, los niveles oficiales
+desbloqueados se guardan al completar cada nivel en
+`user_data/official_progress.json`. El archivo persiste entre ejecuciones y
+está excluido de Git. Los récords personales y los niveles personalizados
+se guardan por separado en la misma carpeta.
+
 ## Estructura del Proyecto
 
 ```text
