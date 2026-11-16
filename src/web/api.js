@@ -101,7 +101,7 @@ Module['api'] = (() => {
     const publicLevelPath = (id) => levelPath(`public:${id}`);
     function fail(error) {
         accept(null);
-        notice = messages[error.message] ?? 'Sin conexión confirmada. Puedes jugar localmente, pero no puedes reservar ni publicar.';
+        notice = messages[error.message] ?? '';
         ownPublicationState.items = [];
         ownPublicationState.error = 'Sin conexión: la gestión de publicaciones no está disponible.';
         renderPublications();
@@ -657,7 +657,7 @@ Module['api'] = (() => {
         const panel = document.createElement('details');
         panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font:15px sans-serif;background:#f5f1e8;color:#30281f;text-align:left';
         const summary = document.createElement('summary');
-        summary.textContent = 'Catálogo público y mis publicaciones';
+        summary.textContent = 'Niveles de la comunidad';
         summary.style.cssText = 'font-weight:bold;cursor:pointer';
         const search = document.createElement('form');
         search.style.cssText = 'display:flex;gap:8px;margin:12px 0 4px';
@@ -819,19 +819,22 @@ Module['api'] = (() => {
         state.setAttribute('role', 'status');
         const form = document.createElement('form');
         const label = document.createElement('label');
-        label.textContent = 'Nombre de tu combi: ';
         const input = document.createElement('input');
         input.type = 'text'; input.maxLength = 64; input.autocomplete = 'off';
+        input.placeholder = 'Nombre de tu combi';
+        input.setAttribute('aria-label', 'Nombre de tu combi');
         input.setAttribute('aria-describedby', 'combi-name-rules');
         label.append(input);
-        const save = document.createElement('button'); save.type = 'submit'; save.textContent = 'Reservar / cambiar';
-        const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Reconectar';
+        const save = document.createElement('button'); save.type = 'submit';
+        const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Reintentar';
         const rules = document.createElement('p'); rules.id = 'combi-name-rules';
-        rules.textContent = '3–24 caracteres: letras latinas (con tildes), números, espacios o guiones; empieza y termina con letra o número. Mayúsculas y espacios sobrantes no distinguen nombres. Unicode NFKC; las tildes sí distinguen.';
+        rules.textContent = 'De 3 a 24 letras, números, espacios o guiones.';
+        rules.title = '3–24 caracteres: letras latinas (con tildes), números, espacios o guiones; empieza y termina con letra o número. Mayúsculas y espacios sobrantes no distinguen nombres. Unicode NFKC; las tildes sí distinguen.';
         const warning = document.createElement('p');
-        warning.textContent = 'Si borras la cookie o vence (1 año), crearás otra identidad y perderás acceso a la anterior desde este navegador. Sus niveles, grabaciones y nombre reservado permanecen. No hay recuperación.';
+        warning.textContent = 'Tu identidad vive en este navegador: si borras las cookies, no se puede recuperar.';
+        warning.title = 'Si borras la cookie o vence (1 año), crearás otra identidad y perderás acceso a la anterior desde este navegador. Sus niveles, grabaciones y nombre reservado permanecen. No hay recuperación.';
         const feedback = document.createElement('p'); feedback.setAttribute('aria-live', 'polite');
-        form.append(label, save, retry); panel.append(state, form, rules, warning, feedback);
+        form.append(label, save); panel.append(state, form, retry, rules, warning, feedback);
         const canvas = document.querySelector('canvas');
         const container = canvas?.parentElement;
         if (container?.parentElement) container.before(panel); else document.body.prepend(panel);
@@ -839,11 +842,16 @@ Module['api'] = (() => {
         for (const event of ['keydown', 'keyup', 'keypress']) panel.addEventListener(event, e => e.stopPropagation());
         let renderedName = null;
         updateUi = () => {
-            state.textContent = status === 'ready'
-                ? (identity.name ? 'Combi: ' + identity.name : 'Identidad conectada. Todavía no tienes un nombre reservado.')
-                : 'Modo local: puedes jugar. Sin nombre reservado ni permisos de publicación.';
+            const ready = status === 'ready';
+            state.textContent = ready
+                ? (identity.name ? 'Tu combi: ' + identity.name : 'Elige un nombre para tu combi.')
+                : 'Sin conexión. Puedes jugar, pero no reservar un nombre ni publicar niveles.';
+            // Online: the name form. Offline: only a retry button.
+            form.hidden = rules.hidden = warning.hidden = !ready;
+            retry.hidden = ready;
+            save.textContent = identity?.name ? 'Cambiar nombre' : 'Reservar nombre';
             if (identity?.name !== renderedName) { input.value = identity?.name ?? ''; renderedName = identity?.name; }
-            save.disabled = busy || status !== 'ready'; retry.disabled = busy;
+            save.disabled = busy || !ready; retry.disabled = busy;
             feedback.textContent = busy ? 'Conectando…' : notice;
         };
         form.addEventListener('submit', async e => { e.preventDefault(); await rename(input.value); });
