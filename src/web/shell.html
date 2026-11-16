@@ -66,7 +66,7 @@
         .card .meta { padding: 12px 14px; }
         .card h2 { margin: 0 0 8px; font-size: 16px; }
 
-        /* Game page: the game on the left, the account and community panels on the right */
+        /* Game page: the game on the left, the account, about and publications boxes on the right */
         #page {
             flex: 1;
             display: grid;
@@ -150,12 +150,13 @@
         #loading.error img { display: none; }
         #loading.error .track { display: none; }
 
-        /* About the game */
-        #about { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); max-width: 760px; }
-        #about h2 { margin: 0 0 8px; font-size: 16px; }
-        #about p { margin: 0; color: #cfcfd6; }
-
         /* Sidebar boxes. The panels come from api.js, which writes their look inline. */
+        #sidebar { display: flex; flex-direction: column; }
+        /* Order: your combi (api.js), about the game, your publications (api.js) */
+        #sidebar > #about { order: 1; }
+        #sidebar > details { order: 2; }
+        #sidebar > #about h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+        #sidebar > #about p { margin: 0; color: var(--text); font-size: 14px; }
         #sidebar > section, #sidebar > details {
             width: 100%;
             max-width: none !important;
@@ -167,7 +168,7 @@
             border-radius: 4px;
             font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
         }
-        /* The community panel is always open, so its title is just a heading. */
+        /* The publications panel is always open, so its title is just a heading. */
         #sidebar summary { font-weight: 600; list-style: none; pointer-events: none; }
         #sidebar summary::-webkit-details-marker { display: none; }
         #sidebar h3 { margin: 16px 0 6px; font-size: 14px; font-weight: 600; }
@@ -301,12 +302,13 @@
                     </button>
                 </div>
             </div>
+        </main>
+        <aside id="sidebar">
             <section id="about">
                 <h2>Acerca del juego</h2>
                 <p>Arma tu combi con bloques, ruedas, ventiladores, velas y barriles de TNT. Recoge pasajeros y llévalos hasta la meta. Cada nivel tiene su propio ranking, y puedes crear y publicar tus propios niveles.</p>
             </section>
-        </main>
-        <aside id="sidebar"></aside>
+        </aside>
     </div>
 
     <footer id="footer"><div class="wrap">© 2026 Jueguitos</div></footer>
@@ -361,7 +363,7 @@
         // api.js puts its panels before the game frame; they belong in the sidebar.
         const sidebar = document.getElementById('sidebar');
 
-        // The community panel is a normal box, not a dropdown: keep it open.
+        // The publications panel is a normal box, not a dropdown: keep it open.
         function keepOpen(details) {
             details.open = true;
             details.addEventListener('toggle', () => { details.open = true; });

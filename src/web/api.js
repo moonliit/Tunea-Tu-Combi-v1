@@ -712,34 +712,7 @@ Module['api'] = (() => {
         panel.classList.add('combi-matcha');
         panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font-size:15px;background:#f5f1e8;color:#30281f;text-align:left';
         const summary = document.createElement('summary');
-        summary.textContent = 'Niveles de la comunidad';
         summary.style.cssText = 'font-weight:bold;cursor:pointer';
-        const search = document.createElement('form');
-        search.style.cssText = 'display:flex;gap:8px;margin:12px 0 4px';
-        const searchInput = document.createElement('input');
-        searchInput.placeholder = 'Nombre del nivel o autor';
-        searchInput.maxLength = 40;
-        searchInput.style.flex = '1';
-        const searchButton = document.createElement('button');
-        searchButton.type = 'submit';
-        searchButton.textContent = 'Buscar';
-        search.append(searchInput, searchButton);
-        const scope = document.createElement('p');
-        scope.textContent = 'Orden: publicaciones recientes. La búsqueda revisa como máximo las 100 más recientes. El servidor valida la estructura y la ventana registrada del chofer; no verifica la física ni evita trampas.';
-        scope.style.cssText = 'margin:4px 0 10px;color:#665c50;font-size:13px';
-        const catalogTitle = document.createElement('h3');
-        catalogTitle.textContent = 'Niveles públicos';
-        const catalogList = document.createElement('div');
-        const navigation = document.createElement('div');
-        navigation.style.cssText = 'display:flex;gap:8px;margin:8px 0 18px';
-        const previous = document.createElement('button');
-        previous.type = 'button';
-        previous.textContent = 'Anterior';
-        const next = document.createElement('button');
-        next.type = 'button';
-        next.textContent = 'Siguiente';
-        navigation.append(previous, next);
-        const ownTitle = document.createElement('h3');
         const ownList = document.createElement('div');
         const ownNavigation = document.createElement('div');
         ownNavigation.style.cssText = 'display:flex;gap:8px;margin:8px 0';
@@ -752,10 +725,7 @@ Module['api'] = (() => {
         ownNavigation.append(ownPrevious, ownNext);
         const feedback = document.createElement('p');
         feedback.setAttribute('aria-live', 'polite');
-        panel.append(
-            summary, search, scope, catalogTitle, catalogList, navigation,
-            ownTitle, ownList, ownNavigation, feedback
-        );
+        panel.append(summary, ownList, ownNavigation, feedback);
         container.before(panel);
         for (const event of ['keydown', 'keyup', 'keypress'])
             panel.addEventListener(event, (value) => value.stopPropagation());
@@ -783,32 +753,7 @@ Module['api'] = (() => {
             return button;
         };
         renderPublications = () => {
-            catalogList.replaceChildren();
-            if (catalogState.loading) {
-                catalogList.textContent = 'Cargando catálogo...';
-            } else if (catalogState.error) {
-                catalogList.textContent = catalogState.error;
-            } else if (!catalogState.items.length) {
-                catalogList.textContent = catalogState.query
-                    ? 'No hay coincidencias dentro de las 100 publicaciones más recientes.'
-                    : 'Todavía no hay niveles publicados.';
-            } else {
-                for (const level of catalogState.items) {
-                    const author = level.author?.name || 'Combi sin nombre';
-                    const best = level.best
-                        ? `Mejor: ${level.best.total} puntos · ${level.best.driverTimeMs} ms`
-                        : 'Sin marca disponible';
-                    catalogList.append(row(
-                        level.name,
-                        `Por ${author} · ${best}`,
-                        [actionButton('Jugar', () => playPublicLevel(level.id))]
-                    ));
-                }
-            }
-            previous.disabled = catalogState.loading || !catalogState.previous.length;
-            next.disabled = catalogState.loading || !catalogState.nextCursor;
-
-            ownTitle.textContent = `Mis publicaciones (${ownPublicationState.activeCount}/${ownPublicationState.limit} activas)`;
+            summary.textContent = `Mis publicaciones (${ownPublicationState.activeCount}/${ownPublicationState.limit} activas)`;
             ownList.replaceChildren();
             if (ownPublicationState.loading) {
                 ownList.textContent = 'Cargando publicaciones...';
@@ -841,17 +786,6 @@ Module['api'] = (() => {
                 !ownPublicationState.nextCursor;
             feedback.textContent = publicationState.message;
         };
-        search.addEventListener('submit', (event) => {
-            event.preventDefault();
-            searchCatalog(searchInput.value);
-        });
-        previous.addEventListener('click', () => {
-            if (!catalogState.previous.length) return;
-            loadCatalog(catalogState.previous.pop());
-        });
-        next.addEventListener('click', () => {
-            if (catalogState.nextCursor) loadCatalog(catalogState.nextCursor, true);
-        });
         ownPrevious.addEventListener('click', () => {
             if (!ownPublicationState.previous.length) return;
             loadOwnPublications(ownPublicationState.previous.pop());
@@ -861,7 +795,6 @@ Module['api'] = (() => {
                 loadOwnPublications(ownPublicationState.nextCursor, true);
         });
         renderPublications();
-        loadCatalog(null);
         loadOwnPublications();
     }
     function mount() {
