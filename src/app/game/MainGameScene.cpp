@@ -10,6 +10,7 @@
 #include "app/AudioController.hpp"
 #include "app/CustomLevelCatalog.hpp"
 #include "rendering/Background.hpp"
+#include "rendering/PassengerRenderer.hpp"
 #include <optional>
 #include <raylib.h>
 #include <algorithm>
@@ -116,28 +117,6 @@ double HorizontalRadius(const PartRenderState& state) {
     return state.type == PartType::Fan
         ? state.cellSize * 0.75
         : state.cellSize * 0.5;
-}
-
-void DrawPassenger(
-    float x,
-    float y,
-    bool hasSkirt,
-    float scale = 1.0f,
-    Color tint = BLACK
-) {
-    DrawCircleV({x, y - 19.0f * scale}, 6.0f * scale, tint);
-    DrawLineEx({x, y - 13.0f * scale}, {x, y - 2.0f * scale}, 3.0f * scale, tint);
-    DrawLineEx({x, y - 9.0f * scale}, {x - 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, tint);
-    DrawLineEx({x, y - 9.0f * scale}, {x + 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, tint);
-    if (hasSkirt) {
-        const bool standardPassenger = tint.r == BLACK.r &&
-            tint.g == BLACK.g && tint.b == BLACK.b;
-        DrawTriangle({x - 5.0f * scale, y - 2.0f * scale},
-            {x + 5.0f * scale, y - 2.0f * scale},
-            {x, y + 4.0f * scale}, standardPassenger ? PINK : tint);
-    }
-    DrawLineEx({x, y - 2.0f * scale}, {x - 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, tint);
-    DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, tint);
 }
 
 Rectangle GhostPreviewButton() {
@@ -513,7 +492,8 @@ void MainGameScene::Update(float dt) {
             m_carriedPassengers.push_back({
                 passengerIndex,
                 hostPart->GetId(),
-                passenger.hasSkirt
+                passenger.hasSkirt,
+                passenger.face
             });
             m_capture.RecordPassengerPickup(
                 std::llround(m_elapsedMs), passengerIndex, hostPart->GetId()
@@ -1014,7 +994,8 @@ void MainGameScene::Render() const {
                 static_cast<float>(passenger.position.y),
                 passenger.hasSkirt,
                 1.0f,
-                Color{110, 205, 255, 150}
+                Color{110, 205, 255, 150},
+                m_appContext->textureLibrary->FindPassengerFace(passenger.face)
             );
         }
     }
@@ -1047,7 +1028,9 @@ void MainGameScene::Render() const {
             static_cast<float>(passenger.position.x),
             static_cast<float>(passenger.position.y),
             passenger.hasSkirt,
-            1.5f
+            1.5f,
+            BLACK,
+            m_appContext->textureLibrary->FindPassengerFace(passenger.face)
         );
     }
     const std::vector<TrackedPart> trackedParts = CollectParts(
@@ -1062,7 +1045,10 @@ void MainGameScene::Render() const {
         DrawPassenger(
             static_cast<float>(position.x),
             static_cast<float>(position.y) + 7.0f,
-            passenger.hasSkirt
+            passenger.hasSkirt,
+            1.0f,
+            BLACK,
+            m_appContext->textureLibrary->FindPassengerFace(passenger.face)
         );
     }
     EndMode2D();

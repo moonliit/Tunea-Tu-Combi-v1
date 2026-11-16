@@ -70,6 +70,7 @@ bool GhostPlayback::Load(const nlohmann::json& capture) {
         }
         for (const auto& passenger : capture.at("levelDefinition").at("passengers")) {
             m_passengerSkirts.push_back(passenger.value("hasSkirt", false));
+            m_passengerFaces.push_back(passenger.value("face", std::string{}));
         }
         for (const auto& event : capture.at("events")) {
             if (event.value("type", "") == "passengerPickup" &&
@@ -101,6 +102,7 @@ bool GhostPlayback::Load(const nlohmann::json& capture) {
         m_legacyWheelHosts.clear();
         m_frames.clear();
         m_passengerSkirts.clear();
+        m_passengerFaces.clear();
         m_passengerPickups.clear();
         return false;
     }
@@ -109,6 +111,7 @@ bool GhostPlayback::Load(const nlohmann::json& capture) {
         m_legacyWheelHosts.clear();
         m_frames.clear();
         m_passengerSkirts.clear();
+        m_passengerFaces.clear();
         m_passengerPickups.clear();
         return false;
     }
@@ -308,7 +311,10 @@ void GhostPlayback::Sample() {
         if (host == m_renderStates.end()) continue;
         m_passengerStates.push_back({
             .position = {host->position.x, host->position.y + 7.0},
-            .hasSkirt = m_passengerSkirts[pickup.id]
+            .hasSkirt = m_passengerSkirts[pickup.id],
+            .face = pickup.id < m_passengerFaces.size()
+                ? m_passengerFaces[pickup.id]
+                : std::string{}
         });
     }
 }
@@ -327,6 +333,7 @@ void GhostPlayback::Reset() {
     m_frames.clear();
     m_renderStates.clear();
     m_passengerSkirts.clear();
+    m_passengerFaces.clear();
     m_passengerPickups.clear();
     m_passengerStates.clear();
 }

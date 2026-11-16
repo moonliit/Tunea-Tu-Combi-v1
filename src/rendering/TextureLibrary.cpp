@@ -1,6 +1,7 @@
 #include "rendering/TextureLibrary.hpp"
 #include "raylib.h"
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <string>
@@ -27,6 +28,8 @@ constexpr const char* WheelMountPath = "assets/textures/parts/wheel_mount.png";
 constexpr const char* TerrainTexturePath = "assets/textures/terrain/dirt.png";
 constexpr const char* LevelGoalTexturePath = "assets/textures/level/goal.png";
 constexpr const char* fontPath = "assets/fonts/Matcha Style.ttf";
+// cada PNG de esta carpeta aparece como una cara elegible en el editor
+constexpr const char* PassengerFacesDir = "assets/textures/passengers/faces";
 
 Texture2D LoadSmoothTexture(const char* path, bool useBilinearFilter = true) {
     const Texture2D texture = LoadTexture(path);
@@ -97,6 +100,29 @@ void TextureLibrary::Initialize() {
     SetTextureWrap(m_terrainTexture, TEXTURE_WRAP_REPEAT);
     m_levelGoalTexture = LoadSmoothTexture(LevelGoalTexturePath);
 
+    m_passengerFaces.clear();
+    if (DirectoryExists(PassengerFacesDir)) {
+        FilePathList files = LoadDirectoryFilesEx(PassengerFacesDir, ".png", false);
+        for (unsigned int index = 0; index < files.count; ++index) {
+            const char* path = files.paths[index];
+            const Texture2D texture = LoadTexture(path);
+            if (texture.id == 0) continue;
+            SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+            m_passengerFaces.push_back(PassengerFace{
+                .name = GetFileNameWithoutExt(path),
+                .texture = texture
+            });
+        }
+        UnloadDirectoryFiles(files);
+        std::sort(
+            m_passengerFaces.begin(),
+            m_passengerFaces.end(),
+            [](const PassengerFace& first, const PassengerFace& second) {
+                return first.name < second.name;
+            }
+        );
+    }
+
     // UI textures (static, startup-loaded; missing files fall back to missing texture)
     m_ui.logo = LoadSmoothTexture("assets/textures/ui/branding/logo.png");
 
@@ -151,6 +177,10 @@ void TextureLibrary::Shutdown() {
         UnloadTexture(texture);
     }
     m_partTextures.clear();
+    for (const PassengerFace& face : m_passengerFaces) {
+        UnloadTexture(face.texture);
+    }
+    m_passengerFaces.clear();
     UnloadTexture(m_wheelMount);
     for (const Texture2D& background : m_backgrounds) {
         UnloadTexture(background);
@@ -196,4 +226,12 @@ void TextureLibrary::Shutdown() {
 
 const Texture2D& TextureLibrary::GetPartTexture(PartType type) const {
     return m_partTextures.at(type);
+}
+
+const Texture2D* TextureLibrary::FindPassengerFace(const std::string& name) const {
+    if (name.empty()) return nullptr;
+    for (const PassengerFace& face : m_passengerFaces) {
+        if (face.name == name) return &face.texture;
+    }
+    return nullptr;
 }

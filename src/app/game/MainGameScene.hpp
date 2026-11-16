@@ -30,6 +30,7 @@ struct CarriedPassenger {
     std::size_t id;
     PartId hostId;
     bool hasSkirt;
+    std::string face;
 };
 
 class MainGameScene final : public I_Scene {
