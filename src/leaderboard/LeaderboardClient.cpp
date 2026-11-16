@@ -40,6 +40,27 @@ nlohmann::json ScoreJson(const Scoring::ScoreBreakdown& score) {
     };
 }
 
+std::string TextField(const nlohmann::json& object, const char* key) {
+    const auto found = object.find(key);
+    return found != object.end() && found->is_string() ? found->get<std::string>() : std::string{};
+}
+
+std::int64_t NumberField(const nlohmann::json& object, const char* key) {
+    const auto found = object.find(key);
+    return found != object.end() && found->is_number() ? found->get<std::int64_t>() : 0;
+}
+
+bool BoolField(const nlohmann::json& object, const char* key) {
+    const auto found = object.find(key);
+    return found != object.end() && found->is_boolean() && found->get<bool>();
+}
+
+const nlohmann::json& ObjectField(const nlohmann::json& object, const char* key) {
+    static const nlohmann::json none = nlohmann::json::object();
+    const auto found = object.find(key);
+    return found != object.end() && found->is_object() ? *found : none;
+}
+
 PersonalBest ReadPersonalBest(const nlohmann::json& value) {
     if (!value.is_object()) return {};
     const auto& statistics = value.value("statistics", nlohmann::json::object());
@@ -47,10 +68,10 @@ PersonalBest ReadPersonalBest(const nlohmann::json& value) {
     if (!statistics.is_object() || !score.is_object()) return {};
     return {
         .available = true,
-        .currentAttempt = value.value("currentAttempt", false),
-        .total = score.value("total", std::int64_t{0}),
-        .driverTimeMs = statistics.value("driverTimeMs", std::int64_t{0}),
-        .initialParts = statistics.value("initialParts", std::int64_t{0})
+        .currentAttempt = BoolField(value, "currentAttempt"),
+        .total = NumberField(score, "total"),
+        .driverTimeMs = NumberField(statistics, "driverTimeMs"),
+        .initialParts = NumberField(statistics, "initialParts")
     };
 }
 
@@ -149,7 +170,7 @@ void LeaderboardClient::Poll(double frameMs) {
     std::free(raw);
     if (state.is_discarded() || !state.is_object()) return;
 
-    const std::string status = state.value("status", "idle");
+    const std::string status = TextField(state, "status");
     m_snapshot.status = status == "loading"
         ? LeaderboardStatus::Loading
         : status == "ready"
@@ -157,31 +178,32 @@ void LeaderboardClient::Poll(double frameMs) {
         : status == "unavailable"
         ? LeaderboardStatus::Unavailable
         : LeaderboardStatus::Idle;
-    m_snapshot.message = state.value("message", "");
-    m_snapshot.championRunRef = state.value("championRunRef", "");
-    m_snapshot.personalBest = ReadPersonalBest(
-        state.value("personalBest", nlohmann::json::object())
-    );
+    m_snapshot.message = TextField(state, "message");
+    m_snapshot.championRunRef = TextField(state, "championRunRef");
+    const auto personalBest = state.find("personalBest");
+    m_snapshot.personalBest = personalBest != state.end()
+        ? ReadPersonalBest(*personalBest)
+        : PersonalBest{};
     const auto submission = state.value("submission", nlohmann::json::object());
     m_snapshot.submissionConfirmed = submission.is_object();
     m_snapshot.previousBestRetained = submission.is_object() &&
-        submission.value("previousBestRetained", false);
+        BoolField(submission, "previousBestRetained");
     m_snapshot.entries.clear();
-    for (const auto& entry : state.value("entries", nlohmann::json::array())) {
-        const auto& statistics = entry.at("statistics");
-        const auto& score = entry.at("score");
-        const std::string name = entry.contains("name") && entry["name"].is_string()
-            ? entry["name"].get<std::string>()
-            : "";
+    const auto entries = state.find("entries");
+    if (entries == state.end() || !entries->is_array()) return;
+    for (const auto& entry : *entries) {
+        if (!entry.is_object()) continue;
+        const auto& statistics = ObjectField(entry, "statistics");
+        const auto& score = ObjectField(entry, "score");
         m_snapshot.entries.push_back({
-            .rank = entry.value("rank", 0),
-            .combiId = entry.value("combiId", ""),
-            .name = name,
-            .attemptId = entry.value("attemptId", ""),
-            .runRef = entry.value("runRef", ""),
-            .total = score.value("total", std::int64_t{0}),
-            .driverTimeMs = statistics.value("driverTimeMs", std::int64_t{0}),
-            .initialParts = statistics.value("initialParts", std::int64_t{0})
+            .rank = static_cast<int>(NumberField(entry, "rank")),
+            .combiId = TextField(entry, "combiId"),
+            .name = TextField(entry, "name"),
+            .attemptId = TextField(entry, "attemptId"),
+            .runRef = TextField(entry, "runRef"),
+            .total = NumberField(score, "total"),
+            .driverTimeMs = NumberField(statistics, "driverTimeMs"),
+            .initialParts = NumberField(statistics, "initialParts")
         });
     }
 #else
