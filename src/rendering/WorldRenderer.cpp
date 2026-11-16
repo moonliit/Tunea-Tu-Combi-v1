@@ -138,7 +138,7 @@ void WorldRenderer::Render(
     const std::optional<PartType>& repositionedPartType,
     PartOrientation repositionedOrientation,
     int screenHeight,
-    const std::function<void()>& beforePlayParts
+    const std::function<void()>& beforePlayParts,
     bool showParts
 ) const {
     RenderBackground(
