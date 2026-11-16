@@ -44,16 +44,20 @@ struct ExitConfirmDialogLayout {
 };
 
 ExitConfirmDialogLayout GetExitConfirmDialogLayout(int width, int height) {
+    constexpr float dialogWidth = 610.0f;
+    constexpr float dialogHeight = 200.0f;
+
     const Rectangle dialog{
-        (width - 520.0f) / 2.0f,
-        (height - 286.0f) / 2.0f,
-        520.0f,
-        286.0f
+        (static_cast<float>(width) - dialogWidth) / 2.0f,
+        (static_cast<float>(height) - dialogHeight) / 2.0f,
+        dialogWidth,
+        dialogHeight
     };
+
     return {
         dialog,
-        Rectangle{dialog.x + 24.0f, dialog.y + 196.0f, 186.0f, 80.0f},
-        Rectangle{dialog.x + dialog.width - 210.0f, dialog.y + 196.0f, 186.0f, 80.0f}
+        Rectangle{dialog.x + 50.0f, dialog.y + 110.0f, 186.0f, 80.0f},
+        Rectangle{dialog.x + 246.0f, dialog.y + 110.0f, 186.0f, 80.0f}
     };
 }
 
@@ -1883,16 +1887,8 @@ void MainGameScene::Render() const {
             16,
             mutedText
         );
-        DrawTextFont(
-            "ESC: cancelar   ENTER: salir",
-            static_cast<int>(dialog.x + 24.0f),
-            static_cast<int>(dialog.y + 132.0f),
-            15,
-            mutedText
-        );
-
-        DrawExitConfirmAction(layout.cancel, ui.menuDialogCancel, "CANCELAR", true);
-        DrawExitConfirmAction(layout.confirm, ui.menuDialogAccept, "SALIR", true);
+        DrawExitConfirmAction(layout.cancel, ui.menuDialogCancel, "ESC: CANCELAR", true);
+        DrawExitConfirmAction(layout.confirm, ui.menuDialogAccept, "ENTER: SALIR", true);
     }
 
     EndDrawing();
