@@ -137,7 +137,7 @@ public:
     bool ContainPart(std::unique_ptr<Part> part);
     std::unique_ptr<Part> RemoveContainedPart();
     void ApplyPropulsionForce(float magnitude);
-    void ApplyRadialImpulseForce(float magnitude, float radius);
+    void ApplyRadialImpulseForce(float breakMagnitude, float launchMagnitude, float radius);
     bool IsRemovalRequested() const { return m_removalRequested; }
     void ClearRemovalRequest() { m_removalRequested = false; }
 

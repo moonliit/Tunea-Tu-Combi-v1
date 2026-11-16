@@ -10,11 +10,24 @@
 #include "physics/engine/common/BodyPairHash.hpp"
 #include <unordered_set>
 #include <list>
+#include <vector>
 
 namespace Physics {
 
 class World : public I_PhysicsWorld {
 private:
+    struct PendingExplosion {
+        Math::Vector2D center{0.0f, 0.0f};
+        float breakImpulseForce = 0.0f;
+        float launchImpulseForce = 0.0f;
+        float radius = 0.0f;
+    };
+
+    struct PendingLaunchImpulse {
+        std::weak_ptr<BaseRigidBody> body;
+        Math::Vector2D impulse{0.0f, 0.0f};
+    };
+
     std::vector<std::shared_ptr<BaseRigidBody>> m_bodies;
     std::list<std::shared_ptr<BaseJoint>> m_joints;
     std::unordered_set<RigidBodyPair, BodyPairHash> m_jointConnectedCache;
@@ -29,7 +42,10 @@ private:
     bool m_firstTerrainContactSeen = false;
     float m_firstLandingProtectionRemaining = 0.0f;
     float m_linearDamping = 0.05f;
-    float m_angularDamping = 0.675f;
+    float m_angularDamping = 0.65f;
+    std::vector<PendingExplosion> m_pendingExplosions;
+
+    std::vector<PendingLaunchImpulse> ProcessPendingExplosions();
 
 public:
     explicit World(
@@ -53,7 +69,8 @@ public:
     ) override;
     void ApplyExplosion(
         const Math::Vector2D& center,
-        float impulseForce,
+        float breakImpulseForce,
+        float launchImpulseForce,
         float radius
     ) override;
 

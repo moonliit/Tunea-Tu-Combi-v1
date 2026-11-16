@@ -51,7 +51,8 @@ public:
     ) = 0;
     virtual void ApplyExplosion(
         const Math::Vector2D& center,
-        float impulseForce,
+        float breakImpulseForce,
+        float launchImpulseForce,
         float radius
     ) = 0;
 

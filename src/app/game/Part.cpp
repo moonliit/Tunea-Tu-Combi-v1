@@ -12,7 +12,8 @@ constexpr float WindSailForce = 1750.0f;
 constexpr float WindSailActiveDuration = 0.75f;
 constexpr float WindSailCooldownDuration = 1.25f;
 
-constexpr float TntExplosionForce = 1000.0f;
+constexpr float TntExplosionBreakForce = 1000.0f;
+constexpr float TntExplosionLaunchForce = 400.0f;
 constexpr float TntExplosionRadius = 750.0f;
 constexpr float ContainedTntExplosionMultiplier = 1.75f;
 
@@ -112,27 +113,19 @@ void Part::ApplyPropulsionForce(float magnitude) {
     });
 }
 
-void Part::ApplyRadialImpulseForce(float magnitude, float radius) {
+void Part::ApplyRadialImpulseForce(float breakMagnitude, float launchMagnitude, float radius) {
     if (!m_physicsWorld || (!m_physicsBody && !m_attachmentBody)) return;
     const std::shared_ptr<I_RigidBody>& body =
         m_physicsBody ? m_physicsBody : m_attachmentBody;
     const Vector2D bodyPosition = body->GetPosition();
     const bool contained = m_attachmentBody != nullptr && m_physicsBody == nullptr;
-    Vector2D center = bodyPosition;
-    if (contained) {
-        if (m_grid) {
-            center = m_grid->CoordToWorld(m_gridCoord);
-        } else {
-            center = m_attachmentBody->GetPosition();
-        }
-    }
+    const Vector2D center = bodyPosition;
 
-    const float explosionMagnitude = contained
-        ? magnitude * ContainedTntExplosionMultiplier
-        : magnitude;
+    const float multiplier = contained ? ContainedTntExplosionMultiplier : 1.0f;
     m_physicsWorld->ApplyExplosion(
         center,
-        explosionMagnitude,
+        breakMagnitude * multiplier,
+        launchMagnitude * multiplier,
         radius
     );
     m_removalRequested = true;
@@ -167,7 +160,11 @@ void Part::UpdateActivation(float deltaTime) {
             ApplyPropulsionForce(WindSailForce);
             break;
         case PartType::TNTBarrel:
-            ApplyRadialImpulseForce(TntExplosionForce, TntExplosionRadius);
+            ApplyRadialImpulseForce(
+                TntExplosionBreakForce,
+                TntExplosionLaunchForce,
+                TntExplosionRadius
+            );
             m_activationActive = false;
             break;
         default:
