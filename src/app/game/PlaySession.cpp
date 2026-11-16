@@ -132,6 +132,14 @@ void PlaySession::CreatePhysicsWorld(
 
 void PlaySession::Start() {
     m_ejectedParts.clear();
+    if (m_physics) {
+        for (const auto& passenger : m_ejectedPassengers) {
+            if (passenger.body) m_physics->RemoveBody(passenger.body);
+        }
+    }
+    m_ejectedPassengers.clear();
+    m_carriedPassengersByHost.clear();
+    m_ejectedPassengerIds.clear();
     m_runtimeModel = m_model;
     m_assembler.Assemble(m_runtimeModel, m_physics);
     BuildActivationSubscriptions();
@@ -144,6 +152,14 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
         part->ResetPhysicsBody();
     }
     m_ejectedParts.clear();
+    if (m_physics) {
+        for (const auto& passenger : m_ejectedPassengers) {
+            if (passenger.body) m_physics->RemoveBody(passenger.body);
+        }
+    }
+    m_ejectedPassengers.clear();
+    m_carriedPassengersByHost.clear();
+    m_ejectedPassengerIds.clear();
 
     CreatePhysicsWorld(SampleTerrain(terrain), true);
     m_activationRegistry.Clear();
@@ -159,7 +175,9 @@ void PlaySession::Update(float deltaTime) {
 void PlaySession::ProcessImpacts() {
     std::unordered_set<Part*> impactedPartsForTnt;
     std::unordered_set<Part*> ejectedContainers;
+    std::unordered_set<Part*> passengerEjectedHosts;
     std::vector<Part*> containersToEject;
+    std::vector<Part*> passengerHostsToEject;
     const bool landingProtectionActive =
         m_physics && m_physics->IsLandingImpactProtectionActive();
 
@@ -190,6 +208,18 @@ void PlaySession::ProcessImpacts() {
             continue;
         }
 
+        // carried passenger hit: eject passenger from carrying block on strong impact
+        if (!landingProtectionActive &&
+            impact.part->GetType() == PartType::SquareBlock &&
+            impact.impulse >= ContainerEjectDamageThreshold &&
+            passengerEjectedHosts.find(impact.part) == passengerEjectedHosts.end() &&
+            m_carriedPassengersByHost.find(impact.part->GetId()) != m_carriedPassengersByHost.end()) {
+            passengerHostsToEject.push_back(impact.part);
+            m_damageConsumed = true;
+            passengerEjectedHosts.insert(impact.part);
+            continue;
+        }
+
         if (
             impact.part->GetType() == PartType::TNTBarrel &&
             impact.impulse >= TntImpactImpulseThreshold
@@ -213,6 +243,12 @@ void PlaySession::ProcessImpacts() {
     }
     if (!containersToEject.empty()) {
         BuildActivationSubscriptions();
+    }
+
+    for (Part* host : passengerHostsToEject) {
+        if (host != nullptr) {
+            EjectCarriedPassenger(*host);
+        }
     }
 
     for (const Math::Vector2D& breakagePos : m_physics->ConsumeBreakagePositions()) {
@@ -348,6 +384,81 @@ void PlaySession::EjectContainedPart(Part& container, float) {
     }
 
     m_ejectedParts.push_back(std::move(ejected));
+}
+
+void PlaySession::RegisterCarriedPassenger(
+    PartId hostId,
+    const CarriedPassengerInfo& passenger
+) {
+    m_carriedPassengersByHost[hostId] = passenger;
+}
+
+void PlaySession::UnregisterCarriedPassenger(PartId hostId) {
+    m_carriedPassengersByHost.erase(hostId);
+}
+
+void PlaySession::ClearCarriedPassengers() {
+    m_carriedPassengersByHost.clear();
+    m_ejectedPassengerIds.clear();
+}
+
+std::vector<std::size_t> PlaySession::ConsumeEjectedPassengerIds() {
+    std::vector<std::size_t> ids = std::move(m_ejectedPassengerIds);
+    m_ejectedPassengerIds.clear();
+    return ids;
+}
+
+bool PlaySession::EjectCarriedPassenger(Part& host) {
+    if (!m_physics) return false;
+    auto it = m_carriedPassengersByHost.find(host.GetId());
+    if (it == m_carriedPassengersByHost.end()) return false;
+
+    std::shared_ptr<I_RigidBody> hostBody = host.GetPhysicsBody();
+    if (!hostBody) return false;
+
+    const CarriedPassengerInfo passenger = it->second;
+    const float cellSize = m_runtimeModel.GetGrid().GetCellSize();
+    Math::Vector2D position = hostBody->GetPosition();
+    Math::RealNum rotation = hostBody->GetRotation();
+    Math::Vector2D linearVelocity{0.0f, 0.0f};
+    Math::RealNum angularVelocity = 0.0f;
+    if (auto baseBody = std::dynamic_pointer_cast<Physics::BaseRigidBody>(hostBody)) {
+        linearVelocity = baseBody->GetLinearVelocity();
+        angularVelocity = baseBody->GetAngularVelocity();
+    }
+
+    // match contained-part ejection feel/kinematics
+    const Math::Vector2D outDir = Math::Vector2D::FromAngle(rotation - 1.5707963f);
+    const float radius = std::max(4.0f, cellSize * 0.18f);
+    const float offsetDist = cellSize * 0.55f;
+    Math::Vector2D spawnPos = position + outDir * (offsetDist + radius);
+    Math::Vector2D spawnVelocity =
+        (linearVelocity + (outDir * offsetDist * angularVelocity)) * 1.05f;
+
+    const float passengerMass = GetPartDefinition(PartType::Fan).mass;
+    std::shared_ptr<I_RigidBody> body = m_physics->CreateCircle(
+        spawnPos,
+        radius,
+        passengerMass,
+        BodyType::Dynamic
+    );
+    if (!body) return false;
+
+    if (auto ejectedBase = std::dynamic_pointer_cast<Physics::BaseRigidBody>(body)) {
+        ejectedBase->GetLinearVelocityMut() = spawnVelocity;
+        ejectedBase->GetAngularVelocityMut() = angularVelocity;
+    }
+
+    hostBody->AddMass(-passengerMass);
+    m_carriedPassengersByHost.erase(it);
+    m_ejectedPassengerIds.push_back(passenger.id);
+    m_ejectedPassengers.push_back(EjectedPassenger{
+        .id = passenger.id,
+        .hasSkirt = passenger.hasSkirt,
+        .face = passenger.face,
+        .body = std::move(body)
+    });
+    return true;
 }
 
 void PlaySession::ActivateAction(ActivationAction action) {

@@ -427,12 +427,14 @@ void CustomLevelEditorScene::Render() const {
     }
     for (const auto& passenger : custom.definition.passengers) {
         DrawPassenger(
+            *m_context->textureLibrary,
             static_cast<float>(passenger.position.x),
             static_cast<float>(passenger.position.y),
             passenger.hasSkirt,
             PassengerEditorScale(m_designCamera.zoom),
             BLACK,
-            m_context->textureLibrary->FindPassengerFace(passenger.face)
+            m_context->textureLibrary->FindPassengerFace(passenger.face),
+            0.0f
         );
     }
     for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {

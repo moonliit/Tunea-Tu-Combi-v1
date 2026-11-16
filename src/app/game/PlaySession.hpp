@@ -7,8 +7,24 @@
 #include "math/Vector2D.hpp"
 #include "physics/I_Physics.hpp"
 #include "physics/PhysicsAssembler.hpp"
+#include <cstddef>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
+
+struct EjectedPassenger {
+    std::size_t id = 0;
+    bool hasSkirt = false;
+    std::string face;
+    std::shared_ptr<I_RigidBody> body;
+};
+
+struct CarriedPassengerInfo {
+    std::size_t id = 0;
+    bool hasSkirt = false;
+    std::string face;
+};
 
 class PlaySession {
 private:
@@ -23,6 +39,9 @@ private:
     ActivationRegistry m_activationRegistry;
     Math::Vector2D m_gravity;
     std::vector<std::unique_ptr<Part>> m_ejectedParts;
+    std::vector<EjectedPassenger> m_ejectedPassengers;
+    std::unordered_map<PartId, CarriedPassengerInfo> m_carriedPassengersByHost;
+    std::vector<std::size_t> m_ejectedPassengerIds;
     int m_tntConsumedAmount = 0;
     bool m_damageConsumed = false;
     bool m_breakageConsumed = false;
@@ -62,6 +81,9 @@ public:
     const std::vector<std::unique_ptr<Part>>& GetEjectedParts() const {
         return m_ejectedParts;
     }
+    const std::vector<EjectedPassenger>& GetEjectedPassengers() const {
+        return m_ejectedPassengers;
+    }
     std::size_t GetJointCount() const {
         return m_assembler.GetJointCount();
     }
@@ -95,6 +117,10 @@ public:
     std::vector<std::pair<PartId, PartId>> ConsumeBrokenConnections() {
         return m_assembler.ConsumeBrokenConnections();
     }
+    void RegisterCarriedPassenger(PartId hostId, const CarriedPassengerInfo& passenger);
+    void UnregisterCarriedPassenger(PartId hostId);
+    void ClearCarriedPassengers();
+    std::vector<std::size_t> ConsumeEjectedPassengerIds();
 
 
 private:
@@ -102,6 +128,7 @@ private:
     void ProcessImpacts();
     void RemoveConsumedTnt();
     void EjectContainedPart(Part& container, float impactImpulse);
+    bool EjectCarriedPassenger(Part& host);
 };
 
 #endif

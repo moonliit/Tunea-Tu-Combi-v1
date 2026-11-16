@@ -74,6 +74,8 @@ class TextureLibrary {
 private:
     std::map<PartType, Texture2D> m_partTextures;
     std::vector<PassengerFace> m_passengerFaces;
+    Texture2D m_passengerSkirtless{};
+    Texture2D m_passengerSkirt{};
     Texture2D m_wheelMount{};
     std::array<Texture2D, BackgroundCount> m_backgrounds{};
     Texture2D m_terrainTexture{};
@@ -95,6 +97,8 @@ public:
     }
     const Texture2D& GetTerrainTexture() const { return m_terrainTexture; }
     const Texture2D& GetLevelGoalTexture() const { return m_levelGoalTexture; }
+    const Texture2D& GetPassenngerSkirtless() const { return m_passengerSkirtless; }
+    const Texture2D& GetPassenngerSkirt() const { return m_passengerSkirt; }
     const UiTextures& GetUi() const { return m_ui; }
 
     // todas las imágenes de assets/textures/passengers/faces, ordenadas por nombre

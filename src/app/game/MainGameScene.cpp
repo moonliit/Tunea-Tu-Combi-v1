@@ -440,6 +440,19 @@ void MainGameScene::Update(float dt) {
     if (m_stateMachine.IsPlayMode()) {
         m_playSession.Update(dt);
         m_elapsedMs += frameMs;
+        for (const std::size_t ejectedPassengerId :
+             m_playSession.ConsumeEjectedPassengerIds()) {
+            const auto it = std::find_if(
+                m_carriedPassengers.begin(),
+                m_carriedPassengers.end(),
+                [ejectedPassengerId](const CarriedPassenger& carried) {
+                    return carried.id == ejectedPassengerId;
+                }
+            );
+            if (it != m_carriedPassengers.end()) {
+                m_carriedPassengers.erase(it);
+            }
+        }
         for (const auto [first, second] :
              m_playSession.ConsumeBrokenConnections()) {
             m_capture.RecordDetach(
@@ -495,6 +508,14 @@ void MainGameScene::Update(float dt) {
                 passenger.hasSkirt,
                 passenger.face
             });
+            m_playSession.RegisterCarriedPassenger(
+                hostPart->GetId(),
+                CarriedPassengerInfo{
+                    passengerIndex,
+                    passenger.hasSkirt,
+                    passenger.face
+                }
+            );
             m_capture.RecordPassengerPickup(
                 std::llround(m_elapsedMs), passengerIndex, hostPart->GetId()
             );
@@ -911,6 +932,7 @@ void MainGameScene::ResetToBuildMode() {
     });
     std::fill(m_passengerCollected.begin(), m_passengerCollected.end(), false);
     m_carriedPassengers.clear();
+    m_playSession.ClearCarriedPassengers();
 }
 
 void MainGameScene::ResetEditorCamera() {
@@ -1050,6 +1072,70 @@ void MainGameScene::Render() const {
         return;
     }
 
+    const auto renderPassengersBeforeVehicle = [&]() {
+        const std::vector<TrackedPart> trackedParts = CollectParts(
+            m_playSession.GetRuntimeGrid()
+        );
+
+        const auto& passengerDefinitions = m_level.GetDefinition().passengers;
+        for (std::size_t i = 0; i < passengerDefinitions.size(); ++i) {
+            if (i < m_passengerCollected.size() && m_passengerCollected[i]) continue;
+            const auto& passenger = passengerDefinitions[i];
+            DrawPassenger(
+                *m_appContext->textureLibrary,
+                static_cast<float>(passenger.position.x),
+                static_cast<float>(passenger.position.y),
+                passenger.hasSkirt,
+                1.5f,
+                BLACK,
+                m_appContext->textureLibrary->FindPassengerFace(passenger.face),
+                0.0f
+            );
+        }
+
+        for (const CarriedPassenger& passenger : m_carriedPassengers) {
+            const TrackedPart* host = FindTrackedPart(
+                trackedParts, passenger.hostId
+            );
+            if (host == nullptr) continue;
+            const float rotation = static_cast<float>(host->state.rotation);
+            // desplazar al pasajero en el espacio local del contenedor para que
+            // siga su inclinación
+            const float localOffsetY = 7.0f;
+            const float sinR = std::sin(rotation);
+            const float cosR = std::cos(rotation);
+            const float worldX = static_cast<float>(host->state.position.x) -
+                localOffsetY * sinR;
+            const float worldY = static_cast<float>(host->state.position.y) +
+                localOffsetY * cosR;
+            DrawPassenger(
+                *m_appContext->textureLibrary,
+                worldX,
+                worldY,
+                passenger.hasSkirt,
+                1.0f,
+                BLACK,
+                m_appContext->textureLibrary->FindPassengerFace(passenger.face),
+                rotation
+            );
+        }
+
+        for (const auto& passenger : m_playSession.GetEjectedPassengers()) {
+            if (!passenger.body) continue;
+            const auto position = passenger.body->GetPosition();
+            DrawPassenger(
+                *m_appContext->textureLibrary,
+                static_cast<float>(position.x),
+                static_cast<float>(position.y),
+                passenger.hasSkirt,
+                1.0f,
+                BLACK,
+                m_appContext->textureLibrary->FindPassengerFace(passenger.face),
+                static_cast<float>(passenger.body->GetRotation())
+            );
+        }
+    };
+
     m_worldRenderer.Render(
         m_camera,
         m_stateMachine.GetState(),
@@ -1059,7 +1145,8 @@ void MainGameScene::Render() const {
         m_buildSession.GetSelectedOrientation(),
         m_buildSession.GetRepositionedPartType(),
         m_buildSession.GetRepositionedOrientation(),
-        m_appContext->windowHeight
+        m_appContext->windowHeight,
+        renderPassengersBeforeVehicle
     );
     BeginMode2D(m_camera);
     if (m_ghostPlayback.IsVisible()) {
@@ -1067,12 +1154,14 @@ void MainGameScene::Render() const {
         for (const GhostPassengerState& passenger :
              m_ghostPlayback.GetPassengerStates()) {
             DrawPassenger(
+                *m_appContext->textureLibrary,
                 static_cast<float>(passenger.position.x),
                 static_cast<float>(passenger.position.y),
                 passenger.hasSkirt,
                 1.0f,
                 Color{110, 205, 255, 150},
-                m_appContext->textureLibrary->FindPassengerFace(passenger.face)
+                m_appContext->textureLibrary->FindPassengerFace(passenger.face),
+                0.0f
             );
         }
     }
@@ -1096,38 +1185,6 @@ void MainGameScene::Render() const {
         0.0f,
         WHITE
     );
-
-    const auto& passengerDefinitions = m_level.GetDefinition().passengers;
-    for (std::size_t i = 0; i < passengerDefinitions.size(); ++i) {
-        if (i < m_passengerCollected.size() && m_passengerCollected[i]) continue;
-        const auto& passenger = passengerDefinitions[i];
-        DrawPassenger(
-            static_cast<float>(passenger.position.x),
-            static_cast<float>(passenger.position.y),
-            passenger.hasSkirt,
-            1.5f,
-            BLACK,
-            m_appContext->textureLibrary->FindPassengerFace(passenger.face)
-        );
-    }
-    const std::vector<TrackedPart> trackedParts = CollectParts(
-        m_playSession.GetRuntimeGrid()
-    );
-    for (const CarriedPassenger& passenger : m_carriedPassengers) {
-        const TrackedPart* host = FindTrackedPart(
-            trackedParts, passenger.hostId
-        );
-        if (host == nullptr) continue;
-        const auto position = host->state.position;
-        DrawPassenger(
-            static_cast<float>(position.x),
-            static_cast<float>(position.y) + 7.0f,
-            passenger.hasSkirt,
-            1.0f,
-            BLACK,
-            m_appContext->textureLibrary->FindPassengerFace(passenger.face)
-        );
-    }
     EndMode2D();
     m_uiRenderer.Render(
         m_appContext->windowWidth,

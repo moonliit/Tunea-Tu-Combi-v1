@@ -29,6 +29,8 @@ constexpr const char* TerrainTexturePath = "assets/textures/terrain/dirt.png";
 constexpr const char* LevelGoalTexturePath = "assets/textures/level/goal.png";
 constexpr const char* fontPath = "assets/fonts/Matcha Style.ttf";
 // cada PNG de esta carpeta aparece como una cara elegible en el editor
+constexpr const char* PassengerSkirtlessPath = "assets/textures/passengers/passenger_skirtless.png";
+constexpr const char* PassengerSkirtPath = "assets/textures/passengers/passenger_skirt.png";
 constexpr const char* PassengerFacesDir = "assets/textures/passengers/faces";
 
 Texture2D LoadSmoothTexture(const char* path, bool useBilinearFilter = true) {
@@ -99,6 +101,9 @@ void TextureLibrary::Initialize() {
     m_terrainTexture = LoadSmoothTexture(TerrainTexturePath);
     SetTextureWrap(m_terrainTexture, TEXTURE_WRAP_REPEAT);
     m_levelGoalTexture = LoadSmoothTexture(LevelGoalTexturePath);
+
+    m_passengerSkirtless = LoadSmoothTexture(PassengerSkirtlessPath);
+    m_passengerSkirt = LoadSmoothTexture(PassengerSkirtPath);
 
     m_passengerFaces.clear();
     if (DirectoryExists(PassengerFacesDir)) {
@@ -182,6 +187,8 @@ void TextureLibrary::Shutdown() {
     }
     m_passengerFaces.clear();
     UnloadTexture(m_wheelMount);
+    UnloadTexture(m_passengerSkirtless);
+    UnloadTexture(m_passengerSkirt);
     for (const Texture2D& background : m_backgrounds) {
         UnloadTexture(background);
     }
