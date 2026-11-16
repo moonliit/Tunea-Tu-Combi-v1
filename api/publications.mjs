@@ -17,6 +17,7 @@ const MAX_ACTIVE_PUBLICATIONS = 5;
 const CATALOG_PAGE_SIZE = 10;
 const SEARCH_SCOPE = 100;
 const MAX_CAPTURE_MS = 600000;
+const GOAL_SIZE = { x: 70, y: 200 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLIC_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -55,7 +56,7 @@ function validateName(value) {
     if (
         chars.length < 3 ||
         chars.length > 40 ||
-        !/^[\p{L}\p{N}][\p{L}\p{N} '\-]*[\p{L}\p{N}]$/u.test(name)
+        !/^[\p{L}\p{N}][\p{L}\p{N} '\-_]*[\p{L}\p{N}]$/u.test(name)
     ) {
         throw new ApiError(400, 'INVALID_LEVEL_NAME');
     }
@@ -151,16 +152,24 @@ export function validateLevelDefinition(value) {
     };
     if (!exactKeys(value.goal, ['position'])) throw new ApiError(400, 'INVALID_LEVEL');
     const goal = { position: point(value.goal.position) };
-    const goalMinX = goal.position.x - 80 / 2;
+    const goalMinX = goal.position.x - GOAL_SIZE.x / 2;
     if (goalMinX <= grid.worldPos.x)
         throw new ApiError(400, 'GOAL_MUST_BE_RIGHT_OF_GRID');
 
     if (!Array.isArray(value.passengers) || value.passengers.length > 64)
         throw new ApiError(400, 'INVALID_LEVEL');
     const passengers = value.passengers.map((passenger) => {
-        if (!exactKeys(passenger, ['hasSkirt', 'position']) || typeof passenger.hasSkirt !== 'boolean')
+        const hasFace = Boolean(passenger) && typeof passenger === 'object' && 'face' in passenger;
+        if (
+            !exactKeys(passenger, hasFace ? ['face', 'hasSkirt', 'position'] : ['hasSkirt', 'position']) ||
+            typeof passenger.hasSkirt !== 'boolean' ||
+            (hasFace && (typeof passenger.face !== 'string' || !/^[\p{L}\p{N}_-]{1,40}$/u.test(passenger.face)))
+        ) {
             throw new ApiError(400, 'INVALID_LEVEL');
-        return { position: point(passenger.position), hasSkirt: passenger.hasSkirt };
+        }
+        const result = { position: point(passenger.position), hasSkirt: passenger.hasSkirt };
+        if (hasFace) result.face = passenger.face;
+        return result;
     });
     const result = { terrain: { polygons }, grid, goal, passengers };
     if (value.initialCamera !== undefined) {
@@ -325,18 +334,17 @@ function validateCapture(value, identityId, draft) {
     if (!Array.isArray(value.frames) || value.frames.length < 2 || value.frames.length > 12002)
         throw new ApiError(400, 'INVALID_CAPTURE');
     const driverId = drivers[0].id;
-    const goalSize = { x: 80, y: 80 };
+    // the game counts a part as touching the goal within half a cell of its area
     const goalMargin = Math.max(0, definition.grid.cellSize / 2);
-    const goalMinX = (definition.goal.position.x - goalSize.x / 2 - goalMargin) * 1000;
-    const goalMaxX = (definition.goal.position.x + goalSize.x / 2 + goalMargin) * 1000;
-    const goalMinY = (definition.goal.position.y - goalSize.y / 2 - goalMargin) * 1000;
-    const goalMaxY = (definition.goal.position.y + goalSize.y / 2 + goalMargin) * 1000;
+    const goalMinX = (definition.goal.position.x - GOAL_SIZE.x / 2 - goalMargin) * 1000;
+    const goalMaxX = (definition.goal.position.x + GOAL_SIZE.x / 2 + goalMargin) * 1000;
+    const goalMinY = (definition.goal.position.y - GOAL_SIZE.y / 2 - goalMargin) * 1000;
+    const goalMaxY = (definition.goal.position.y + GOAL_SIZE.y / 2 + goalMargin) * 1000;
     const touchesGoalArea = (state) =>
         state.xMilli >= goalMinX && state.xMilli <= goalMaxX &&
         state.yMilli >= goalMinY && state.yMilli <= goalMaxY;
     let previousTime = -1;
     let firstWindowSample = null;
-    let lastWindowSample = null;
     for (const frame of value.frames) {
         if (!exactKeys(frame, ['parts', 'timeMs']) || !Array.isArray(frame.parts) || frame.parts.length > 256)
             throw new ApiError(400, 'INVALID_CAPTURE');
@@ -364,12 +372,10 @@ function validateCapture(value, identityId, draft) {
             if (state.id === driverId) driverState = state;
         }
         if (frame.timeMs > value.statistics.driverTimeMs) {
-            if (!driverState || !touchesGoalArea(driverState))
-                throw new ApiError(400, 'INVALID_GOAL_WINDOW');
-            if (lastWindowSample !== null && frame.timeMs - lastWindowSample > 250)
+            // Only the first frame must touch the goal and the game keeps counting if the driver moves on.
+            if (firstWindowSample === null && (!driverState || !touchesGoalArea(driverState)))
                 throw new ApiError(400, 'INVALID_GOAL_WINDOW');
             firstWindowSample ??= frame.timeMs;
-            lastWindowSample = frame.timeMs;
         }
     }
     if (
@@ -377,8 +383,7 @@ function validateCapture(value, identityId, draft) {
         value.finishedAtMs - value.statistics.driverTimeMs < 3000 ||
         value.finishedAtMs - value.statistics.driverTimeMs > 3400 ||
         firstWindowSample === null ||
-        firstWindowSample - value.statistics.driverTimeMs > 250 ||
-        lastWindowSample < value.statistics.driverTimeMs + 3000
+        firstWindowSample - value.statistics.driverTimeMs > 250
     ) {
         throw new ApiError(400, 'INVALID_GOAL_WINDOW');
     }
