@@ -29,6 +29,8 @@ struct GoalDefinition {
 struct PassengerDefinition {
     Math::Vector2D position;
     bool hasSkirt = false;
+    // nombre de la imagen en assets/textures/passengers/faces; vacío = cabeza normal
+    std::string face;
 };
 
 struct GridDefinition {

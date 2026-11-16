@@ -11,6 +11,7 @@
 #include "app/game/GhostPlayback.hpp"
 
 #include <raylib.h>
+#include <functional>
 #include <optional>
 
 class WorldRenderer {
@@ -38,6 +39,7 @@ public:
         const std::optional<PartType>& repositionedPartType,
         PartOrientation repositionedOrientation,
         int screenHeight,
+        const std::function<void()>& beforePlayParts = {},
         bool showParts = true
     ) const;
     void RenderGhostPlayback(const std::vector<GhostRenderState>& states) const;

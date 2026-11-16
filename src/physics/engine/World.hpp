@@ -42,9 +42,10 @@ private:
     float m_linearDamping = 0.05f;
     float m_angularDamping = 0.65f;
     std::vector<PendingExplosion> m_pendingExplosions;
-    std::vector<PendingLaunchImpulse> ProcessPendingExplosions();
     bool m_firstTerrainContactSeen = false;
     float m_firstLandingProtectionRemaining = 0.0f;
+
+    std::vector<PendingLaunchImpulse> ProcessPendingExplosions();
 
 public:
     explicit World(

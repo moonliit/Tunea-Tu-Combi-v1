@@ -7,12 +7,14 @@
 #include "app/CustomMusicCatalog.hpp"
 #include "app/game/Level.hpp"
 #include "rendering/TextureLibrary.hpp"
+#include "rendering/PassengerRenderer.hpp"
 #include "ui/UiButton.hpp"
 #include <raylib.h>
 #include <algorithm>
 #include <cmath>
 #include <optional>
 #include <random>
+#include <string>
 #include <utility>
 #include <print>
 
@@ -511,7 +513,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
                 const float dx = std::abs(sampleScreen.x - feet.x);
                 const float dy = sampleScreen.y - feet.y;
                 return dx <= 12.0f * scale * m_designCamera.zoom + 8.0f &&
-                    dy >= -28.0f * scale * m_designCamera.zoom - 8.0f &&
+                    dy >= -33.0f * scale * m_designCamera.zoom - 8.0f &&
                     dy <= 10.0f * scale * m_designCamera.zoom + 8.0f;
             };
             bool overPassenger = std::any_of(
@@ -570,9 +572,17 @@ void CustomLevelEditorScene::ProcessInput(float) {
         if (surfaceY.has_value()) {
             static std::mt19937 randomEngine{std::random_device{}()};
             static std::bernoulli_distribution skirtChance(0.5);
+            // cada pasajero nuevo recibe una cara al azar de assets/textures/passengers/faces
+            const auto& faces = m_context->textureLibrary->GetPassengerFaces();
+            std::string face;
+            if (!faces.empty()) {
+                std::uniform_int_distribution<std::size_t> chooseFace(0, faces.size() - 1);
+                face = faces[chooseFace(randomEngine)].name;
+            }
             custom.definition.passengers.push_back({
                 .position = {point.x, surfaceY.value()},
-                .hasSkirt = skirtChance(randomEngine)
+                .hasSkirt = skirtChance(randomEngine),
+                .face = std::move(face)
             });
             m_context->customLevels->Save();
         }
@@ -673,20 +683,16 @@ void CustomLevelEditorScene::Render() const {
         }
     }
     for (const auto& passenger : custom.definition.passengers) {
-        const float x = static_cast<float>(passenger.position.x);
-        const float y = static_cast<float>(passenger.position.y);
-        const float scale = PassengerEditorScale(m_designCamera.zoom);
-        DrawCircleV({x, y - 19.0f * scale}, 6.0f * scale, BLACK);
-        DrawLineEx({x, y - 13.0f * scale}, {x, y - 2.0f * scale}, 3.0f * scale, BLACK);
-        DrawLineEx({x, y - 9.0f * scale}, {x - 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
-        DrawLineEx({x, y - 9.0f * scale}, {x + 7.0f * scale, y - 4.0f * scale}, 2.0f * scale, BLACK);
-        if (passenger.hasSkirt) {
-            DrawTriangle({x - 5.0f * scale, y - 2.0f * scale},
-                {x + 5.0f * scale, y - 2.0f * scale},
-                {x, y + 4.0f * scale}, PINK);
-        }
-        DrawLineEx({x, y - 2.0f * scale}, {x - 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
-        DrawLineEx({x, y - 2.0f * scale}, {x + 4.0f * scale, y + 5.0f * scale}, 2.0f * scale, BLACK);
+        DrawPassenger(
+            *m_context->textureLibrary,
+            static_cast<float>(passenger.position.x),
+            static_cast<float>(passenger.position.y),
+            passenger.hasSkirt,
+            PassengerEditorScale(m_designCamera.zoom),
+            BLACK,
+            m_context->textureLibrary->FindPassengerFace(passenger.face),
+            0.0f
+        );
     }
     for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {
         const Vector2 point = m_terrainWorkPoints[i].ToRayVec();

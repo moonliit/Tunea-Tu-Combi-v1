@@ -134,10 +134,15 @@ nlohmann::json LevelDefinition::ToJson() const {
 
     j["passengers"] = nlohmann::json::array();
     for (const auto& passenger : passengers) {
-        j["passengers"].push_back({
+        nlohmann::json passengerJson = {
             {"position", passenger.position.ToJson()},
             {"hasSkirt", passenger.hasSkirt}
-        });
+        };
+        // solo se escribe si tiene cara, para no invalidar victorias ya aprobadas
+        if (!passenger.face.empty()) {
+            passengerJson["face"] = passenger.face;
+        }
+        j["passengers"].push_back(std::move(passengerJson));
     }
 
     return j;
@@ -195,7 +200,8 @@ LevelDefinition LevelDefinition::FromJson(const nlohmann::json& j) {
         for (const auto& passengerJson : j["passengers"]) {
             level.passengers.push_back({
                 .position = Math::Vector2D::FromJson(passengerJson.at("position")),
-                .hasSkirt = passengerJson.value("hasSkirt", false)
+                .hasSkirt = passengerJson.value("hasSkirt", false),
+                .face = passengerJson.value("face", std::string{})
             });
         }
     }

@@ -140,9 +140,9 @@ std::vector<UiControl> UiLayout::BuildControls(
             "Cabina del chofer",
             "Cabina de pasajero",
             "Llanta",
-            "Tanque SOLGAS",
             "Ventilador",
-            "Inflador de globos"
+            "Inflador de globos",
+            "Tanque SOLGAS",
         };
         constexpr Color colors[] = {
             Color{106, 90, 205, 255},

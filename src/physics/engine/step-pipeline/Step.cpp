@@ -122,11 +122,11 @@ std::vector<World::PendingLaunchImpulse> World::ProcessPendingExplosions() {
 void World::Step(float deltaTime) {
     constexpr float FirstLandingProtectionSeconds = 0.35f;
     m_impactEvents.clear();
-    if (m_subStepCount <= 0 || deltaTime <= 0.0f) return;
-    
+
     float subDt = deltaTime / m_subStepCount;
     bool protectFirstLanding = m_firstLandingProtectionRemaining > 0.0f;
 
+    if (m_subStepCount <= 0 || deltaTime <= 0.0f) return;
     const float linearDamping = std::max(0.0f, m_linearDamping);
     const float angularDamping = std::max(0.0f, m_angularDamping);
     const float linearDampFactor = std::exp(-linearDamping * subDt);

@@ -7,6 +7,8 @@
 
 #include <array>
 #include <map>
+#include <string>
+#include <vector>
 #include <raylib.h>
 
 struct UiButtonSkin {
@@ -64,10 +66,19 @@ struct UiTextures {
     UiGameTextures game;
 };
 
+// cara elegible para un pasajero; name es el nombre del archivo sin extensión
+struct PassengerFace {
+    std::string name;
+    Texture2D texture{};
+};
+
 // loaded once at startup, MainGameScene is rebuilt for every level
 class TextureLibrary {
 private:
     std::map<PartType, Texture2D> m_partTextures;
+    std::vector<PassengerFace> m_passengerFaces;
+    Texture2D m_passengerSkirtless{};
+    Texture2D m_passengerSkirt{};
     Texture2D m_wheelMount{};
     std::array<Texture2D, BackgroundCount> m_backgrounds{};
     Texture2D m_terrainTexture{};
@@ -89,7 +100,16 @@ public:
     }
     const Texture2D& GetTerrainTexture() const { return m_terrainTexture; }
     const Texture2D& GetLevelGoalTexture() const { return m_levelGoalTexture; }
+    const Texture2D& GetPassenngerSkirtless() const { return m_passengerSkirtless; }
+    const Texture2D& GetPassenngerSkirt() const { return m_passengerSkirt; }
     const UiTextures& GetUi() const { return m_ui; }
+
+    // todas las imágenes de assets/textures/passengers/faces, ordenadas por nombre
+    const std::vector<PassengerFace>& GetPassengerFaces() const {
+        return m_passengerFaces;
+    }
+    // nullptr si el nombre está vacío o la imagen no existe
+    const Texture2D* FindPassengerFace(const std::string& name) const;
 };
 void DrawTextFont(const char *text, int posX, int posY, float fontSize, Color color);
 float MeasureTextFont(const char *text, float fontSize);

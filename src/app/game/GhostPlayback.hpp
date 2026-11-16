@@ -21,6 +21,7 @@ struct GhostRenderState {
 struct GhostPassengerState {
     Math::Vector2D position;
     bool hasSkirt;
+    std::string face;
 };
 
 enum class GhostLoadStatus {
@@ -70,6 +71,7 @@ class GhostPlayback {
         std::int64_t timeMs;
     };
     std::vector<bool> m_passengerSkirts;
+    std::vector<std::string> m_passengerFaces;
     std::vector<PassengerPickup> m_passengerPickups;
     std::vector<GhostPassengerState> m_passengerStates;
 

@@ -138,6 +138,7 @@ void WorldRenderer::Render(
     const std::optional<PartType>& repositionedPartType,
     PartOrientation repositionedOrientation,
     int screenHeight,
+    const std::function<void()>& beforePlayParts,
     bool showParts
 ) const {
     RenderBackground(
@@ -158,6 +159,9 @@ void WorldRenderer::Render(
 
     if (state == GameState::Build || state == GameState::View) {
         grid.DrawSelf();
+        if (beforePlayParts) {
+            beforePlayParts();
+        }
 
         for (const Part* part : grid.GetActiveParts()) {
             if (part->HasContainedPart()) {
@@ -212,7 +216,10 @@ void WorldRenderer::Render(
                 }
             }
         }
-    } else if (state == GameState::Play || state == GameState::Results) {
+    } else if (state == GameState::Play) {
+        if (beforePlayParts) {
+            beforePlayParts();
+        }
         const EditorGrid& runtimeGrid = playSession.GetRuntimeGrid();
         for (const Part* part : runtimeGrid.GetActiveParts()) {
             if (part->HasContainedPart()) {
