@@ -11,8 +11,14 @@ class CustomLevelEditorScene final : public I_Scene {
     Camera2D m_designCamera{};
     enum class DesignTool { Terrain, Grid, Goal, Eraser, Passenger };
     DesignTool m_designTool = DesignTool::Terrain;
+    std::optional<Math::Vector2D> m_gridAnchor;
+    Math::Vector2D m_gridPreviewCursor{};
+    int m_gridAnchorLevel = -1;
     std::vector<Math::Vector2D> m_terrainWorkPoints;
     std::optional<Vector2> m_lastEraserMouseScreen;
+    std::optional<Vector2> m_rightDragStart;
+    bool m_rightDragged = false;
+    bool m_rightPressOnCanvas = false;
     std::vector<Math::Vector2D> m_erasedPassengerPositions;
     bool m_musicPickerOpen = false;
     int m_musicCategory = 0;

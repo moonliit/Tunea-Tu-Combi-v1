@@ -13,9 +13,10 @@ constexpr float ControlHeight = 50.0f;
 constexpr float ControlGap = 10.0f;
 constexpr float EditorControlStartX = 390.0f;
 constexpr float EditorControlStartY = 20.0f;
-constexpr float EditorControlWidth = 102.0f;
+constexpr float EditorControlWidth = 94.0f;
 constexpr float EditorControlHeight = 52.0f;
 constexpr float EditorControlGap = 6.0f;
+constexpr float EditorMenuGap = 36.0f;
 
 UiControl MakeToolbarControl(
     int index,
@@ -179,7 +180,7 @@ std::vector<UiControl> UiLayout::BuildControls(
         const float editorTotalWidth =
             4.0f * (EditorControlWidth + EditorControlGap) - EditorControlGap;
         const float editorStartX =
-            screenWidth - editorTotalWidth - 165;
+            UiButton::GameMenuButton(screenWidth).x - EditorMenuGap - editorTotalWidth;
         const auto canMoveUp = grid.CanShiftContents({0, -1});
         const auto canMoveRight = grid.CanShiftContents({1, 0});
         const auto canMoveDown = grid.CanShiftContents({0, 1});

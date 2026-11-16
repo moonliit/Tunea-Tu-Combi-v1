@@ -139,6 +139,7 @@ void WorldRenderer::Render(
     PartOrientation repositionedOrientation,
     int screenHeight,
     const std::function<void()>& beforePlayParts
+    bool showParts
 ) const {
     RenderBackground(
         m_textures.GetBackground(m_background),
@@ -149,6 +150,11 @@ void WorldRenderer::Render(
 
     for (const Math::TerrainMesh& mesh : playSession.GetTerrainMeshes()) {
         RenderTerrainMesh(m_textures, mesh, playSession.GetTerrainVisual());
+    }
+
+    if (!showParts) {
+        EndMode2D();
+        return;
     }
 
     if (state == GameState::Build || state == GameState::View) {

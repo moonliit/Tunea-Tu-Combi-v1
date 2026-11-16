@@ -20,6 +20,7 @@ struct UiButtonSkin {
 
 struct UiGameTextures {
     UiButtonSkin toolbarSlot;
+    Texture2D editHammer{};
     UiButtonSkin modePlay;
     UiButtonSkin modeEdit;
     UiButtonSkin clearSelection; // DROP
@@ -52,12 +53,14 @@ struct UiTextures {
     UiButtonSkin menuEditorLevels;
     UiButtonSkin menuCreateLevel;
     UiButtonSkin menuBack;
+    UiButtonSkin resultsBack;
     UiButtonSkin menuEditAndPlay;
     UiButtonSkin menuPublish;
     UiButtonSkin menuDelete;
     UiButtonSkin menuDialogCancel;
     UiButtonSkin menuDialogCreate;
-    UiButtonSkin menuToEditor;
+    UiButtonSkin menuCommunity;
+    UiButtonSkin menuMyLevels;
     std::array<UiButtonSkin, MaxOfficialLevelCount> menuLevelTitles{};
 
     UiGameTextures game;
@@ -109,5 +112,6 @@ public:
     const Texture2D* FindPassengerFace(const std::string& name) const;
 };
 void DrawTextFont(const char *text, int posX, int posY, float fontSize, Color color);
+float MeasureTextFont(const char *text, float fontSize);
 
 #endif

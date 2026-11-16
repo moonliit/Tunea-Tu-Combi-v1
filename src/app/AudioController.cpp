@@ -7,6 +7,49 @@
 #include <fstream>
 #include <print>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+// Web only.
+// downloads a file from the site and saves it where the game reads
+// its files. The game waits until the download ends.
+EM_ASYNC_JS(int, FetchAssetWeb, (const char* path), {
+    const file = UTF8ToString(path);
+    try {
+        const response = await fetch(file);
+        if (!response.ok) return 0;
+        FS.mkdirTree('/' + file.substring(0, file.lastIndexOf('/')));
+        FS.writeFile('/' + file, new Uint8Array(await response.arrayBuffer()));
+        return 1;
+    } catch (error) {
+        return 0;
+    }
+});
+#endif
+
+namespace {
+
+// True if the file can be opened.
+// On the web, the songs are not inside ray.data
+bool EnsureAsset(const std::string& path) {
+    if (std::filesystem::exists(path)) return true;
+#ifdef __EMSCRIPTEN__
+    return FetchAssetWeb(path.c_str()) != 0;
+#else
+    return false;
+#endif
+}
+
+}
+
+MusicWithPath MusicWithPath::Load(std::string path) {
+    EnsureAsset(path);
+    return MusicWithPath {
+        .music = LoadMusicStream(path.c_str()),
+        .path = std::move(path),
+    };
+}
+
 std::optional<std::string> MusicWithPath::TryGetDualPath() const {
     std::filesystem::path currentPath(path);
     std::filesystem::path cleanDir("assets/audio/clean");
@@ -24,7 +67,8 @@ std::optional<std::string> MusicWithPath::TryGetDualPath() const {
     else {
         return std::nullopt;
     }
-    if (std::filesystem::exists(dualPath)) {
+    // On the web this may download the twin.
+    if (EnsureAsset(dualPath.generic_string())) {
         return dualPath.generic_string();
     }
     return std::nullopt;
@@ -53,7 +97,7 @@ void AudioController::Initialize() {
         );
     }
     m_menuMusicClean = MusicWithPath::Load("assets/audio/menu-clean.ogg");
-    m_menuMusicCustom = MusicWithPath::Load("assets/audio/menu-custom.wav");
+    m_menuMusicCustom = MusicWithPath::Load("assets/audio/menu-custom.ogg");
     m_menuMusicClean.music.looping = true;
     m_menuMusicCustom.music.looping = true;
     for (std::size_t index = 0; index < OfficialLevels.size(); ++index) {
@@ -64,10 +108,10 @@ void AudioController::Initialize() {
     }
     m_radioStatic = LoadSound("assets/audio/radio_static.wav");
     SetSoundVolume(m_radioStatic, 0.15f);
-    m_uiClick = LoadSound("assets/audio/sfx/ui_click.wav");
-    m_partSelect = LoadSound("assets/audio/sfx/part_select.wav");
+    m_uiClick = LoadSound("assets/audio/sfx/ui_click.ogg");
+    m_partSelect = LoadSound("assets/audio/sfx/part_select.ogg");
     m_partPlace = LoadSound("assets/audio/sfx/part_place.wav");
-    m_sailSound = LoadSound("assets/audio/sfx/sail.wav");
+    m_sailSound = LoadSound("assets/audio/sfx/sail.ogg");
     m_damageSounds = {
         LoadSound("assets/audio/sfx/damage_01.wav"),
         LoadSound("assets/audio/sfx/damage_02.wav"),
@@ -81,20 +125,20 @@ void AudioController::Initialize() {
     };
     for (Sound damage : m_damageSounds) SetSoundVolume(damage, 0.65f);
     m_breakageSounds = {
-        LoadSound("assets/audio/sfx/breakage_1.wav"),
-        LoadSound("assets/audio/sfx/breakage_2.wav"),
-        LoadSound("assets/audio/sfx/breakage_3.wav"),
-        LoadSound("assets/audio/sfx/breakage_4.wav"),
+        LoadSound("assets/audio/sfx/breakage_1.ogg"),
+        LoadSound("assets/audio/sfx/breakage_2.ogg"),
+        LoadSound("assets/audio/sfx/breakage_3.ogg"),
+        LoadSound("assets/audio/sfx/breakage_4.ogg"),
     };
     for (Sound damage : m_breakageSounds) SetSoundVolume(damage, 1.75f);
-    m_explosionSound = LoadSound("assets/audio/sfx/explosion.wav");
+    m_explosionSound = LoadSound("assets/audio/sfx/explosion.ogg");
     m_horns = {
         LoadSound("assets/audio/sfx/combi_horn_1.wav"),
-        LoadSound("assets/audio/sfx/combi_horn_2.wav"),
+        LoadSound("assets/audio/sfx/combi_horn_2.ogg"),
         LoadSound("assets/audio/sfx/combi_horn_3.wav")
     };
-    m_fanSound = LoadMusicStream("assets/audio/sfx/fan.wav");
-    m_wheelSound = LoadMusicStream("assets/audio/sfx/wheel.wav");
+    m_fanSound = LoadMusicStream("assets/audio/sfx/fan.ogg");
+    m_wheelSound = LoadMusicStream("assets/audio/sfx/wheel.ogg");
     m_fanSound.looping = true;
     m_wheelSound.looping = true;
     SetMusicVolume(m_fanSound, 0.45f);
@@ -258,7 +302,9 @@ void AudioController::StartLevelEditorMusic(const std::string& path, bool previe
     // switching to a different editor track: unload previous editor streams if present
     if (m_levelEditorMusicLoaded) {
         StopMusicStream(SelectedMusic().music);
-        UnloadMusicStream(m_levelEditorMusicClean.music);
+        // Without a clean twin, "clean" is the same stream as "custom": unload it once.
+        if (m_levelEditorMusicClean.music.stream.buffer != m_levelEditorMusicCustom.music.stream.buffer)
+            UnloadMusicStream(m_levelEditorMusicClean.music);
         UnloadMusicStream(m_levelEditorMusicCustom.music);
         m_levelEditorMusicLoaded = false;
     } else {

@@ -49,6 +49,10 @@ inline Rectangle AtTopRight(
     };
 }
 
+inline Rectangle GameMenuButton(int windowWidth) {
+    return AtTopRight(windowWidth, 20.0f, 20.0f, 151.0f, 52.0f);
+}
+
 inline Rectangle CenteredAbove(
     Rectangle reference,
     float width,
@@ -110,7 +114,7 @@ inline void Draw(
     if (drawBorder) DrawRectangleLinesEx(bounds, 1.0f, DARKGRAY);
     const int textX = centerText
         ? static_cast<int>(bounds.x +
-            (bounds.width - MeasureText(label, fontSize)) / 2)
+            (bounds.width - MeasureTextFont(label, fontSize)) / 2)
         : static_cast<int>(bounds.x) + leftPadding;
     DrawTextFont(
         label,

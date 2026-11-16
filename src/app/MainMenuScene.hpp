@@ -17,6 +17,8 @@ class MainMenuScene : public I_Scene {
     AppContext* m_context;
     bool m_selectingLevel = false;
     bool m_editingLevels = false;
+    bool m_browsingCommunity = false;
+    int m_communityScroll = 0;
     int m_selectedLevel = 0;
     std::string m_newLevelName;
     bool m_creatingLevel = false;
@@ -31,6 +33,7 @@ class MainMenuScene : public I_Scene {
     float m_titleTerrainLength = 0.0f;
 
     void ProcessLevelEditorInput();
+    void ProcessCommunityInput();
     void InitTitleWorld();
     void ResetTitleWorld();
     void UpdateTitleWorld(float deltaTime);

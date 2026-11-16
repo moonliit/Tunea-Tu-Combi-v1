@@ -49,6 +49,24 @@ void DrawCenteredTexture(const Texture2D& texture, Rectangle bounds, float paddi
     );
 }
 
+void DrawActionTexture(const Texture2D& texture, Rectangle bounds, float rotation) {
+    if (texture.id == 0) return;
+    const float size = std::min(bounds.width - 16.0f, bounds.height - 6.0f);
+    DrawTexturePro(
+        texture,
+        Rectangle{0.0f, 0.0f,
+            static_cast<float>(texture.width), static_cast<float>(texture.height)},
+        Rectangle{
+            bounds.x + bounds.width / 2.0f,
+            bounds.y + bounds.height / 2.0f - 3.0f,
+            size, size
+        },
+        Vector2{size / 2.0f, size / 2.0f},
+        rotation * RAD2DEG,
+        Color{255, 255, 255, 175}
+    );
+}
+
 PartType ToolbarToPartType(ToolbarPart part) {
     return static_cast<PartType>(part);
 }
@@ -74,12 +92,17 @@ void DrawTexturedControl(
     const UiGameTextures& gameUi,
     bool selected,
     std::optional<const Texture2D*> contentTexture,
+    std::optional<float> contentRotation,
     std::optional<int> hotkey
 ) {
     const bool hovered = control.enabled && UiButton::IsHovered(control.bounds);
     const bool pressed = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    const bool driverBoxControl = control.type == UiControlType::ToolbarPart &&
+        control.toolbarPart == ToolbarPart::DriverBox;
     const Texture2D& frame = UiButton::ResolveButtonTexture(skin, control.enabled, hovered, pressed);
-    if (frame.id != 0) {
+    if (driverBoxControl) {
+        DrawRectangleRec(control.bounds, Fade(RED, pressed ? 0.45f : hovered ? 0.35f : 0.25f));
+    } else if (frame.id != 0) {
         UiButton::DrawTextureFit(frame, control.bounds, WHITE);
     } else {
         Color color = control.color;
@@ -88,7 +111,9 @@ void DrawTexturedControl(
         DrawRectangleLinesEx(control.bounds, 1.0f, DARKGRAY);
     }
 
-    if (selected) {
+    if (driverBoxControl) {
+        DrawRectangleLinesEx(control.bounds, selected ? 3.0f : 2.0f, RED);
+    } else if (selected) {
         if (gameUi.toolbarSelected.id != 0) {
             UiButton::DrawTextureFit(gameUi.toolbarSelected, control.bounds, WHITE);
         } else {
@@ -98,13 +123,37 @@ void DrawTexturedControl(
         DrawRectangleLinesEx(control.bounds, 2.0f, Fade(WHITE, 0.6f));
     }
 
+    if (control.type == UiControlType::Activation && control.active) {
+        DrawRectangleRec(
+            control.bounds,
+            Fade(IsFanAction(control.activationAction.value()) ? GREEN : ORANGE, 0.18f)
+        );
+    }
+
     if (contentTexture.has_value() && contentTexture.value() != nullptr &&
         contentTexture.value()->id != 0) {
-        Color tint = control.enabled ? WHITE : Color{140, 140, 140, 220};
-        if (control.type == UiControlType::Activation && control.active) {
-            tint = WHITE;
+        if (control.type == UiControlType::Activation) {
+            DrawActionTexture(
+                *contentTexture.value(), control.bounds,
+                contentRotation.value_or(0.0f)
+            );
+        } else {
+            DrawCenteredTexture(
+                *contentTexture.value(), control.bounds, 5.0f,
+                control.enabled ? WHITE : Color{140, 140, 140, 220}
+            );
         }
-        DrawCenteredTexture(*contentTexture.value(), control.bounds, 5.0f, tint);
+    }
+    if (control.type == UiControlType::Activation) {
+        DrawRectangleRec(
+            Rectangle{
+                control.bounds.x + 2.0f,
+                control.bounds.y + control.bounds.height - 20.0f,
+                control.bounds.width - 4.0f,
+                18.0f
+            },
+            Fade(BLACK, 0.65f)
+        );
     }
 
     // label overlay (kept for clarity; can be hidden when art includes text)
@@ -115,7 +164,7 @@ void DrawTexturedControl(
         int textX = static_cast<int>(control.bounds.x) + control.labelOffsetX;
         int textY = static_cast<int>(control.bounds.y) + control.labelOffsetY;
         if (control.type == UiControlType::ToolbarPart) {
-            textX = static_cast<int>(control.bounds.x + (control.bounds.width - MeasureText(label, fontSize)) / 2.0f);
+            textX = static_cast<int>(control.bounds.x + (control.bounds.width - MeasureTextFont(label, fontSize)) / 2.0f);
             textY = static_cast<int>(control.bounds.y + control.bounds.height - fontSize - 4);
         }
         DrawTextFont(label, textX + 1, textY + 1, fontSize, Fade(BLACK, 0.6f));
@@ -166,6 +215,7 @@ void GameUiRenderer::Render(
         bool selected = false;
         std::optional<int> hotkey;
         std::optional<const Texture2D*> contentTexture;
+        std::optional<float> contentRotation;
         const UiButtonSkin* skin = &gameUi.toolbarSlot;
 
         if (control.type == UiControlType::ToolbarPart) {
@@ -184,18 +234,24 @@ void GameUiRenderer::Render(
             hotkey = activationIndex == 10 ? 0 : activationIndex;
             selected = control.active;
             skin = &gameUi.toolbarSlot;
-            // content/label shown via overlay; tint active
+            const auto& subscribers = activationRegistry.GetSubscribers(
+                control.activationAction.value()
+            );
+            if (!subscribers.empty() && subscribers.front() != nullptr) {
+                const Part* part = subscribers.front();
+                contentTexture = &textures.GetPartTexture(part->GetType());
+                contentRotation = static_cast<float>(
+                    part->GetRenderState(grid).rotation
+                );
+            }
         } else if (control.type == UiControlType::Editor && control.editorAction.has_value()) {
             skin = &SkinForEditorAction(gameUi, control.editorAction.value());
         }
 
         DrawTexturedControl(
-            control, *skin, gameUi, selected, contentTexture, hotkey
+            control, *skin, gameUi, selected, contentTexture,
+            contentRotation, hotkey
         );
-
-        if (control.type == UiControlType::Activation && control.active) {
-            DrawRectangleRec(control.bounds, Fade(IsFanAction(control.activationAction.value()) ? GREEN : ORANGE, 0.18f));
-        }
     }
 
     // ENTER badge for main mode button (play/edit side button) when present
@@ -219,17 +275,17 @@ void GameUiRenderer::Render(
     if (state == GameState::Build) {
         const auto actions = ActivationRegistry::GetActionsForGrid(grid);
         if (!actions.empty()) {
-            const int columns = 3;
+            const int columns = 2;
             const int rows = (static_cast<int>(actions.size()) + columns - 1) / columns;
-            const int panelX = screenWidth - 196;
+            const int panelX = screenWidth - 236;
             const int panelY = 80;
             const int panelHeight = 24 + rows * 22;
-            DrawRectangle(panelX, panelY, 184, panelHeight, Fade(DARKGRAY, 0.82f));
-            DrawTextFont("EN PLAY (teclas 1-0)", panelX + 8, panelY + 5, 12, WHITE);
+            DrawRectangle(panelX, panelY, 224, panelHeight, Fade(DARKGRAY, 0.82f));
+            DrawTextFont("EN JUEGO (teclas 1-0)", panelX + 8, panelY + 5, 12, WHITE);
             for (std::size_t index = 0; index < actions.size(); ++index) {
                 const int column = static_cast<int>(index) % columns;
                 const int row = static_cast<int>(index) / columns;
-                const int x = panelX + 8 + column * 58;
+                const int x = panelX + 8 + column * 106;
                 const int y = panelY + 25 + row * 22;
                 const int hotkey = index == 9 ? 0 : static_cast<int>(index) + 1;
                 DrawTextFont(
@@ -247,16 +303,16 @@ void GameUiRenderer::Render(
     Color modeTextColor;
 
     if (state == GameState::Build) {
-        modeText = "MODE: EDIT";
-        modeControlsText = "(Left Click: Place, Right Click: Delete, ENTER: Play)";
+        modeText = "MODO: DISEÑO";
+        modeControlsText = "(Clic izq.: colocar, clic der.: borrar, ENTER: jugar)";
         modeTextColor = DARKGREEN;
     } else if (state == GameState::View) {
-        modeText = "MODE: VIEW";
-        modeControlsText = "(Drag to move camera, ESC: Edit)";
+        modeText = "MODO: VISTA";
+        modeControlsText = "(Arrastra para mover la cámara, ESC: diseñar)";
         modeTextColor = DARKPURPLE;
     } else {
-        modeText = "MODE: PLAY";
-        modeControlsText = "(Press ENTER to Edit)";
+        modeText = "MODO: JUEGO";
+        modeControlsText = "(Pulsa ENTER para volver al diseño)";
         modeTextColor = MAROON;
     }
 

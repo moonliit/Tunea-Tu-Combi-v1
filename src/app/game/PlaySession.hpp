@@ -123,6 +123,7 @@ public:
     std::vector<std::size_t> ConsumeEjectedPassengerIds();
 
 
+
 private:
     void BuildActivationSubscriptions();
     void ProcessImpacts();

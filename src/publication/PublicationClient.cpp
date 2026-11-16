@@ -13,6 +13,15 @@ EM_JS(char*, ReadPublicationWeb, (), {
 EM_JS(void, ConsumePublicationActionWeb, (const char* action), {
     Module['api'].consumePublicationAction(UTF8ToString(action));
 });
+EM_JS(void, OpenCatalogWeb, (), { Module['api'].openCatalog(); });
+EM_JS(void, NextCatalogPageWeb, (), { Module['api'].nextCatalogPage(); });
+EM_JS(void, PreviousCatalogPageWeb, (), { Module['api'].previousCatalogPage(); });
+EM_JS(void, PlayPublicLevelWeb, (const char* id), {
+    Module['api'].playPublicLevel(UTF8ToString(id));
+});
+EM_JS(char*, ReadCatalogWeb, (), {
+    return stringToNewUTF8(JSON.stringify(Module['api'].catalogSnapshot()));
+});
 EM_JS_DEPS(publication_deps, "$stringToNewUTF8");
 #endif
 
@@ -39,6 +48,42 @@ void PublicationClient::Publish(const nlohmann::json& payload) {
 #endif
 }
 
+void PublicationClient::OpenCatalog() {
+#ifdef __EMSCRIPTEN__
+    m_catalog.loading = true;
+    m_catalog.error.clear();
+    OpenCatalogWeb();
+#else
+    m_catalog = {
+        .error = "Los niveles públicos están disponibles en la versión web."
+    };
+#endif
+}
+
+void PublicationClient::NextCatalogPage() {
+#ifdef __EMSCRIPTEN__
+    if (m_catalog.loading || !m_catalog.hasNext) return;
+    m_catalog.loading = true;
+    NextCatalogPageWeb();
+#endif
+}
+
+void PublicationClient::PreviousCatalogPage() {
+#ifdef __EMSCRIPTEN__
+    if (m_catalog.loading || !m_catalog.hasPrevious) return;
+    m_catalog.loading = true;
+    PreviousCatalogPageWeb();
+#endif
+}
+
+void PublicationClient::PlayPublicLevel(const std::string& id) {
+#ifdef __EMSCRIPTEN__
+    PlayPublicLevelWeb(id.c_str());
+#else
+    static_cast<void>(id);
+#endif
+}
+
 void PublicationClient::Poll(double frameMs) {
 #ifdef __EMSCRIPTEN__
     m_pollDelayMs -= frameMs;
@@ -57,6 +102,28 @@ void PublicationClient::Poll(double frameMs) {
         ? PublicationStatus::Error
         : PublicationStatus::Idle;
     m_snapshot.message = state.value("message", "");
+    char* catalogRaw = ReadCatalogWeb();
+    const nlohmann::json catalog = nlohmann::json::parse(
+        catalogRaw, nullptr, false
+    );
+    std::free(catalogRaw);
+    if (catalog.is_object()) {
+        m_catalog.loading = catalog.value("loading", false);
+        m_catalog.hasPrevious = catalog.value("hasPrevious", false);
+        m_catalog.hasNext = catalog.value("hasNext", false);
+        m_catalog.error = catalog.value("error", "");
+        m_catalog.levels.clear();
+        if (catalog.contains("items") && catalog["items"].is_array()) {
+            for (const auto& item : catalog["items"]) {
+                if (!item.is_object()) continue;
+                m_catalog.levels.push_back({
+                    item.value("id", ""),
+                    item.value("name", ""),
+                    item.value("author", "")
+                });
+            }
+        }
+    }
     const std::uint64_t revision = state.value("revision", std::uint64_t{0});
     if (revision == m_revision) return;
     m_revision = revision;

@@ -80,12 +80,7 @@ struct MusicWithPath {
     Music music;
     std::string path;
 
-    static MusicWithPath Load(std::string path) {
-        return MusicWithPath {
-            .music = LoadMusicStream(path.c_str()),
-            .path = std::move(path),
-        };
-    }
+    static MusicWithPath Load(std::string path);
     std::optional<std::string> TryGetDualPath() const;
     MusicWithPath GetAndLoadDual() const {
         const auto dualPath = TryGetDualPath();
