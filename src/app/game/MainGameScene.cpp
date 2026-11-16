@@ -615,28 +615,53 @@ void MainGameScene::Update(float dt) {
                 std::llround(m_elapsedMs), passengerIndex, hostPart->GetId()
             );
         }
-        std::optional<Vector2> driverPosition;
-        if (!parts.empty()) {
+        {
+            std::optional<Vector2> driverPosition;
             Vector2 center{0.0f, 0.0f};
+            int partCount = 0;
             for (const Part* part : parts) {
-                const auto position = part->GetRenderState(runtimeGrid).position;
-                center.x += static_cast<float>(position.x);
-                center.y += static_cast<float>(position.y);
-                if (!driverPosition && IsOrContainsDriver(part)) {
+                const auto state = part->GetRenderState(runtimeGrid);
+                center.x += static_cast<float>(state.position.x);
+                center.y += static_cast<float>(state.position.y);
+                ++partCount;
+                if (part->HasContainedPart() && part->GetContainedPart() &&
+                    part->GetContainedPart()->GetType() == PartType::Driver) {
+                    const auto dstate = part->GetContainedPart()->GetRenderState(runtimeGrid);
                     driverPosition = Vector2{
-                        static_cast<float>(position.x),
-                        static_cast<float>(position.y)
+                        static_cast<float>(dstate.position.x),
+                        static_cast<float>(dstate.position.y)
+                    };
+                } else if (!driverPosition && part->GetType() == PartType::Driver) {
+                    driverPosition = Vector2{
+                        static_cast<float>(state.position.x),
+                        static_cast<float>(state.position.y)
                     };
                 }
             }
-            // Follow the driver or the vehicle center, but not outside the map
-            m_camera.target = ClampToBounds(
-                driverPosition.value_or(Vector2{
-                    center.x / parts.size(),
-                    center.y / parts.size()
-                }),
-                m_mapBounds
-            );
+            for (const auto& ejected : m_playSession.GetEjectedParts()) {
+                if (!ejected) continue;
+                const auto estate = ejected->GetRenderState(runtimeGrid);
+                center.x += static_cast<float>(estate.position.x);
+                center.y += static_cast<float>(estate.position.y);
+                ++partCount;
+                if (ejected->GetType() == PartType::Driver) {
+                    driverPosition = Vector2{
+                        static_cast<float>(estate.position.x),
+                        static_cast<float>(estate.position.y)
+                    };
+                }
+            }
+            // follow driver (including ejected) or vehicle center, clamped to map
+            if (partCount > 0) {
+                m_camera.target = ClampToBounds(
+                    driverPosition.value_or(Vector2{
+                        center.x / static_cast<float>(partCount),
+                        center.y / static_cast<float>(partCount)
+                    }),
+                    m_mapBounds
+                );
+            }
+
             bool fanActive = false;
             for (ActivationAction action : m_playSession.GetActivationRegistry().GetVisibleActions()) {
                 fanActive = fanActive || (
@@ -739,25 +764,48 @@ void MainGameScene::TransitionToPlayMode() {
     if (!runtimeParts.empty()) {
         Vector2 center{0.0f, 0.0f};
         std::optional<Vector2> driverPosition;
+        int partCount = 0;
         for (const Part* part : runtimeParts) {
-            const Math::Vector2D position =
-                part->GetRenderState(runtimeGrid).position;
-            center.x += static_cast<float>(position.x);
-            center.y += static_cast<float>(position.y);
-            if (!driverPosition && IsOrContainsDriver(part)) {
+            const auto state = part->GetRenderState(runtimeGrid);
+            center.x += static_cast<float>(state.position.x);
+            center.y += static_cast<float>(state.position.y);
+            ++partCount;
+            if (part->HasContainedPart() && part->GetContainedPart() &&
+                part->GetContainedPart()->GetType() == PartType::Driver) {
+                const auto dstate = part->GetContainedPart()->GetRenderState(runtimeGrid);
                 driverPosition = Vector2{
-                    static_cast<float>(position.x),
-                    static_cast<float>(position.y)
+                    static_cast<float>(dstate.position.x),
+                    static_cast<float>(dstate.position.y)
+                };
+            } else if (!driverPosition && part->GetType() == PartType::Driver) {
+                driverPosition = Vector2{
+                    static_cast<float>(state.position.x),
+                    static_cast<float>(state.position.y)
                 };
             }
         }
-        m_camera.target = ClampToBounds(
-            driverPosition.value_or(Vector2{
-                center.x / runtimeParts.size(),
-                center.y / runtimeParts.size()
-            }),
-            m_mapBounds
-        );
+        for (const auto& ejected : m_playSession.GetEjectedParts()) {
+            if (!ejected) continue;
+            const auto estate = ejected->GetRenderState(runtimeGrid);
+            center.x += static_cast<float>(estate.position.x);
+            center.y += static_cast<float>(estate.position.y);
+            ++partCount;
+            if (ejected->GetType() == PartType::Driver) {
+                driverPosition = Vector2{
+                    static_cast<float>(estate.position.x),
+                    static_cast<float>(estate.position.y)
+                };
+            }
+        }
+        if (partCount > 0) {
+            m_camera.target = ClampToBounds(
+                driverPosition.value_or(Vector2{
+                    center.x / static_cast<float>(partCount),
+                    center.y / static_cast<float>(partCount)
+                }),
+                m_mapBounds
+            );
+        }
     }
 }
 
@@ -765,7 +813,7 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
     const EditorGrid& grid = m_playSession.GetRuntimeGrid();
     const std::vector<TrackedPart> parts = CollectParts(grid);
     std::vector<GoalPartSample> partSamples;
-    partSamples.reserve(parts.size());
+    partSamples.reserve(parts.size() + m_playSession.GetEjectedParts().size());
     for (const TrackedPart& tracked : parts) {
         const PartId id = tracked.part->GetId();
         const double currentX = static_cast<double>(tracked.state.position.x);
@@ -786,6 +834,30 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
             .horizontalRadius = HorizontalRadius(tracked.state),
             .initial = m_initialPartIds.contains(id),
             .driver = tracked.part->GetType() == PartType::Driver
+        });
+    }
+    for (const auto& ejected : m_playSession.GetEjectedParts()) {
+        if (!ejected) continue;
+        const PartRenderState state = ejected->GetRenderState(grid);
+        const PartId id = ejected->GetId();
+        const double currentX = static_cast<double>(state.position.x);
+        const double currentY = static_cast<double>(state.position.y);
+        const auto previous = m_previousPartPositions.find(id);
+        const double previousX = previous == m_previousPartPositions.end()
+            ? currentX
+            : static_cast<double>(previous->second.x);
+        const double previousY = previous == m_previousPartPositions.end()
+            ? currentY
+            : static_cast<double>(previous->second.y);
+        partSamples.push_back({
+            .id = id,
+            .previousX = previousX,
+            .previousY = previousY,
+            .currentX = currentX,
+            .currentY = currentY,
+            .horizontalRadius = HorizontalRadius(state),
+            .initial = false,
+            .driver = ejected->GetType() == PartType::Driver
         });
     }
     std::vector<GoalPassengerSample> passengerSamples;
@@ -810,6 +882,11 @@ void MainGameScene::UpdateGoalWindow(double frameMs) {
             tracked.part->GetId(),
             tracked.state.position
         );
+    }
+    for (const auto& ejected : m_playSession.GetEjectedParts()) {
+        if (!ejected) continue;
+        const PartRenderState state = ejected->GetRenderState(grid);
+        m_previousPartPositions.emplace(ejected->GetId(), state.position);
     }
 }
 

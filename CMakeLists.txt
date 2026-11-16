@@ -64,6 +64,16 @@ if(EMSCRIPTEN)
     file(GLOB ASSET_FILES "assets/*")
     if(ASSET_FILES)
         target_link_options(ray PRIVATE "--preload-file" "${CMAKE_CURRENT_SOURCE_DIR}/assets@/assets")
+
+        # Release: the songs (most of assets/) stay out of ray.data. 
+        # The site serves them and the game downloads each one when it first needs it
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            target_link_options(ray PRIVATE
+                "SHELL:--exclude-file \"*/assets/audio/clean/*\" --exclude-file \"*/assets/audio/custom/*\"")
+        endif()
+
+        # The browser keeps ray.data, so later visits do not download it again.
+        target_link_options(ray PRIVATE "--use-preload-cache")
     endif()
 
 elseif(APPLE)

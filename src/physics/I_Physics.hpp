@@ -49,9 +49,11 @@ public:
     virtual void RemoveBody(
         const std::shared_ptr<I_RigidBody>& body
     ) = 0;
+    virtual bool IsLandingImpactProtectionActive() const { return false; }
     virtual void ApplyExplosion(
         const Math::Vector2D& center,
-        float impulseForce,
+        float breakImpulseForce,
+        float launchImpulseForce,
         float radius
     ) = 0;
 

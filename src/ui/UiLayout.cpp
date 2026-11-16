@@ -132,9 +132,9 @@ std::vector<UiControl> UiLayout::BuildControls(
             ToolbarPart::DriverBox,
             ToolbarPart::SquareBlock,
             ToolbarPart::CircleWheel,
-            ToolbarPart::TNTBarrel,
             ToolbarPart::Fan,
-            ToolbarPart::WindSail
+            ToolbarPart::WindSail,
+            ToolbarPart::TNTBarrel
         };
         constexpr std::string_view labels[] = {
             "Cabina del chofer",

@@ -12,7 +12,8 @@ constexpr float WindSailForce = 1750.0f;
 constexpr float WindSailActiveDuration = 0.75f;
 constexpr float WindSailCooldownDuration = 1.25f;
 
-constexpr float TntExplosionForce = 1000.0f;
+constexpr float TntExplosionBreakForce = 1000.0f;
+constexpr float TntExplosionLaunchForce = 400.0f;
 constexpr float TntExplosionRadius = 750.0f;
 constexpr float ContainedTntExplosionMultiplier = 1.75f;
 
@@ -67,13 +68,15 @@ void Part::SetAttachmentBody(std::shared_ptr<I_RigidBody> body) {
 
 void Part::SetContainedBody(
     std::shared_ptr<I_RigidBody> body,
-    I_PhysicsWorld* physicsWorld
+    I_PhysicsWorld* physicsWorld,
+    EditorGrid* grid
 ) {
     if (!body || m_physicsBody) return;
     m_attachmentRotationOffset =
         PartOrientationRadians(m_orientation) - body->GetRotation();
     m_attachmentBody = std::move(body);
     m_physicsWorld = physicsWorld;
+    m_grid = grid;
 }
 
 bool Part::CanContain(const Part& part) const {
@@ -110,20 +113,19 @@ void Part::ApplyPropulsionForce(float magnitude) {
     });
 }
 
-void Part::ApplyRadialImpulseForce(float magnitude, float radius) {
+void Part::ApplyRadialImpulseForce(float breakMagnitude, float launchMagnitude, float radius) {
     if (!m_physicsWorld || (!m_physicsBody && !m_attachmentBody)) return;
     const std::shared_ptr<I_RigidBody>& body =
         m_physicsBody ? m_physicsBody : m_attachmentBody;
-    const Vector2D position = body->GetPosition();
-    const Vector2D center = m_attachmentBody
-        ? m_attachmentBody->GetPosition()
-        : position;
-    const float explosionMagnitude = m_attachmentBody
-        ? magnitude * ContainedTntExplosionMultiplier
-        : magnitude;
+    const Vector2D bodyPosition = body->GetPosition();
+    const bool contained = m_attachmentBody != nullptr && m_physicsBody == nullptr;
+    const Vector2D center = bodyPosition;
+
+    const float multiplier = contained ? ContainedTntExplosionMultiplier : 1.0f;
     m_physicsWorld->ApplyExplosion(
         center,
-        explosionMagnitude,
+        breakMagnitude * multiplier,
+        launchMagnitude * multiplier,
         radius
     );
     m_removalRequested = true;
@@ -158,7 +160,11 @@ void Part::UpdateActivation(float deltaTime) {
             ApplyPropulsionForce(WindSailForce);
             break;
         case PartType::TNTBarrel:
-            ApplyRadialImpulseForce(TntExplosionForce, TntExplosionRadius);
+            ApplyRadialImpulseForce(
+                TntExplosionBreakForce,
+                TntExplosionLaunchForce,
+                TntExplosionRadius
+            );
             m_activationActive = false;
             break;
         default:
@@ -307,7 +313,27 @@ void Part::SetPhysicsBody(
 
     if (m_containedPart) {
         m_containedPart->ResetPhysicsBody();
-        m_containedPart->SetContainedBody(m_physicsBody, m_physicsWorld);
+        m_containedPart->SetContainedBody(m_physicsBody, m_physicsWorld, m_grid);
+    }
+}
+
+void Part::AdoptPhysicsBody(
+    std::shared_ptr<I_RigidBody> body,
+    I_PhysicsWorld* physicsWorld,
+    EditorGrid* grid
+) {
+    m_physicsBody = std::move(body);
+    m_attachmentBody = nullptr;
+    m_attachmentRotationOffset = 0.0f;
+    m_physicsWorld = physicsWorld;
+    m_grid = grid;
+    m_propulsionActive = false;
+    m_activationActive = false;
+    m_activeTimeRemaining = 0.0f;
+    m_cooldownRemaining = 0.0f;
+    m_removalRequested = false;
+    if (m_physicsBody) {
+        m_physicsBody->m_part = this;
     }
 }
 
