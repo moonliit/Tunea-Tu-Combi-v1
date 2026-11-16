@@ -66,7 +66,7 @@
         .card .meta { padding: 12px 14px; }
         .card h2 { margin: 0 0 8px; font-size: 16px; }
 
-        /* Game page: the game on the left, the account, about and publications boxes on the right */
+        /* Game page: the game on the left, the account and about boxes on the right */
         #page {
             flex: 1;
             display: grid;
@@ -150,14 +150,10 @@
         #loading.error img { display: none; }
         #loading.error .track { display: none; }
 
-        /* Sidebar boxes. The panels come from api.js, which writes their look inline. */
-        #sidebar { display: flex; flex-direction: column; }
-        /* Order: your combi (api.js), about the game, your publications (api.js) */
-        #sidebar > #about { order: 1; }
-        #sidebar > details { order: 2; }
+        /* Sidebar boxes. The account panel comes from api.js, which writes its look inline. */
         #sidebar > #about h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
         #sidebar > #about p { margin: 0; color: var(--text); font-size: 14px; }
-        #sidebar > section, #sidebar > details {
+        #sidebar > section {
             width: 100%;
             max-width: none !important;
             margin: 0 0 16px !important;
@@ -168,13 +164,7 @@
             border-radius: 4px;
             font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
         }
-        /* The publications panel is always open, so its title is just a heading. */
-        #sidebar summary { font-weight: 600; list-style: none; pointer-events: none; }
-        #sidebar summary::-webkit-details-marker { display: none; }
-        #sidebar h3 { margin: 16px 0 6px; font-size: 14px; font-weight: 600; }
         #sidebar p { margin: 6px 0; }
-        #sidebar [style*="665c50"] { color: var(--muted) !important; }
-        #sidebar [style*="border-top"] { border-top-color: var(--line) !important; flex-wrap: wrap; }
         #sidebar > section > p[role="status"] { font-weight: 600; }
         #sidebar > section > p:not([role]):not([aria-live]) { color: var(--muted); font-size: 12px; }
         #sidebar > section > p[aria-live] { color: var(--muted); }
@@ -207,8 +197,8 @@
             border-radius: 3px;
             font: inherit;
         }
-        #sidebar form input[type="text"], #sidebar form input:not([type]), #sidebar form input[type="search"] { min-width: 0; flex: 1; }
-        a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+        #sidebar form input[type="text"], #sidebar form input:not([type]) { min-width: 0; flex: 1; }
+        a:focus-visible, button:focus-visible, input:focus-visible {
             outline: 2px solid var(--accent);
             outline-offset: 2px;
         }
@@ -285,7 +275,7 @@
             <div class="tags"><span>Física</span><span>Construcción</span><span>Editor de niveles</span></div>
         </div>
         <main id="main">
-            <!-- api.js adds its panels right before this element; the script below moves them to the sidebar. -->
+            <!-- api.js adds its panel right before this element; the script below moves it to the sidebar. -->
             <div id="frame">
                 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
                 <div id="loading" role="status">
@@ -360,21 +350,13 @@
             showError('Se perdió la gráfica. Recarga la página para intentarlo de nuevo.');
         });
 
-        // api.js puts its panels before the game frame; they belong in the sidebar.
+        // api.js puts its panel before the game frame; it belongs at the top of the sidebar.
         const sidebar = document.getElementById('sidebar');
-
-        // The publications panel is a normal box, not a dropdown: keep it open.
-        function keepOpen(details) {
-            details.open = true;
-            details.addEventListener('toggle', () => { details.open = true; });
-            details.querySelector('summary')?.setAttribute('tabindex', '-1');
-        }
 
         new MutationObserver(records => {
             for (const record of records) {
                 for (const node of record.addedNodes) {
-                    if (node.tagName === 'DETAILS') keepOpen(node);
-                    if (node.tagName === 'SECTION' || node.tagName === 'DETAILS') sidebar.append(node);
+                    if (node.tagName === 'SECTION') sidebar.prepend(node);
                 }
             }
         }).observe(document.getElementById('main'), { childList: true });

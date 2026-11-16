@@ -39,7 +39,7 @@ El nivel va en la URL como `{levelId}`, que puede ser:
 | `level-list` | `GET /levels?query=&cursor=` | 200 |
 | `level-get` | `GET /levels/{levelId}` | 200, o 404 |
 | `level-publish` | `POST /levels` | 201 con `Location`, 200 si ya estaba aplicado |
-| `level-list-mine` | `GET /me/levels?cursor=` | 200 |
+| `level-list-mine` | `GET /me/levels?status=&query=&cursor=` | 200 |
 | `level-retire` | `DELETE /levels/{levelId}` | 200 |
 | `level-copy` | `POST /levels/{levelId}/copies` | 200, con el borrador en la respuesta |
 | `recordings-cleanup` | EventBridge, no es HTTP | - |

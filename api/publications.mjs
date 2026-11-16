@@ -88,7 +88,7 @@ export function validateLevelDefinition(value) {
         typeof value !== 'object' ||
         Array.isArray(value) ||
         !required.every((key) => keys.includes(key)) ||
-        keys.some((key) => ![...required, 'initialCamera'].includes(key))
+        keys.some((key) => ![...required, 'initialCamera', 'tntObstacles'].includes(key))
     ) {
         throw new ApiError(400, 'INVALID_LEVEL');
     }
@@ -172,6 +172,15 @@ export function validateLevelDefinition(value) {
         return result;
     });
     const result = { terrain: { polygons }, grid, goal, passengers };
+    // Optional: levels made before TNT barrels existed do not have the key.
+    if (value.tntObstacles !== undefined) {
+        if (!Array.isArray(value.tntObstacles) || value.tntObstacles.length > 64)
+            throw new ApiError(400, 'INVALID_LEVEL');
+        result.tntObstacles = value.tntObstacles.map((obstacle) => {
+            if (!exactKeys(obstacle, ['position'])) throw new ApiError(400, 'INVALID_LEVEL');
+            return { position: point(obstacle.position) };
+        });
+    }
     if (value.initialCamera !== undefined) {
         if (!exactKeys(value.initialCamera, ['target', 'zoom']))
             throw new ApiError(400, 'INVALID_LEVEL');
@@ -700,26 +709,38 @@ export function createPublicationService(store, objects, clock = () => Date.now(
             };
         },
 
-        async mine(identity, cursor) {
+        // status: 'public' or 'retired' to list only those (omitted lists both).
+        // query: part of the name, normalized like the catalog search.
+        async mine(identity, cursor, status, queryValue) {
+            if (status !== undefined && !['public', 'retired'].includes(status))
+                throw new ApiError(400, 'INVALID_STATUS');
+            const query = normalizeQuery(queryValue);
             let page;
-            try {
-                page = await store.queryAuthorLevels(identity.id, cursor, 20);
-            } catch (error) {
-                if (error?.message === 'Invalid cursor')
-                    throw new ApiError(400, 'INVALID_CURSOR');
-                throw error;
-            }
+            let items;
+            do {
+                try {
+                    page = await store.queryAuthorLevels(identity.id, cursor, 20, status);
+                } catch (error) {
+                    if (error?.message === 'Invalid cursor')
+                        throw new ApiError(400, 'INVALID_CURSOR');
+                    throw error;
+                }
+                cursor = page.cursor;
+                items = page.items.filter((item) =>
+                    item.name.normalize('NFKC').toLocaleLowerCase('es').includes(query));
+                // A filtered page can be empty although more levels follow: keep reading.
+            } while (!items.length && cursor);
             return {
                 activeCount: (await store.getAuthorState(identity.id))?.activePublications ?? 0,
                 limit: MAX_ACTIVE_PUBLICATIONS,
-                items: page.items.map((item) => ({
+                items: items.map((item) => ({
                     id: item.levelId,
                     name: item.name,
                     status: item.visibility,
                     publishedAt: item.publishedAt,
                     retiredAt: item.retiredAt ?? null
                 })),
-                cursor: page.cursor
+                cursor
             };
         },
 

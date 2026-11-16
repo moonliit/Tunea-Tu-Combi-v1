@@ -12,7 +12,6 @@ Module['api'] = (() => {
     let updateUi = () => {};
     let transientLocalProfileId = '';
     let leaderboardGeneration = 0;
-    let renderPublications = () => {};
     let publicationRevision = 0;
     let publicationState = {
         status: 'idle',
@@ -23,6 +22,7 @@ Module['api'] = (() => {
     };
     const catalogState = {
         items: [],
+        mine: false,
         query: '',
         currentCursor: null,
         nextCursor: null,
@@ -32,16 +32,6 @@ Module['api'] = (() => {
     };
     let catalogSearchTimer = null;
     let catalogGeneration = 0;
-    const ownPublicationState = {
-        items: [],
-        activeCount: 0,
-        limit: 5,
-        currentCursor: null,
-        nextCursor: null,
-        previous: [],
-        loading: false,
-        error: ''
-    };
     let leaderboardState = {
         status: 'idle',
         entries: [],
@@ -72,12 +62,7 @@ Module['api'] = (() => {
         NO_SESSION: 'No hay sesión. Reconecta para crear una identidad.'
     };
     function accept(next) {
-        if (identity?.id !== next?.id) {
-            epoch++;
-            ownPublicationState.currentCursor = null;
-            ownPublicationState.nextCursor = null;
-            ownPublicationState.previous = [];
-        }
+        if (identity?.id !== next?.id) epoch++;
         identity = next;
         status = next ? 'ready' : 'local';
     }
@@ -108,9 +93,6 @@ Module['api'] = (() => {
     function fail(error) {
         accept(null);
         notice = messages[error.message] ?? '';
-        ownPublicationState.items = [];
-        ownPublicationState.error = 'Sin conexión: la gestión de publicaciones no está disponible.';
-        renderPublications();
     }
     const lock = fn => typeof navigator !== 'undefined' && navigator.locks
         ? navigator.locks.request('combi-session', fn) : fn();
@@ -133,7 +115,6 @@ Module['api'] = (() => {
                 }
                 accept(result.identity);
                 notice = '';
-                loadOwnPublications();
             });
         } catch (error) { fail(error); }
         finally { busy = false; updateUi(); }
@@ -159,7 +140,6 @@ Module['api'] = (() => {
             };
             notice = 'Nombre reservado.';
             loadCatalog(catalogState.currentCursor);
-            loadOwnPublications();
             channel?.postMessage('changed');
             return true;
         } catch (error) {
@@ -425,7 +405,7 @@ Module['api'] = (() => {
                     ? 'unavailable'
                     : 'error',
                 message: error.status === 404 || error.message === 'LEVEL_NOT_FOUND'
-                    ? 'El nivel fue retirado o ya no está disponible.'
+                    ? 'El nivel fue eliminado o ya no está disponible.'
                     : error.message === 'RECORDING_UNAVAILABLE'
                     ? 'El recorrido campeón no está disponible.'
                     : 'No se pudo consultar el recorrido campeón.',
@@ -510,36 +490,38 @@ Module['api'] = (() => {
     const publicationMessages = {
         ATTEMPT_ALREADY_PUBLISHED: 'Esta victoria ya fue usada para publicar.',
         DRAFT_CHANGED_AFTER_WIN: 'El borrador cambió después de la victoria. Complétalo otra vez.',
-        DRAFT_ALREADY_PUBLISHED: 'Este borrador ya originó una publicación. Crea una copia desde “Mis publicaciones” para editar y volver a publicar.',
+        DRAFT_ALREADY_PUBLISHED: 'Este borrador ya originó una publicación. Crea una copia desde Comunidad para editarlo y volver a publicarlo.',
         INVALID_CAPTURE: 'La grabación no cumple los límites de publicación.',
         INVALID_GOAL_WINDOW: 'La grabación no confirma los tres segundos del chofer.',
         INVALID_LEVEL: 'El nivel supera los límites permitidos o tiene datos inválidos.',
         INVALID_LEVEL_NAME: 'Nombre de 3 a 40 letras, números, espacios, - o _.',
-        PUBLICATION_LIMIT: 'Ya tienes cinco publicaciones activas. Retira una antes de publicar.',
+        PUBLICATION_LIMIT: 'Ya tienes cinco publicaciones activas. Elimina una antes de publicar.',
         RETRY_PUBLICATION: 'Hubo otra publicación simultánea. Vuelve a intentarlo.'
     };
     async function loadCatalog(cursor = null, pushPrevious = false,
         generation = ++catalogGeneration) {
         catalogState.loading = true;
         catalogState.error = '';
-        renderPublications();
         try {
-            const query = encodeURIComponent(catalogState.query);
-            const cursorValue = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
-            const result = await request(`/levels?query=${query}${cursorValue}`);
+            // "Propios" lists only your published levels.
+            if (catalogState.mine && status !== 'ready') throw new Error('NO_IDENTITY');
+            const search = `query=${encodeURIComponent(catalogState.query)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+            const result = await request(catalogState.mine
+                ? `/me/levels?status=public&${search}`
+                : `/levels?${search}`);
             if (generation !== catalogGeneration) return;
             if (pushPrevious) catalogState.previous.push(catalogState.currentCursor);
             catalogState.currentCursor = cursor;
             catalogState.nextCursor = result.cursor ?? null;
-            catalogState.items = result.items ?? [];
+            catalogState.items = (result.items ?? []).map(level =>
+                catalogState.mine ? { ...level, author: { id: identity.id, name: identity.name } } : level);
         } catch {
             if (generation === catalogGeneration)
-                catalogState.error = 'No se pudo cargar el catálogo público.';
+                catalogState.error = catalogState.mine
+                    ? 'No se pudieron cargar tus niveles.'
+                    : 'No se pudo cargar el catálogo público.';
         } finally {
-            if (generation === catalogGeneration) {
-                catalogState.loading = false;
-                renderPublications();
-            }
+            if (generation === catalogGeneration) catalogState.loading = false;
         }
     }
     function searchCatalog(query) {
@@ -551,37 +533,10 @@ Module['api'] = (() => {
         catalogState.loading = true;
         catalogState.error = '';
         const generation = ++catalogGeneration;
-        renderPublications();
         catalogSearchTimer = setTimeout(() => {
             catalogSearchTimer = null;
             loadCatalog(null, false, generation);
         }, 180);
-    }
-    async function loadOwnPublications(cursor = null, pushPrevious = false) {
-        if (status !== 'ready') {
-            ownPublicationState.items = [];
-            ownPublicationState.error = 'Conecta una identidad para gestionar tus publicaciones.';
-            renderPublications();
-            return;
-        }
-        ownPublicationState.loading = true;
-        ownPublicationState.error = '';
-        renderPublications();
-        try {
-            const cursorValue = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
-            const result = await request(`/me/levels${cursorValue}`);
-            if (pushPrevious) ownPublicationState.previous.push(ownPublicationState.currentCursor);
-            ownPublicationState.currentCursor = cursor;
-            ownPublicationState.nextCursor = result.cursor ?? null;
-            ownPublicationState.items = result.items ?? [];
-            ownPublicationState.activeCount = result.activeCount ?? 0;
-            ownPublicationState.limit = result.limit ?? 5;
-        } catch {
-            ownPublicationState.error = 'No se pudieron cargar tus publicaciones.';
-        } finally {
-            ownPublicationState.loading = false;
-            renderPublications();
-        }
     }
     async function publishDraft(payload) {
         publicationState = {
@@ -589,7 +544,6 @@ Module['api'] = (() => {
             status: 'publishing',
             message: 'Subiendo nivel y grabación...'
         };
-        renderPublications();
         try {
             if (status !== 'ready' || !identity?.id || payload.capture?.combiId !== identity.id)
                 throw new Error('IDENTITY_CHANGED');
@@ -600,7 +554,7 @@ Module['api'] = (() => {
                 status: 'published',
                 message: `“${result.name}” ya está en el catálogo.`
             };
-            await Promise.all([loadCatalog(null), loadOwnPublications()]);
+            await loadCatalog(null);
             return true;
         } catch (error) {
             publicationState = {
@@ -609,10 +563,9 @@ Module['api'] = (() => {
                 message: error.message === 'IDENTITY_CHANGED'
                     ? 'La victoria pertenece a otra sesión. Completa el nivel con la identidad actual.'
                     : error.message === 'LEVEL_ALREADY_RETIRED'
-                    ? 'Esta publicación fue retirada y no puede reactivarse. Crea una copia y complétala otra vez.'
+                    ? 'Este nivel ya fue publicado y eliminado, así que no se puede publicar de nuevo.'
                     : publicationMessages[error.message] ?? 'No se pudo publicar. Comprueba la conexión e inténtalo otra vez.'
             };
-            renderPublications();
             return false;
         }
     }
@@ -633,7 +586,6 @@ Module['api'] = (() => {
                 message: 'El nivel ya no está disponible o falló la conexión.'
             };
         }
-        renderPublications();
     }
     async function copyPublication(id) {
         try {
@@ -652,24 +604,26 @@ Module['api'] = (() => {
                 message: 'No se pudo crear la copia.'
             };
         }
-        renderPublications();
     }
     async function retirePublication(id) {
+        const accepted = window.confirm(
+            '¿Eliminar este nivel? Se quita del catálogo y no se puede deshacer.'
+        );
+        if (!accepted) return;
         try {
             await request(publicLevelPath(id), 'DELETE');
             publicationState = {
                 ...publicationState,
                 status: 'idle',
-                message: 'Publicación retirada. El cupo quedó libre.'
+                message: ''
             };
-            await Promise.all([loadCatalog(null), loadOwnPublications()]);
+            await loadCatalog(catalogState.currentCursor);
         } catch {
             publicationState = {
                 ...publicationState,
                 status: 'error',
-                message: 'No se pudo retirar la publicación.'
+                message: 'No se pudo eliminar el nivel.'
             };
-            renderPublications();
         }
     }
     function publicationSnapshot() {
@@ -681,10 +635,12 @@ Module['api'] = (() => {
             error: catalogState.error,
             hasPrevious: catalogState.previous.length > 0,
             hasNext: Boolean(catalogState.nextCursor),
+            onlyMine: catalogState.mine,
             items: catalogState.items.map(level => ({
                 id: level.id,
                 name: level.name,
-                author: level.author?.name || 'Combi sin nombre'
+                author: level.author?.name || 'Combi sin nombre',
+                mine: Boolean(identity?.id) && level.author?.id === identity.id
             }))
         };
     }
@@ -692,6 +648,13 @@ Module['api'] = (() => {
         if (catalogSearchTimer !== null) clearTimeout(catalogSearchTimer);
         catalogSearchTimer = null;
         catalogState.query = '';
+        catalogState.mine = false;
+        catalogState.previous = [];
+        loadCatalog(null);
+    }
+    function showOnlyMine(mine) {
+        // From C++ a bool arrives as 0 or 1.
+        catalogState.mine = Boolean(mine);
         catalogState.previous = [];
         loadCatalog(null);
     }
@@ -706,96 +669,6 @@ Module['api'] = (() => {
     function consumePublicationAction(action) {
         if (action === 'play') publicationState.play = null;
         if (action === 'copy') publicationState.copy = null;
-    }
-    function mountPublications(container) {
-        const panel = document.createElement('details');
-        panel.classList.add('combi-matcha');
-        panel.style.cssText = 'max-width:800px;margin:12px auto;padding:12px;box-sizing:border-box;font-size:15px;background:#f5f1e8;color:#30281f;text-align:left';
-        const summary = document.createElement('summary');
-        summary.style.cssText = 'font-weight:bold;cursor:pointer';
-        const ownList = document.createElement('div');
-        const ownNavigation = document.createElement('div');
-        ownNavigation.style.cssText = 'display:flex;gap:8px;margin:8px 0';
-        const ownPrevious = document.createElement('button');
-        ownPrevious.type = 'button';
-        ownPrevious.textContent = 'Anteriores propias';
-        const ownNext = document.createElement('button');
-        ownNext.type = 'button';
-        ownNext.textContent = 'Más publicaciones propias';
-        ownNavigation.append(ownPrevious, ownNext);
-        const feedback = document.createElement('p');
-        feedback.setAttribute('aria-live', 'polite');
-        panel.append(summary, ownList, ownNavigation, feedback);
-        container.before(panel);
-        for (const event of ['keydown', 'keyup', 'keypress'])
-            panel.addEventListener(event, (value) => value.stopPropagation());
-
-        const row = (title, detail, actions) => {
-            const item = document.createElement('div');
-            item.style.cssText = 'display:flex;align-items:center;gap:8px;border-top:1px solid #d7cdbf;padding:8px 0';
-            const text = document.createElement('div');
-            text.style.flex = '1';
-            const strong = document.createElement('strong');
-            strong.textContent = title;
-            const small = document.createElement('div');
-            small.textContent = detail;
-            small.style.cssText = 'font-size:13px;color:#665c50';
-            text.append(strong, small);
-            item.append(text, ...actions);
-            return item;
-        };
-        const actionButton = (label, handler, disabled = false) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = label;
-            button.disabled = disabled;
-            button.addEventListener('click', handler);
-            return button;
-        };
-        renderPublications = () => {
-            summary.textContent = `Mis publicaciones (${ownPublicationState.activeCount}/${ownPublicationState.limit} activas)`;
-            ownList.replaceChildren();
-            if (ownPublicationState.loading) {
-                ownList.textContent = 'Cargando publicaciones...';
-            } else if (ownPublicationState.error) {
-                ownList.textContent = ownPublicationState.error;
-            } else if (!ownPublicationState.items.length) {
-                ownList.textContent = 'Todavía no tienes publicaciones.';
-            } else {
-                for (const level of ownPublicationState.items) {
-                    const active = level.status === 'public';
-                    const actions = [actionButton('Crear copia', () => copyPublication(level.id))];
-                    if (active) {
-                        actions.push(actionButton('Retirar', () => {
-                            const accepted = window.confirm(
-                                'Retirar quita el nivel del catálogo y libera un cupo. No puede reactivarse; sus puntuaciones se conservan y la grabación se elimina tras 24 horas. Las partidas en curso podrán terminar localmente, pero sus resultados serán rechazados. ¿Continuar?'
-                            );
-                            if (accepted) retirePublication(level.id);
-                        }));
-                    }
-                    ownList.append(row(
-                        level.name,
-                        active ? 'Publicación activa' : 'Publicación retirada, no se puede reactivar',
-                        actions
-                    ));
-                }
-            }
-            ownPrevious.disabled = ownPublicationState.loading ||
-                !ownPublicationState.previous.length;
-            ownNext.disabled = ownPublicationState.loading ||
-                !ownPublicationState.nextCursor;
-            feedback.textContent = publicationState.message;
-        };
-        ownPrevious.addEventListener('click', () => {
-            if (!ownPublicationState.previous.length) return;
-            loadOwnPublications(ownPublicationState.previous.pop());
-        });
-        ownNext.addEventListener('click', () => {
-            if (ownPublicationState.nextCursor)
-                loadOwnPublications(ownPublicationState.nextCursor, true);
-        });
-        renderPublications();
-        loadOwnPublications();
     }
     function mount() {
         const panel = document.createElement('section');
@@ -825,7 +698,6 @@ Module['api'] = (() => {
         const canvas = document.querySelector('canvas');
         const container = canvas?.parentElement;
         if (container?.parentElement) container.before(panel); else document.body.prepend(panel);
-        if (container?.parentElement) mountPublications(container);
         for (const event of ['keydown', 'keyup', 'keypress']) panel.addEventListener(event, e => e.stopPropagation());
         let renderedName = null;
         updateUi = () => {
@@ -870,10 +742,13 @@ Module['api'] = (() => {
         publishDraft,
         catalogSnapshot,
         openCatalog,
+        showOnlyMine,
         searchCatalog,
         nextCatalogPage,
         previousCatalogPage,
         playPublicLevel,
+        copyPublication,
+        retirePublication,
         publicationSnapshot,
         consumePublicationAction
     };

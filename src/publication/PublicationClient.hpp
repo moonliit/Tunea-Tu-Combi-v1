@@ -24,12 +24,14 @@ struct PublicLevelSummary {
     std::string id;
     std::string name;
     std::string author;
+    bool mine = false;
 };
 
 struct PublicCatalogSnapshot {
     bool loading = false;
     bool hasPrevious = false;
     bool hasNext = false;
+    bool onlyMine = false;
     std::string error;
     std::vector<PublicLevelSummary> levels;
 };
@@ -45,10 +47,13 @@ class PublicationClient {
 public:
     void Publish(const nlohmann::json& payload);
     void OpenCatalog();
+    void ShowOnlyMine(bool mine);
     void SearchCatalog(const std::string& query);
     void NextCatalogPage();
     void PreviousCatalogPage();
     void PlayPublicLevel(const std::string& id);
+    void CopyPublicLevel(const std::string& id);
+    void RetirePublicLevel(const std::string& id);
     void Poll(double frameMs);
     std::optional<nlohmann::json> TakePlayRequest();
     std::optional<nlohmann::json> TakeCopyRequest();

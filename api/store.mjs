@@ -65,15 +65,22 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
         return items;
     }
 
-    async function queryPage(PK, cursor, limit, prefix = null) {
+    // The visibility filter runs after the read of `limit` items, so a page can come
+    // back with fewer items (even none) while the cursor says there is more.
+    async function queryPage(PK, cursor, limit, prefix = null, visibility = null) {
         const result = await client.send(new QueryCommand({
             TableName: table,
             KeyConditionExpression: prefix
                 ? 'PK = :pk AND begins_with(SK, :prefix)'
                 : 'PK = :pk',
+            ...(visibility ? {
+                FilterExpression: '#visibility = :visibility',
+                ExpressionAttributeNames: { '#visibility': 'visibility' }
+            } : {}),
             ExpressionAttributeValues: {
                 ':pk': PK,
-                ...(prefix ? { ':prefix': prefix } : {})
+                ...(prefix ? { ':prefix': prefix } : {}),
+                ...(visibility ? { ':visibility': visibility } : {})
             },
             ExclusiveStartKey: decodeCursor(cursor, PK),
             ConsistentRead: true,
@@ -302,8 +309,8 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
         },
 
         queryCatalog: (cursor, limit) => queryPage('CATALOG', cursor, limit),
-        queryAuthorLevels: (authorId, cursor, limit) =>
-            queryPage(`AUTHOR#${authorId}`, cursor, limit, 'LEVEL#'),
+        queryAuthorLevels: (authorId, cursor, limit, visibility) =>
+            queryPage(`AUTHOR#${authorId}`, cursor, limit, 'LEVEL#', visibility),
 
         async create(identity, hash, expiresAt) {
             await transact(

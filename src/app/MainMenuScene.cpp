@@ -63,6 +63,24 @@ Rectangle CommunityRow(int width, int index) {
     };
 }
 
+// Buttons of a row, counted from the right: 0 is "Jugar", 1 "Eliminar" and 2 "Copiar"
+// (the last two only show up on your own levels).
+Rectangle CommunityRowButton(int width, int row, int fromRight) {
+    const Rectangle bounds = CommunityRow(width, row);
+    return Rectangle{
+        bounds.x + bounds.width - 123.0f - fromRight * 115.0f,
+        bounds.y + 13.0f,
+        105.0f,
+        46.0f
+    };
+}
+
+// The search and "propios" buttons sit side by side, centered between the page arrows.
+Rectangle CommunityMineButton(int width, int height) {
+    return Rectangle{width / 2.0f - 11.0f,
+        static_cast<float>(height - 158), 96.0f, 60.0f};
+}
+
 Rectangle CommunityPageButton(int width, int height, bool next) {
     return Rectangle{
         width / 2.0f + (next ? 132.0f : -228.0f),
@@ -73,7 +91,7 @@ Rectangle CommunityPageButton(int width, int height, bool next) {
 }
 
 Rectangle CommunitySearchButton(int width, int height) {
-    return Rectangle{(width - 62.0f) / 2.0f,
+    return Rectangle{width / 2.0f - 85.0f,
         static_cast<float>(height - 158), 62.0f, 60.0f};
 }
 
@@ -93,49 +111,6 @@ CommunitySearchDialogLayout GetCommunitySearchDialogLayout(int width, int height
         Rectangle{dialog.x + dialog.width - 58.0f,
             dialog.y + 16.0f, 38.0f, 38.0f}
     };
-}
-
-std::string FoldCommunityText(const std::string& value) {
-    std::string folded = value;
-    for (std::size_t index = 0; index < folded.size(); ++index) {
-        unsigned char character = static_cast<unsigned char>(folded[index]);
-        if (character == 0xC3 && index + 1 < folded.size()) {
-            unsigned char next = static_cast<unsigned char>(folded[index + 1]);
-            switch (next) {
-                case 0x81: next = 0xA1; break; // Á
-                case 0x89: next = 0xA9; break; // É
-                case 0x8D: next = 0xAD; break; // Í
-                case 0x93: next = 0xB3; break; // Ó
-                case 0x9A: next = 0xBA; break; // Ú
-                case 0x9C: next = 0xBC; break; // Ü
-                case 0x91: next = 0xB1; break; // Ñ
-                default: break;
-            }
-            folded[index + 1] = static_cast<char>(next);
-            ++index;
-        } else if (character < 0x80) {
-            folded[index] = static_cast<char>(std::tolower(character));
-        }
-    }
-    const auto first = folded.find_first_not_of(' ');
-    if (first == std::string::npos) return {};
-    const auto last = folded.find_last_not_of(' ');
-    return folded.substr(first, last - first + 1);
-}
-
-std::vector<std::size_t> CommunityMatches(
-    const PublicCatalogSnapshot& catalog,
-    const std::string& query
-) {
-    const std::string needle = FoldCommunityText(query);
-    std::vector<std::size_t> matches;
-    for (std::size_t index = 0; index < catalog.levels.size(); ++index) {
-        if (needle.empty() || FoldCommunityText(catalog.levels[index].name).find(needle)
-                != std::string::npos) {
-            matches.push_back(index);
-        }
-    }
-    return matches;
 }
 
 Rectangle CreateLevelButton(int width) {
@@ -201,6 +176,18 @@ void DrawCommunityPageButton(
         Rectangle{bounds.x + (bounds.width - labelWidth) / 2.0f,
             bounds.y + 61.0f, labelWidth, labelHeight},
         enabled ? WHITE : Color{255, 255, 255, 105});
+}
+
+void DrawCommunityMineButton(Rectangle bounds, bool active) {
+    const bool hovered = UiButton::IsHovered(bounds);
+    DrawRectangleRec(bounds,
+        hovered || active ? Color{55, 59, 60, 255} : BLACK);
+    DrawRectangleLinesEx(bounds, 3.0f,
+        active ? GOLD : Color{129, 195, 71, 255});
+    const char* label = "PROPIOS";
+    DrawTextFont(label,
+        static_cast<int>(bounds.x + (bounds.width - MeasureTextFont(label, 18)) / 2.0f),
+        static_cast<int>(bounds.y + 21.0f), 18, active ? GOLD : WHITE);
 }
 
 void DrawCommunitySearchButton(Rectangle bounds, bool active) {
@@ -554,6 +541,13 @@ void MainMenuScene::ProcessCommunityInput() {
         return;
     }
 
+    if (UiButton::WasClicked(CommunityMineButton(width, height))) {
+        m_context->audioController->PlayUiClick();
+        m_communityScroll = 0;
+        m_context->publications.ShowOnlyMine(!catalog.onlyMine);
+        return;
+    }
+
     if (!catalog.loading && catalog.hasPrevious &&
         UiButton::WasClicked(CommunityPageButton(width, height, false))) {
         m_context->audioController->PlayUiClick();
@@ -569,23 +563,29 @@ void MainMenuScene::ProcessCommunityInput() {
         return;
     }
 
-    const std::vector<std::size_t> matches = CommunityMatches(
-        catalog, m_communityQuery
-    );
     const int maxScroll = std::max(0,
-        static_cast<int>(matches.size()) - 5);
+        static_cast<int>(catalog.levels.size()) - 5);
     m_communityScroll = std::clamp(
         m_communityScroll - static_cast<int>(GetMouseWheelMove()),
         0, maxScroll
     );
     for (int row = 0; row < 5; ++row) {
         const int index = m_communityScroll + row;
-        if (index >= static_cast<int>(matches.size())) break;
+        if (index >= static_cast<int>(catalog.levels.size())) break;
+        const PublicLevelSummary& level = catalog.levels[index];
+        if (level.mine && UiButton::WasClicked(CommunityRowButton(width, row, 1))) {
+            m_context->audioController->PlayUiClick();
+            m_context->publications.RetirePublicLevel(level.id);
+            return;
+        }
+        if (level.mine && UiButton::WasClicked(CommunityRowButton(width, row, 2))) {
+            m_context->audioController->PlayUiClick();
+            m_context->publications.CopyPublicLevel(level.id);
+            return;
+        }
         if (UiButton::WasClicked(CommunityRow(width, row))) {
             m_context->audioController->PlayUiClick();
-            m_context->publications.PlayPublicLevel(
-                catalog.levels[matches[index]].id
-            );
+            m_context->publications.PlayPublicLevel(level.id);
             return;
         }
     }
@@ -769,13 +769,11 @@ void MainMenuScene::Render() const {
         DrawMenuChoiceLabel("JUGAR", buttons.play, 21);
         DrawMenuChoiceLabel("MIS NIVELES", buttons.myLevels, 17);
     } else if (m_browsingCommunity) {
-        DrawSelectorTitle("NIVELES DE LA COMUNIDAD",
-            m_context->windowWidth, 24.0f);
         const PublicCatalogSnapshot& catalog =
             m_context->publications.GetCatalogSnapshot();
-        const std::vector<std::size_t> matches = CommunityMatches(
-            catalog, m_communityQuery
-        );
+        DrawSelectorTitle(catalog.onlyMine ? "MIS PUBLICACIONES"
+                                           : "NIVELES DE LA COMUNIDAD",
+            m_context->windowWidth, 24.0f);
         if (!m_communityQuery.empty()) {
             const std::string queryLabel = "Búsqueda: " + m_communityQuery;
             DrawCommunityNotice(queryLabel.c_str(),
@@ -788,33 +786,57 @@ void MainMenuScene::Render() const {
             DrawCommunityNotice(
                 m_communityQuery.empty() ? "Cargando niveles..." : "Buscando...",
                 m_context->windowWidth,
-                matches.empty() ? 166 : 130,
-                matches.empty() ? 22 : 16,
+                catalog.levels.empty() ? 166 : 130,
+                catalog.levels.empty() ? 22 : 16,
                 WHITE);
-        } else if (matches.empty()) {
+        } else if (catalog.levels.empty()) {
             DrawCommunityNotice(
-                m_communityQuery.empty()
-                    ? "Todavía no hay niveles publicados."
-                    : "No se encontraron niveles con ese nombre.",
+                !m_communityQuery.empty()
+                    ? "No se encontraron niveles con ese nombre."
+                    : catalog.onlyMine
+                    ? "Todavía no has publicado niveles."
+                    : "Todavía no hay niveles publicados.",
                 m_context->windowWidth, 166, 20, WHITE);
+        }
+        const PublicationSnapshot& publication =
+            m_context->publications.GetSnapshot();
+        if (!publication.message.empty() && !catalog.loading && catalog.error.empty()) {
+            DrawCommunityNotice(publication.message.c_str(),
+                m_context->windowWidth, 130, 16,
+                publication.status == PublicationStatus::Error
+                    ? Color{255, 140, 140, 255}
+                    : WHITE);
         }
         for (int row = 0; catalog.error.empty() && row < 5; ++row) {
             const int index = m_communityScroll + row;
-            if (index >= static_cast<int>(matches.size())) break;
-            const PublicLevelSummary& level = catalog.levels[matches[index]];
+            if (index >= static_cast<int>(catalog.levels.size())) break;
+            const PublicLevelSummary& level = catalog.levels[index];
             const Rectangle bounds = CommunityRow(m_context->windowWidth, row);
             DrawRectangleRec(bounds, Fade(BLACK, 0.86f));
             DrawRectangleLinesEx(bounds, 2.0f, Color{237, 18, 121, 255});
+            // A long name gets smaller instead of running under the buttons.
+            const float nameSpace = CommunityRowButton(m_context->windowWidth, row,
+                level.mine ? 2 : 0).x - bounds.x - 30.0f;
+            int nameSize = 23;
+            while (nameSize > 14 &&
+                   MeasureTextFont(level.name.c_str(), nameSize) > nameSpace) {
+                --nameSize;
+            }
             DrawTextFont(level.name.c_str(), static_cast<int>(bounds.x + 18),
-                static_cast<int>(bounds.y + 9), 23, WHITE);
+                static_cast<int>(bounds.y + 9), nameSize, WHITE);
             const std::string author = "Por " + level.author;
             DrawTextFont(author.c_str(), static_cast<int>(bounds.x + 18),
                 static_cast<int>(bounds.y + 43), 14, SKYBLUE);
-            UiButton::Draw(Rectangle{bounds.x + bounds.width - 123.0f,
-                bounds.y + 13.0f, 105.0f, 46.0f},
+            if (level.mine) {
+                UiButton::Draw(CommunityRowButton(m_context->windowWidth, row, 2),
+                    "Copiar", Color{252, 169, 33, 255}, BLACK, 19);
+                UiButton::Draw(CommunityRowButton(m_context->windowWidth, row, 1),
+                    "Eliminar", Color{214, 69, 65, 255}, BLACK, 19);
+            }
+            UiButton::Draw(CommunityRowButton(m_context->windowWidth, row, 0),
                 "Jugar", Color{129, 195, 71, 255}, BLACK, 19);
         }
-        if (matches.size() > 5) {
+        if (catalog.levels.size() > 5) {
             DrawTextFont("Usa la rueda para ver más niveles",
                 28, m_context->windowHeight - 165, 13, WHITE);
         }
@@ -832,6 +854,10 @@ void MainMenuScene::Render() const {
             CommunitySearchButton(m_context->windowWidth,
                 m_context->windowHeight),
             m_communitySearchOpen || !m_communityQuery.empty());
+        DrawCommunityMineButton(
+            CommunityMineButton(m_context->windowWidth,
+                m_context->windowHeight),
+            catalog.onlyMine);
         UiButton::DrawTextured(UiButton::CenteredAtBottom(
                 m_context->windowWidth, m_context->windowHeight,
                 210.0f, 70.0f, 22.0f),
@@ -1046,14 +1072,8 @@ void MainMenuScene::Render() const {
             );
         }
         if (m_context->customLevels->GetLevels().empty()) {
-            const char* emptyText = "Todavía no hay niveles personalizados";
-            DrawTextFont(
-                emptyText,
-                static_cast<int>((m_context->windowWidth - MeasureTextFont(emptyText, 18)) / 2),
-                249,
-                18,
-                DARKGRAY
-            );
+            DrawCommunityNotice("Todavía no hay niveles personalizados",
+                m_context->windowWidth, 249, 20, WHITE);
         } else if (!drewLevel) {
             const char* scrollText = "Usa la rueda del mouse para ver más niveles";
             DrawTextFont(

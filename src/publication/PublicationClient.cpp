@@ -14,6 +14,7 @@ EM_JS(void, ConsumePublicationActionWeb, (const char* action), {
     Module['api'].consumePublicationAction(UTF8ToString(action));
 });
 EM_JS(void, OpenCatalogWeb, (), { Module['api'].openCatalog(); });
+EM_JS(void, ShowOnlyMineWeb, (bool mine), { Module['api'].showOnlyMine(mine); });
 EM_JS(void, SearchCatalogWeb, (const char* query), {
     Module['api'].searchCatalog(UTF8ToString(query));
 });
@@ -21,6 +22,12 @@ EM_JS(void, NextCatalogPageWeb, (), { Module['api'].nextCatalogPage(); });
 EM_JS(void, PreviousCatalogPageWeb, (), { Module['api'].previousCatalogPage(); });
 EM_JS(void, PlayPublicLevelWeb, (const char* id), {
     Module['api'].playPublicLevel(UTF8ToString(id));
+});
+EM_JS(void, CopyPublicLevelWeb, (const char* id), {
+    Module['api'].copyPublication(UTF8ToString(id));
+});
+EM_JS(void, RetirePublicLevelWeb, (const char* id), {
+    Module['api'].retirePublication(UTF8ToString(id));
 });
 EM_JS(char*, ReadCatalogWeb, (), {
     return stringToNewUTF8(JSON.stringify(Module['api'].catalogSnapshot()));
@@ -63,6 +70,17 @@ void PublicationClient::OpenCatalog() {
 #endif
 }
 
+void PublicationClient::ShowOnlyMine(bool mine) {
+#ifdef __EMSCRIPTEN__
+    m_catalog.onlyMine = mine;
+    m_catalog.loading = true;
+    m_catalog.error.clear();
+    ShowOnlyMineWeb(mine);
+#else
+    static_cast<void>(mine);
+#endif
+}
+
 void PublicationClient::SearchCatalog(const std::string& query) {
 #ifdef __EMSCRIPTEN__
     m_catalog.loading = true;
@@ -100,6 +118,22 @@ void PublicationClient::PlayPublicLevel(const std::string& id) {
 #endif
 }
 
+void PublicationClient::CopyPublicLevel(const std::string& id) {
+#ifdef __EMSCRIPTEN__
+    CopyPublicLevelWeb(id.c_str());
+#else
+    static_cast<void>(id);
+#endif
+}
+
+void PublicationClient::RetirePublicLevel(const std::string& id) {
+#ifdef __EMSCRIPTEN__
+    RetirePublicLevelWeb(id.c_str());
+#else
+    static_cast<void>(id);
+#endif
+}
+
 void PublicationClient::Poll(double frameMs) {
 #ifdef __EMSCRIPTEN__
     m_pollDelayMs -= frameMs;
@@ -127,6 +161,7 @@ void PublicationClient::Poll(double frameMs) {
         m_catalog.loading = catalog.value("loading", false);
         m_catalog.hasPrevious = catalog.value("hasPrevious", false);
         m_catalog.hasNext = catalog.value("hasNext", false);
+        m_catalog.onlyMine = catalog.value("onlyMine", false);
         m_catalog.error = catalog.value("error", "");
         m_catalog.levels.clear();
         if (catalog.contains("items") && catalog["items"].is_array()) {
@@ -135,7 +170,8 @@ void PublicationClient::Poll(double frameMs) {
                 m_catalog.levels.push_back({
                     item.value("id", ""),
                     item.value("name", ""),
-                    item.value("author", "")
+                    item.value("author", ""),
+                    item.value("mine", false)
                 });
             }
         }
