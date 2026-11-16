@@ -223,7 +223,6 @@ void WorldRenderer::Render(
                 m_partRenderer.Render(ejected->GetRenderState(runtimeGrid));
             }
         }
-
     }
 
     EndMode2D();

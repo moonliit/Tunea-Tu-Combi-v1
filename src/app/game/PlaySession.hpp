@@ -96,6 +96,7 @@ public:
         return m_assembler.ConsumeBrokenConnections();
     }
 
+
 private:
     void BuildActivationSubscriptions();
     void ProcessImpacts();
