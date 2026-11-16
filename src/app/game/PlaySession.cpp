@@ -160,6 +160,8 @@ void PlaySession::ProcessImpacts() {
     std::unordered_set<Part*> impactedPartsForTnt;
     std::unordered_set<Part*> ejectedContainers;
     std::vector<Part*> containersToEject;
+    const bool landingProtectionActive =
+        m_physics && m_physics->IsLandingImpactProtectionActive();
 
     for (const PhysicsImpact& impact : m_physics->ConsumeImpactEvents()) {
         if (impact.part == nullptr) continue;
@@ -171,14 +173,16 @@ void PlaySession::ProcessImpacts() {
             ejectedContainers.find(impact.part) == ejectedContainers.end()) {
             Part* contained = impact.part->GetContainedPart();
             if (contained != nullptr && contained->GetType() == PartType::TNTBarrel) {
-                contained->Activate();
-                if (impactedPartsForTnt.find(contained) == impactedPartsForTnt.end()) {
-                    m_tntConsumedAmount++;
-                    impactedPartsForTnt.insert(contained);
+                if (!landingProtectionActive) {
+                    contained->Activate();
+                    if (impactedPartsForTnt.find(contained) == impactedPartsForTnt.end()) {
+                        m_tntConsumedAmount++;
+                        impactedPartsForTnt.insert(contained);
+                    }
+                    m_damageConsumed = true;
+                    ejectedContainers.insert(impact.part);
                 }
-                m_damageConsumed = true;
-                ejectedContainers.insert(impact.part);
-            } else {
+            } else if (!landingProtectionActive) {
                 containersToEject.push_back(impact.part);
                 m_damageConsumed = true;
                 ejectedContainers.insert(impact.part);

@@ -127,6 +127,9 @@ public:
     ) override;
 
     const std::vector<std::shared_ptr<BaseRigidBody>>& GetBodies() const { return m_bodies; }
+    bool IsLandingImpactProtectionActive() const override {
+        return m_firstLandingProtectionRemaining > 0.0f;
+    }
 };
 
 }
