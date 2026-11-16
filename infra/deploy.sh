@@ -2,7 +2,7 @@
 # Deploys Tunea tu Combi to the AWS account the AWS CLI is signed in to.
 #
 #   infra/deploy.sh [-y] backend    infrastructure and Lambdas
-#   infra/deploy.sh web             the web build (build it first: `just web`)
+#   infra/deploy.sh web             the web build (build it first: `just web-release`)
 #   infra/deploy.sh outputs         where everything ended up
 #   infra/deploy.sh destroy         delete everything, players' data included
 #
@@ -95,13 +95,17 @@ upload() {
 }
 
 deploy_web() {
-    local web=build/web
-    [ -f "$web/ray.html" ] || die "there is no web build in $web: run 'just web' first"
+    local web=build/web-release
+    [ -f "$web/ray.html" ] || die "there is no web build in $web: run 'just web-release' first"
     SITE_BUCKET="$(output SiteBucketName)"
     local distribution
     distribution="$(output DistributionId)"
     [ -n "$SITE_BUCKET" ] && [ "$SITE_BUCKET" != None ] \
         || die "stack '$STACK' is not deployed: run 'just aws-deploy-api' first"
+    echo "Uploading the songs to $SITE_BUCKET (only what changed):"
+    aws s3 sync assets/audio "s3://$SITE_BUCKET/assets/audio" \
+        --exclude '*' --include 'clean/*.ogg' --include 'custom/*.ogg' \
+        --size-only --cache-control 'public, max-age=86400' --only-show-errors
     echo "Uploading the game to $SITE_BUCKET:"
     upload "$web/ray.html" index.html text/html
     for file in "$web"/ray.*; do

@@ -29,6 +29,10 @@ cambió.
 | El juego (`src/` o `assets/`) | `just aws-deploy-web` (lo compila y lo sube) |
 | Las dos cosas | `just aws-deploy` |
 
+El juego descarga unos 14 MB al abrirse. Las canciones (`assets/audio/clean` y
+`custom`) se suben aparte y se bajan cuando se necesitan. Una canción nueva va en
+las dos carpetas, con el mismo nombre.
+
 ## Borrarla
 
 ```bash
