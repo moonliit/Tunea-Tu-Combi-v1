@@ -5,7 +5,6 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <print>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -420,7 +419,6 @@ void AudioController::PlayDamageEffect() {
 }
 void AudioController::PlayScreamingEffect() {
     if (m_screamingSoundsTimer > 0.0f) return;
-    std::println("playing screaming sound");
     int randomIndex = rand() % m_screamingSounds.size();
     PlaySound(m_screamingSounds[randomIndex]);
     m_screamingSoundsTimer = m_screamingSoundsTimeCooldown;

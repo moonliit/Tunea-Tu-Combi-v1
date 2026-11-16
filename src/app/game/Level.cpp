@@ -64,6 +64,10 @@ Math::AABB Level::GetContentBounds(float margin) const {
             static_cast<float>(passenger.position.y)
         );
     }
+    for (const TntObstacleDefinition& obstacle : m_definition.tntObstacles) {
+        include(static_cast<float>(obstacle.position.x),
+            static_cast<float>(obstacle.position.y));
+    }
     return Math::AABB(
         Math::Vector2D{minX - margin, minY - margin},
         Math::Vector2D{maxX + margin, maxY + margin}
@@ -145,6 +149,13 @@ nlohmann::json LevelDefinition::ToJson() const {
         j["passengers"].push_back(std::move(passengerJson));
     }
 
+    j["tntObstacles"] = nlohmann::json::array();
+    for (const auto& obstacle : tntObstacles) {
+        j["tntObstacles"].push_back({
+            {"position", obstacle.position.ToJson()}
+        });
+    }
+
     return j;
 }
 
@@ -202,6 +213,15 @@ LevelDefinition LevelDefinition::FromJson(const nlohmann::json& j) {
                 .position = Math::Vector2D::FromJson(passengerJson.at("position")),
                 .hasSkirt = passengerJson.value("hasSkirt", false),
                 .face = passengerJson.value("face", std::string{})
+            });
+        }
+    }
+
+    if (j.contains("tntObstacles") && j["tntObstacles"].is_array()) {
+        for (const auto& obstacleJson : j["tntObstacles"]) {
+            if (!obstacleJson.is_object() || !obstacleJson.contains("position")) continue;
+            level.tntObstacles.push_back({
+                .position = Math::Vector2D::FromJson(obstacleJson.at("position"))
             });
         }
     }

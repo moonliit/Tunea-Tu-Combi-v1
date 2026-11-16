@@ -170,9 +170,19 @@ void DrawEditorToolButton(
             DrawLineEx({cx - 20, top + 42}, {cx - 4, top + 42},
                 3, WHITE);
             break;
+        case 6:
+            DrawTexturePro(
+                textures.GetPartTexture(PartType::TNTBarrel),
+                Rectangle{0, 0,
+                    static_cast<float>(textures.GetPartTexture(PartType::TNTBarrel).width),
+                    static_cast<float>(textures.GetPartTexture(PartType::TNTBarrel).height)},
+                Rectangle{cx - 25, top + 2, 50, 50},
+                Vector2{}, 0.0f, WHITE
+            );
+            break;
     }
     static constexpr const char* labels[]{
-        "Terreno", "Cuadrícula", "Meta", "Música", "Borrador", "Pasajero"
+        "Terreno", "Cuadrícula", "Meta", "Música", "Borrador", "Pasajero", "SOLGAS"
     };
     const char* label = labels[icon];
     const int fontSize = icon == 1 ? 12 : 13;
@@ -262,6 +272,26 @@ std::optional<float> FindTerrainSurfaceY(
     return surfaceY;
 }
 
+void RepositionTntObstacles(CustomLevelData& custom) {
+    const float halfCell = custom.definition.grid.cellSize / 2.0f;
+    for (std::size_t i = 0; i < custom.definition.tntObstacles.size();) {
+        auto& obstacle = custom.definition.tntObstacles[i];
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(obstacle.position.x),
+            static_cast<float>(obstacle.position.y)
+        );
+        if (!surfaceY.has_value()) {
+            custom.definition.tntObstacles.erase(
+                custom.definition.tntObstacles.begin() + i
+            );
+            continue;
+        }
+        obstacle.position.y = *surfaceY - halfCell;
+        ++i;
+    }
+}
+
 }
 
 CustomLevelEditorScene::CustomLevelEditorScene(AppContext* context): m_context(context) {
@@ -330,6 +360,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         );
         custom.definition.initialCamera.reset();
         custom.hasGrid = true;
+        RepositionTntObstacles(custom);
         m_gridAnchor.reset();
         m_gridAnchorLevel = -1;
         m_context->customLevels->Save();
@@ -397,6 +428,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
     const Rectangle musicButton = EditorToolbarButton(3);
     const Rectangle eraserButton = EditorToolbarButton(4);
     const Rectangle passengerButton = EditorToolbarButton(5);
+    const Rectangle tntButton = EditorToolbarButton(6);
     const Rectangle publishButton = LevelEditorPublishButton(m_context->windowWidth);
     const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
     const Rectangle editButton = EditorCombiButton(
@@ -439,6 +471,11 @@ void CustomLevelEditorScene::ProcessInput(float) {
     if (!m_musicPickerOpen &&
         (IsKeyPressed(KEY_SIX) || UiButton::WasClicked(passengerButton))) {
         selectTool(DesignTool::Passenger);
+        return;
+    }
+    if (!m_musicPickerOpen &&
+        (IsKeyPressed(KEY_SEVEN) || UiButton::WasClicked(tntButton))) {
+        selectTool(DesignTool::TntObstacle);
         return;
     }
     if (m_musicPickerOpen) {
@@ -597,6 +634,21 @@ void CustomLevelEditorScene::ProcessInput(float) {
                 changed = true;
             }
             if (overPassenger) continue;
+            for (std::size_t i = 0; i < custom.definition.tntObstacles.size();) {
+                const auto& obstacle = custom.definition.tntObstacles[i];
+                const float radius = 20.0f;
+                if (std::abs(samplePoint.x - obstacle.position.x) > radius ||
+                    std::abs(samplePoint.y - obstacle.position.y) > radius) {
+                    ++i;
+                    continue;
+                }
+                custom.definition.tntObstacles.erase(
+                    custom.definition.tntObstacles.begin() + i
+                );
+                changed = true;
+                break;
+            }
+            if (changed) continue;
             if (custom.hasGoal) {
                 const Math::AABB goalArea = custom.definition.goal.GetAABB();
                 const Rectangle goalBounds{
@@ -641,6 +693,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         m_lastEraserMouseScreen = screenMouse;
         if (terrainChanged) {
             custom.hasTerrain = !custom.definition.terrain.polygons.empty();
+            RepositionTntObstacles(custom);
             if (custom.hasGoal) {
                 const auto surfaceY = FindTerrainSurfaceY(
                     custom.definition.terrain,
@@ -685,6 +738,31 @@ void CustomLevelEditorScene::ProcessInput(float) {
         return;
     }
 
+    if (m_designTool == DesignTool::TntObstacle &&
+        IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain,
+            static_cast<float>(point.x),
+            static_cast<float>(point.y)
+        );
+        if (surfaceY.has_value()) {
+            const Math::Vector2D position{point.x, surfaceY.value() - custom.definition.grid.cellSize / 2.0f};
+            const bool exists = std::any_of(
+                custom.definition.tntObstacles.begin(),
+                custom.definition.tntObstacles.end(),
+                [&](const TntObstacleDefinition& obstacle) {
+                    return std::abs(static_cast<float>(obstacle.position.x - position.x)) <
+                        custom.definition.grid.cellSize * 0.5f;
+                }
+            );
+            if (!exists) {
+                custom.definition.tntObstacles.push_back({position});
+                m_context->customLevels->Save();
+            }
+        }
+        return;
+    }
+
     if (m_designTool == DesignTool::Terrain &&
         IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         m_terrainWorkPoints.push_back(point);
@@ -702,6 +780,7 @@ void CustomLevelEditorScene::ProcessInput(float) {
         custom.definition.terrain.polygons.push_back(std::move(polygon));
         custom.hasTerrain = true;
         m_terrainWorkPoints.clear();
+        RepositionTntObstacles(custom);
         if (custom.hasGoal) {
             const auto surfaceY = FindTerrainSurfaceY(
                 custom.definition.terrain,
@@ -789,6 +868,37 @@ void CustomLevelEditorScene::Render() const {
             m_context->textureLibrary->FindPassengerFace(passenger.face),
             0.0f
         );
+    }
+    for (const auto& obstacle : custom.definition.tntObstacles) {
+        DrawTexturePro(
+            m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel),
+            Rectangle{0, 0,
+                static_cast<float>(m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel).width),
+                static_cast<float>(m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel).height)},
+            Rectangle{
+                static_cast<float>(obstacle.position.x - custom.definition.grid.cellSize / 2.0f),
+                static_cast<float>(obstacle.position.y - custom.definition.grid.cellSize / 2.0f),
+                custom.definition.grid.cellSize, custom.definition.grid.cellSize
+            }, Vector2{}, 0.0f, WHITE
+        );
+    }
+    if (m_designTool == DesignTool::TntObstacle) {
+        const Vector2 mouse = GetScreenToWorld2D(GetMousePosition(), m_designCamera);
+        const auto surfaceY = FindTerrainSurfaceY(
+            custom.definition.terrain, mouse.x, mouse.y
+        );
+        if (surfaceY.has_value()) {
+            const float size = custom.definition.grid.cellSize;
+            const Texture2D& texture =
+                m_context->textureLibrary->GetPartTexture(PartType::TNTBarrel);
+            DrawTexturePro(
+                texture,
+                Rectangle{0, 0, static_cast<float>(texture.width),
+                    static_cast<float>(texture.height)},
+                Rectangle{mouse.x - size / 2.0f, *surfaceY - size, size, size},
+                Vector2{}, 0.0f, Fade(WHITE, 0.55f)
+            );
+        }
     }
     for (std::size_t i = 0; i < m_terrainWorkPoints.size(); ++i) {
         const Vector2 point = m_terrainWorkPoints[i].ToRayVec();
@@ -893,6 +1003,7 @@ void CustomLevelEditorScene::Render() const {
     const Rectangle musicButton = EditorToolbarButton(3);
     const Rectangle eraserButton = EditorToolbarButton(4);
     const Rectangle passengerButton = EditorToolbarButton(5);
+    const Rectangle tntButton = EditorToolbarButton(6);
     const Rectangle publishButton = LevelEditorPublishButton(m_context->windowWidth);
     const Rectangle menuButton = LevelEditorMenuButton(m_context->windowWidth);
     const UiTextures& ui = m_context->textureLibrary->GetUi();
@@ -915,6 +1026,9 @@ void CustomLevelEditorScene::Render() const {
         *m_context->textureLibrary);
     DrawEditorToolButton(passengerButton, 5,
         m_designTool == DesignTool::Passenger, false, false,
+        *m_context->textureLibrary);
+    DrawEditorToolButton(tntButton, 6,
+        m_designTool == DesignTool::TntObstacle, false, false,
         *m_context->textureLibrary);
     const bool ready = custom.hasTerrain && custom.hasGrid && custom.hasGoal;
     const bool approved = m_context->customLevels->HasValidApproval(
@@ -955,7 +1069,9 @@ void CustomLevelEditorScene::Render() const {
                 std::to_string(preview.dims.y) +
                 " | segundo clic o botón Cuadrícula: confirmar | Esc: cancelar";
         } else {
-            instructions = "Primer clic: celda inicial | mueve el mouse para ampliar | máximo 10 x 8";
+            instructions = "Actual " + std::to_string(custom.definition.grid.dims.x) +
+                " x " + std::to_string(custom.definition.grid.dims.y) +
+                " | primer clic: celda inicial | mueve el mouse para redimensionar | máximo 10 x 8";
         }
     } else {
         instructions = m_designTool == DesignTool::Terrain
@@ -964,15 +1080,18 @@ void CustomLevelEditorScene::Render() const {
             ? "Borrador: clic en pasajero, meta, cuadrícula o terreno | arrastra para borrar varios"
             : m_designTool == DesignTool::Passenger
             ? "Haz clic sobre el terreno para colocar un pasajero"
+            : m_designTool == DesignTool::TntObstacle
+            ? "Haz clic sobre el terreno para colocar un TNT estático"
             : "Haz clic sobre el terreno para colocar la meta en su superficie";
     }
     DrawTextFont(instructions.c_str(), 20, 106, 15, WHITE);
     DrawTextFont(
         TextFormat(
-            "Terreno %s   Cuadrícula %s   Meta %s",
+            "Terreno %s   Cuadrícula %s   Meta %s   TNT %d",
             custom.hasTerrain ? "OK" : "-",
             custom.hasGrid ? "OK" : "-",
-            custom.hasGoal ? "OK" : "-"
+            custom.hasGoal ? "OK" : "-",
+            static_cast<int>(custom.definition.tntObstacles.size())
         ),
         20,
         m_context->windowHeight - 28,

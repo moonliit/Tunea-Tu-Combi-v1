@@ -2,6 +2,7 @@
 #define GAME_PLAY_SESSION_HPP
 
 #include "app/game/BuildModel.hpp"
+#include "app/game/Level.hpp"
 #include "app/game/ActivationRegistry.hpp"
 #include "math/Terrain.hpp"
 #include "math/Vector2D.hpp"
@@ -54,6 +55,11 @@ private:
     std::vector<ExplosionVisual> m_explosionVisuals;
     std::vector<DamageVisual> m_damageVisuals;
     std::vector<DamageVisual> m_breakageVisuals;
+    std::vector<TntObstacleDefinition> m_tntObstacles;
+    std::vector<TntObstacleDefinition> m_initialTntObstacles;
+    std::vector<std::unique_ptr<Part>> m_tntObstacleParts;
+    bool m_tntObstacleLandingProtection = true;
+    float m_tntObstacleArmingRemaining = 0.5f;
     int m_tntConsumedAmount = 0;
     bool m_damageConsumed = false;
     bool m_breakageConsumed = false;
@@ -80,6 +86,12 @@ public:
         const Math::TerrainDefinition& terrain,
         Math::Vector2D gravity
     );
+    PlaySession(
+        BuildModel& model,
+        const Math::TerrainDefinition& terrain,
+        const std::vector<TntObstacleDefinition>& tntObstacles,
+        Math::Vector2D gravity
+    );
 
     I_PhysicsWorld& GetPhysics() { return *m_physics; }
     const std::vector<Math::Vector2D>& GetTerrainVertices() const {
@@ -87,6 +99,9 @@ public:
     }
     const std::vector<Math::TerrainMesh>& GetTerrainMeshes() const {
         return m_terrainMeshes;
+    }
+    const std::vector<TntObstacleDefinition>& GetTntObstacles() const {
+        return m_tntObstacles;
     }
     const Math::TerrainVisualDefinition& GetTerrainVisual() const {
         return m_terrainVisual;

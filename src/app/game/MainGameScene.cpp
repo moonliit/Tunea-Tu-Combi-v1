@@ -283,6 +283,7 @@ MainGameScene::MainGameScene(
     m_playSession(
         m_level.GetBuildModel(),
         m_level.GetTerrain(),
+        m_level.GetDefinition().tntObstacles,
         Vector2D{0.0f, m_gravity}
     ),
     m_worldRenderer(*appContext->textureLibrary, GetLevelBackground(specs.levelNumber))
