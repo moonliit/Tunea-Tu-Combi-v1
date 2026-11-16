@@ -747,6 +747,10 @@ void MainGameScene::Update(float dt) {
                 m_appContext->audioController->PlayDamageEffect();
                 m_playSession.GetDamageConsumed() = false;
             }
+            if (m_playSession.GetScreamingConsumed()) {
+                m_appContext->audioController->PlayScreamingEffect();
+                m_playSession.GetScreamingConsumed() = false;
+            }
             if (m_playSession.GetBreakageConsumed()) {
                 m_appContext->audioController->PlayBreakageEffect();
                 m_playSession.GetBreakageConsumed() = false;

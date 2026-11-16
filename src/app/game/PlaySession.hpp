@@ -45,6 +45,7 @@ private:
     int m_tntConsumedAmount = 0;
     bool m_damageConsumed = false;
     bool m_breakageConsumed = false;
+    bool m_screamingConsumed = false;
 
     void CreatePhysicsWorld(
         const std::vector<std::vector<Math::Vector2D>>& terrainSections,
@@ -114,6 +115,7 @@ public:
     }
     bool& GetDamageConsumed() { return m_damageConsumed; }
     bool& GetBreakageConsumed() { return m_breakageConsumed; }
+    bool& GetScreamingConsumed() { return m_screamingConsumed; }
     std::vector<std::pair<PartId, PartId>> ConsumeBrokenConnections() {
         return m_assembler.ConsumeBrokenConnections();
     }

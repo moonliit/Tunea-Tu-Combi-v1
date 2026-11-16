@@ -10,6 +10,7 @@
 namespace {
 
 constexpr float DamageImpulseThreshold = 150.0f;
+constexpr float PassengerHurtImpulseThreshold = 80.0f;
 constexpr float TntImpactImpulseThreshold = 10.0f;
 constexpr float ContainerEjectDamageThreshold = 150.0f;
 
@@ -140,6 +141,10 @@ void PlaySession::Start() {
     m_ejectedPassengers.clear();
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
+    m_tntConsumedAmount = 0;
+    m_damageConsumed = false;
+    m_breakageConsumed = false;
+    m_screamingConsumed = false;
     m_runtimeModel = m_model;
     m_assembler.Assemble(m_runtimeModel, m_physics);
     BuildActivationSubscriptions();
@@ -160,6 +165,10 @@ void PlaySession::Reset(const Math::TerrainDefinition& terrain) {
     m_ejectedPassengers.clear();
     m_carriedPassengersByHost.clear();
     m_ejectedPassengerIds.clear();
+    m_tntConsumedAmount = 0;
+    m_damageConsumed = false;
+    m_breakageConsumed = false;
+    m_screamingConsumed = false;
 
     CreatePhysicsWorld(SampleTerrain(terrain), true);
     m_activationRegistry.Clear();
@@ -181,8 +190,16 @@ void PlaySession::ProcessImpacts() {
     const bool landingProtectionActive =
         m_physics && m_physics->IsLandingImpactProtectionActive();
 
-    for (const PhysicsImpact& impact : m_physics->ConsumeImpactEvents()) {
+    const auto impacts = m_physics->ConsumeImpactEvents();
+
+    for (const PhysicsImpact& impact : impacts) {
         if (impact.part == nullptr) continue;
+
+        // cualquier golpe fuerte asusta a los pasajeros a bordo
+        if (!m_carriedPassengersByHost.empty() &&
+            impact.impulse >= DamageImpulseThreshold) {
+            m_screamingConsumed = true;
+        }
 
         // container hit: explode contained tnt or eject contained part on strong impact
         if (GetPartDefinition(impact.part->GetType()).role == PartRole::Container &&
@@ -208,16 +225,24 @@ void PlaySession::ProcessImpacts() {
             continue;
         }
 
-        // carried passenger hit: eject passenger from carrying block on strong impact
+        // carried passenger hit: hurt (scream + damage) and eject on strong impact
         if (!landingProtectionActive &&
             impact.part->GetType() == PartType::SquareBlock &&
-            impact.impulse >= ContainerEjectDamageThreshold &&
             passengerEjectedHosts.find(impact.part) == passengerEjectedHosts.end() &&
             m_carriedPassengersByHost.find(impact.part->GetId()) != m_carriedPassengersByHost.end()) {
-            passengerHostsToEject.push_back(impact.part);
-            m_damageConsumed = true;
-            passengerEjectedHosts.insert(impact.part);
-            continue;
+            if (impact.impulse >= ContainerEjectDamageThreshold) {
+                passengerHostsToEject.push_back(impact.part);
+                m_damageConsumed = true;
+                m_screamingConsumed = true;
+                m_breakageConsumed = true;
+                passengerEjectedHosts.insert(impact.part);
+                continue;
+            }
+            if (impact.impulse >= PassengerHurtImpulseThreshold) {
+                m_damageConsumed = true;
+                m_screamingConsumed = true;
+                continue;
+            }
         }
 
         if (
