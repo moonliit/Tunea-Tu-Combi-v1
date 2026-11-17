@@ -3,10 +3,10 @@ import { ApiError } from './identity.mjs';
 import {
     CAPTURE_FORMAT_VERSION,
     PHYSICS_VERSION,
+    RULES_VERSION,
     attemptFingerprint,
-    validateStatistics
+    isObject
 } from './leaderboard.mjs';
-import { RULES_VERSION } from './scoring.mjs';
 import {
     ORPHAN_GRACE_MS,
     SAMPLE_INTERVAL_MS,
@@ -16,8 +16,6 @@ import {
 const MAX_ACTIVE_PUBLICATIONS = 5;
 const CATALOG_PAGE_SIZE = 10;
 const SEARCH_SCOPE = 100;
-const MAX_CAPTURE_MS = 600000;
-const GOAL_SIZE = { x: 70, y: 200 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PUBLIC_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -48,378 +46,33 @@ function stableLevelId(authorId, requestId) {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function validateName(value) {
-    if (typeof value !== 'string' || value.length > 256 || /[\p{C}\p{Zl}\p{Zp}]/u.test(value))
-        throw new ApiError(400, 'INVALID_LEVEL_NAME');
-    const name = value.normalize('NFKC').replace(/\p{Zs}+/gu, ' ').trim();
-    const chars = Array.from(name);
+// The game is trusted for the content of a publication.
+// The server only reads what it needs to store it and to rank it.
+function validatePublishBody(body) {
+    const { capture, definition, draftId, music, name, publicationRequestId } = body ?? {};
+    // these ids end up in storage keys, so they must at least be well formed
     if (
-        chars.length < 3 ||
-        chars.length > 40 ||
-        !/^[\p{L}\p{N}][\p{L}\p{N} '\-_]*[\p{L}\p{N}]$/u.test(name)
+        !capture || !definition || !music || typeof name !== 'string' ||
+        !UUID.test(publicationRequestId) || !UUID.test(draftId) || !UUID.test(capture.attemptId) ||
+        !isObject(capture.statistics) || !isObject(capture.score)
     ) {
-        throw new ApiError(400, 'INVALID_LEVEL_NAME');
+        throw new ApiError(400, 'INVALID_PUBLICATION');
     }
-    return name;
-}
-
-function finiteNumber(value, minimum = -100000, maximum = 100000) {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < minimum || value > maximum)
-        throw new ApiError(400, 'INVALID_LEVEL');
-    return Object.is(value, -0) ? 0 : value;
-}
-
-function integer(value, minimum, maximum, code = 'INVALID_LEVEL') {
-    if (!Number.isSafeInteger(value) || value < minimum || value > maximum)
-        throw new ApiError(400, code);
-    return value;
-}
-
-function point(value) {
-    if (!exactKeys(value, ['x', 'y'])) throw new ApiError(400, 'INVALID_LEVEL');
-    return { x: finiteNumber(value.x), y: finiteNumber(value.y) };
-}
-
-export function validateLevelDefinition(value) {
-    const keys = Object.keys(value ?? {}).sort();
-    const required = ['goal', 'grid', 'passengers', 'terrain'];
     if (
-        !value ||
-        typeof value !== 'object' ||
-        Array.isArray(value) ||
-        !required.every((key) => keys.includes(key)) ||
-        keys.some((key) => ![...required, 'initialCamera', 'tntObstacles'].includes(key))
-    ) {
-        throw new ApiError(400, 'INVALID_LEVEL');
-    }
-    if (!exactKeys(value.terrain, ['polygons']) || !Array.isArray(value.terrain.polygons))
-        throw new ApiError(400, 'INVALID_LEVEL');
-    if (value.terrain.polygons.length < 1 || value.terrain.polygons.length > 32)
-        throw new ApiError(400, 'INVALID_LEVEL');
-
-    let segmentCount = 0;
-    let pointCount = 0;
-    const polygons = value.terrain.polygons.map((polygon) => {
-        if (!exactKeys(polygon, ['segments']) || !Array.isArray(polygon.segments))
-            throw new ApiError(400, 'INVALID_LEVEL');
-        if (polygon.segments.length < 1 || polygon.segments.length > 32)
-            throw new ApiError(400, 'INVALID_LEVEL');
-        segmentCount += polygon.segments.length;
-        const segments = polygon.segments.map((segment) => {
-            if (!exactKeys(segment, ['points', 'resolution', 'type']))
-                throw new ApiError(400, 'INVALID_LEVEL');
-            if (!['Line', 'CatmullRom'].includes(segment.type) || !Array.isArray(segment.points))
-                throw new ApiError(400, 'INVALID_LEVEL');
-            if (segment.points.length < 2 || segment.points.length > 128)
-                throw new ApiError(400, 'INVALID_LEVEL');
-            pointCount += segment.points.length;
-            return {
-                type: segment.type,
-                points: segment.points.map(point),
-                resolution: integer(segment.resolution, 1, 32)
-            };
-        });
-        const samePoint = (first, second) =>
-            first.x === second.x && first.y === second.y;
-        for (let index = 1; index < segments.length; index++) {
-            if (!samePoint(segments[index - 1].points.at(-1), segments[index].points[0]))
-                throw new ApiError(400, 'INVALID_LEVEL');
-        }
-        if (!samePoint(segments[0].points[0], segments.at(-1).points.at(-1)))
-            throw new ApiError(400, 'INVALID_LEVEL');
-        const vertices = new Set(
-            segments.flatMap((segment) => segment.points)
-                .map((value) => `${value.x},${value.y}`)
-        );
-        if (vertices.size < 3) throw new ApiError(400, 'INVALID_LEVEL');
-        return { segments };
-    });
-    if (segmentCount > 64 || pointCount > 1024) throw new ApiError(400, 'INVALID_LEVEL');
-
-    if (!exactKeys(value.grid, ['cellSize', 'dims', 'worldPos']))
-        throw new ApiError(400, 'INVALID_LEVEL');
-    if (!Array.isArray(value.grid.dims) || value.grid.dims.length !== 2)
-        throw new ApiError(400, 'INVALID_LEVEL');
-    const dims = [
-        integer(value.grid.dims[0], 1, 16),
-        integer(value.grid.dims[1], 1, 16)
-    ];
-    if (dims[0] * dims[1] > 128) throw new ApiError(400, 'INVALID_LEVEL');
-    const grid = {
-        dims,
-        worldPos: point(value.grid.worldPos),
-        cellSize: finiteNumber(value.grid.cellSize, 10, 200)
-    };
-    if (!exactKeys(value.goal, ['position'])) throw new ApiError(400, 'INVALID_LEVEL');
-    const goal = { position: point(value.goal.position) };
-    const goalMinX = goal.position.x - GOAL_SIZE.x / 2;
-    if (goalMinX <= grid.worldPos.x)
-        throw new ApiError(400, 'GOAL_MUST_BE_RIGHT_OF_GRID');
-
-    if (!Array.isArray(value.passengers) || value.passengers.length > 64)
-        throw new ApiError(400, 'INVALID_LEVEL');
-    const passengers = value.passengers.map((passenger) => {
-        const hasFace = Boolean(passenger) && typeof passenger === 'object' && 'face' in passenger;
-        if (
-            !exactKeys(passenger, hasFace ? ['face', 'hasSkirt', 'position'] : ['hasSkirt', 'position']) ||
-            typeof passenger.hasSkirt !== 'boolean' ||
-            (hasFace && (typeof passenger.face !== 'string' || !/^[\p{L}\p{N}_-]{1,40}$/u.test(passenger.face)))
-        ) {
-            throw new ApiError(400, 'INVALID_LEVEL');
-        }
-        const result = { position: point(passenger.position), hasSkirt: passenger.hasSkirt };
-        if (hasFace) result.face = passenger.face;
-        return result;
-    });
-    const result = { terrain: { polygons }, grid, goal, passengers };
-    // Optional: levels made before TNT barrels existed do not have the key.
-    if (value.tntObstacles !== undefined) {
-        if (!Array.isArray(value.tntObstacles) || value.tntObstacles.length > 64)
-            throw new ApiError(400, 'INVALID_LEVEL');
-        result.tntObstacles = value.tntObstacles.map((obstacle) => {
-            if (!exactKeys(obstacle, ['position'])) throw new ApiError(400, 'INVALID_LEVEL');
-            return { position: point(obstacle.position) };
-        });
-    }
-    if (value.initialCamera !== undefined) {
-        if (!exactKeys(value.initialCamera, ['target', 'zoom']))
-            throw new ApiError(400, 'INVALID_LEVEL');
-        result.initialCamera = {
-            target: point(value.initialCamera.target),
-            zoom: finiteNumber(value.initialCamera.zoom, 0.1, 5)
-        };
-    }
-    return canonical(result);
-}
-
-function validateMusic(value) {
-    if (!exactKeys(value, ['artist', 'path', 'title']))
-        throw new ApiError(400, 'INVALID_MUSIC');
-    if (
-        typeof value.path !== 'string' ||
-        value.path.length > 180 ||
-        !/^assets\/audio\/custom\/[\p{L}\p{N} .,'()!_\-&]+\.(?:ogg|wav)$/u.test(value.path) ||
-        typeof value.title !== 'string' ||
-        Array.from(value.title).length > 80 ||
-        typeof value.artist !== 'string' ||
-        Array.from(value.artist).length > 80 ||
-        /[\p{C}]/u.test(value.title + value.artist)
-    ) {
-        throw new ApiError(400, 'INVALID_MUSIC');
-    }
-    return {
-        path: value.path.normalize('NFKC'),
-        title: value.title.normalize('NFKC'),
-        artist: value.artist.normalize('NFKC')
-    };
-}
-
-function validateCapture(value, identityId, draft) {
-    const definition = draft.definition;
-    const captureKeys = [
-        'attemptId', 'combiId', 'connections', 'construction', 'events',
-        'draftSnapshot', 'finishedAtMs', 'formatVersion', 'frames',
-        'levelDefinition', 'levelId',
-        'passengerCount', 'physicsVersion', 'rulesVersion', 'score', 'statistics'
-    ];
-    if (!exactKeys(value, captureKeys)) throw new ApiError(400, 'INVALID_CAPTURE');
-    if (!UUID.test(value.attemptId) || value.combiId !== identityId || value.levelId !== '')
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    if (
-        value.formatVersion !== CAPTURE_FORMAT_VERSION ||
-        value.physicsVersion !== PHYSICS_VERSION ||
-        value.rulesVersion !== RULES_VERSION
+        capture.formatVersion !== CAPTURE_FORMAT_VERSION ||
+        capture.physicsVersion !== PHYSICS_VERSION ||
+        capture.rulesVersion !== RULES_VERSION
     ) {
         throw new ApiError(409, 'CAPTURE_VERSION_MISMATCH');
     }
-    const capturedDefinition = validateLevelDefinition(value.levelDefinition);
-    if (canonicalText(capturedDefinition) !== canonicalText(definition))
-        throw new ApiError(409, 'DRAFT_CHANGED_AFTER_WIN');
-    if (!exactKeys(value.draftSnapshot, ['definition', 'music', 'name']))
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    const capturedDraft = {
-        name: validateName(value.draftSnapshot.name),
-        definition: validateLevelDefinition(value.draftSnapshot.definition),
-        music: validateMusic(value.draftSnapshot.music)
-    };
-    if (canonicalText(capturedDraft) !== canonicalText(draft))
-        throw new ApiError(409, 'DRAFT_CHANGED_AFTER_WIN');
-    integer(value.passengerCount, 0, 64, 'INVALID_CAPTURE');
-    if (value.passengerCount !== definition.passengers.length)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-
-    const score = validateStatistics(value.statistics);
-    if (!exactKeys(value.score, [
-        'constructionPenalty', 'partDelivery', 'passengerDelivery',
-        'passengerPickup', 'speed', 'total', 'valid'
-    ]) || canonicalText(value.score) !== canonicalText(score)) {
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    }
-    if (!Array.isArray(value.construction) || value.construction.length < 1 || value.construction.length > 256)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    if (value.statistics.initialParts !== value.construction.length)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-
-    const parts = new Map();
-    for (const part of value.construction) {
-        if (!exactKeys(part, ['containedBy', 'gridX', 'gridY', 'id', 'orientation', 'type']))
-            throw new ApiError(400, 'INVALID_CAPTURE');
-        integer(part.id, 1, 0xffffffff, 'INVALID_CAPTURE');
-        if (parts.has(part.id)) throw new ApiError(400, 'INVALID_CAPTURE');
-        integer(part.type, 0, 6, 'INVALID_CAPTURE');
-        integer(part.gridX, 0, definition.grid.dims[0] - 1, 'INVALID_CAPTURE');
-        integer(part.gridY, 0, definition.grid.dims[1] - 1, 'INVALID_CAPTURE');
-        integer(part.orientation, 0, 3, 'INVALID_CAPTURE');
-        integer(part.containedBy, 0, 0xffffffff, 'INVALID_CAPTURE');
-        parts.set(part.id, part);
-    }
-    const drivers = [...parts.values()].filter((part) => part.type === 5);
-    const driverBoxes = [...parts.values()].filter((part) => part.type === 6);
-    if (
-        drivers.length !== 1 ||
-        driverBoxes.length !== 1 ||
-        drivers[0].containedBy !== driverBoxes[0].id
-    ) {
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    }
-    for (const part of parts.values()) {
-        if (part.containedBy !== 0 && !parts.has(part.containedBy))
-            throw new ApiError(400, 'INVALID_CAPTURE');
-    }
-    if (!Array.isArray(value.connections) || value.connections.length > 512)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    for (const connection of value.connections) {
-        if (
-            !exactKeys(connection, ['first', 'second']) ||
-            !parts.has(connection.first) ||
-            !parts.has(connection.second) ||
-            connection.first === connection.second
-        ) {
-            throw new ApiError(400, 'INVALID_CAPTURE');
-        }
-    }
-    integer(value.finishedAtMs, 3000, MAX_CAPTURE_MS, 'INVALID_CAPTURE');
-    if (!Array.isArray(value.events) || value.events.length > 2048)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    let previousEventTime = -1;
-    const pickedPassengers = new Set();
-    for (const event of value.events) {
-        if (!event || typeof event !== 'object' || Array.isArray(event))
-            throw new ApiError(400, 'INVALID_CAPTURE');
-        integer(event.timeMs, 0, MAX_CAPTURE_MS, 'INVALID_CAPTURE');
-        if (event.timeMs < previousEventTime || event.timeMs > value.finishedAtMs)
-            throw new ApiError(400, 'INVALID_CAPTURE');
-        previousEventTime = event.timeMs;
-        if (!['appear', 'detach', 'disappear', 'passengerPickup'].includes(event.type))
-            throw new ApiError(400, 'INVALID_CAPTURE');
-        if (event.type === 'detach') {
-            if (
-                !exactKeys(event, ['first', 'second', 'timeMs', 'type']) ||
-                !parts.has(event.first) ||
-                !parts.has(event.second)
-            ) {
-                throw new ApiError(400, 'INVALID_CAPTURE');
-            }
-        } else if (event.type === 'passengerPickup') {
-            if (
-                !exactKeys(event, event.hostId === undefined
-                    ? ['id', 'timeMs', 'type']
-                    : ['hostId', 'id', 'timeMs', 'type']) ||
-                (event.hostId !== undefined && !parts.has(event.hostId))
-            )
-                throw new ApiError(400, 'INVALID_CAPTURE');
-            integer(event.id, 0, Math.max(0, value.passengerCount - 1), 'INVALID_CAPTURE');
-            if (value.passengerCount === 0) throw new ApiError(400, 'INVALID_CAPTURE');
-            if (pickedPassengers.has(event.id)) throw new ApiError(400, 'INVALID_CAPTURE');
-            pickedPassengers.add(event.id);
-        } else {
-            if (!exactKeys(event, ['id', 'timeMs', 'type']) || !parts.has(event.id))
-                throw new ApiError(400, 'INVALID_CAPTURE');
-        }
-    }
-    if (pickedPassengers.size !== value.statistics.passengersCollected)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-
-    if (!Array.isArray(value.frames) || value.frames.length < 2 || value.frames.length > 12002)
-        throw new ApiError(400, 'INVALID_CAPTURE');
-    const driverId = drivers[0].id;
-    // the game counts a part as touching the goal within half a cell of its area
-    const goalMargin = Math.max(0, definition.grid.cellSize / 2);
-    const goalMinX = (definition.goal.position.x - GOAL_SIZE.x / 2 - goalMargin) * 1000;
-    const goalMaxX = (definition.goal.position.x + GOAL_SIZE.x / 2 + goalMargin) * 1000;
-    const goalMinY = (definition.goal.position.y - GOAL_SIZE.y / 2 - goalMargin) * 1000;
-    const goalMaxY = (definition.goal.position.y + GOAL_SIZE.y / 2 + goalMargin) * 1000;
-    const touchesGoalArea = (state) =>
-        state.xMilli >= goalMinX && state.xMilli <= goalMaxX &&
-        state.yMilli >= goalMinY && state.yMilli <= goalMaxY;
-    let previousTime = -1;
-    let firstWindowSample = null;
-    for (const frame of value.frames) {
-        if (!exactKeys(frame, ['parts', 'timeMs']) || !Array.isArray(frame.parts) || frame.parts.length > 256)
-            throw new ApiError(400, 'INVALID_CAPTURE');
-        integer(frame.timeMs, 0, MAX_CAPTURE_MS, 'INVALID_CAPTURE');
-        if (frame.timeMs < previousTime) throw new ApiError(400, 'INVALID_CAPTURE');
-        if (previousTime >= 0 && frame.timeMs - previousTime > 250)
-            throw new ApiError(400, 'TRUNCATED_RECORDING');
-        previousTime = frame.timeMs;
-        let driverState = null;
-        const frameIds = new Set();
-        for (const state of frame.parts) {
-            const stateKeys = state?.attachmentRotationMilli === undefined
-                ? ['id', 'rotationMilli', 'xMilli', 'yMilli']
-                : ['attachmentRotationMilli', 'id', 'rotationMilli', 'xMilli', 'yMilli'];
-            if (!exactKeys(state, stateKeys))
-                throw new ApiError(400, 'INVALID_CAPTURE');
-            if (!parts.has(state.id) || frameIds.has(state.id))
-                throw new ApiError(400, 'INVALID_CAPTURE');
-            frameIds.add(state.id);
-            integer(state.xMilli, -100000000, 100000000, 'INVALID_CAPTURE');
-            integer(state.yMilli, -100000000, 100000000, 'INVALID_CAPTURE');
-            integer(state.rotationMilli, -100000000, 100000000, 'INVALID_CAPTURE');
-            if (state.attachmentRotationMilli !== undefined)
-                integer(state.attachmentRotationMilli, -100000000, 100000000, 'INVALID_CAPTURE');
-            if (state.id === driverId) driverState = state;
-        }
-        if (frame.timeMs > value.statistics.driverTimeMs) {
-            // Only the first frame must touch the goal and the game keeps counting if the driver moves on.
-            if (firstWindowSample === null && (!driverState || !touchesGoalArea(driverState)))
-                throw new ApiError(400, 'INVALID_GOAL_WINDOW');
-            firstWindowSample ??= frame.timeMs;
-        }
-    }
-    if (
-        previousTime !== value.finishedAtMs ||
-        value.finishedAtMs - value.statistics.driverTimeMs < 3000 ||
-        value.finishedAtMs - value.statistics.driverTimeMs > 3400 ||
-        firstWindowSample === null ||
-        firstWindowSample - value.statistics.driverTimeMs > 250
-    ) {
-        throw new ApiError(400, 'INVALID_GOAL_WINDOW');
-    }
-    return { capture: canonical(value), score };
-}
-
-function validatePublishBody(body, identityId) {
-    if (!exactKeys(body, [
-        'capture', 'definition', 'draftId', 'music', 'name', 'publicationRequestId'
-    ])) {
-        throw new ApiError(400, 'INVALID_PUBLICATION');
-    }
-    if (!UUID.test(body.publicationRequestId) || !UUID.test(body.draftId))
-        throw new ApiError(400, 'INVALID_PUBLICATION');
-    const definition = validateLevelDefinition(body.definition);
-    const name = validateName(body.name);
-    const music = validateMusic(body.music);
-    const draft = { name, definition, music };
-    const run = validateCapture(body.capture, identityId, draft);
     return {
-        publicationRequestId: body.publicationRequestId,
-        draftId: body.draftId,
+        publicationRequestId,
+        draftId,
         name,
         music,
         definition,
-        capture: run.capture,
-        score: run.score
+        capture: canonical(capture),
+        score: capture.score
     };
 }
 
@@ -485,15 +138,13 @@ export function createPublicationService(store, objects, clock = () => Date.now(
         ) {
             throw new Error('Invalid level object');
         }
-        const definition = validateLevelDefinition(value.definition);
-        const music = validateMusic(value.music);
         if (
             value.levelFingerprint !== level.levelFingerprint ||
-            hashValue(definition) !== level.levelFingerprint
+            hashValue(value.definition) !== level.levelFingerprint
         ) {
             throw new Error('Level fingerprint mismatch');
         }
-        return { definition, music };
+        return { definition: value.definition, music: value.music };
     }
 
     async function rowsFor(items) {
@@ -521,7 +172,7 @@ export function createPublicationService(store, objects, clock = () => Date.now(
 
     return {
         async publish(identity, body) {
-            const parsed = validatePublishBody(body, identity.id);
+            const parsed = validatePublishBody(body);
             const payloadFingerprint = hashValue(parsed);
             const previousReceipt = await store.getPublicationReceipt(
                 identity.id,
@@ -810,7 +461,5 @@ export function createPublicationService(store, objects, clock = () => Date.now(
 export const publicationInternals = {
     canonicalText,
     hashValue,
-    stableLevelId,
-    validateCapture,
-    validateName
+    stableLevelId
 };

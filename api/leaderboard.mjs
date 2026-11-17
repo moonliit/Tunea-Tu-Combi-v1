@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { ApiError } from './identity.mjs';
-import { calculateScore, RULES_VERSION } from './scoring.mjs';
 import { officialLevelNumber } from './level-id.mjs';
 import { createProgressService } from './progress.mjs';
 
 export const CAPTURE_FORMAT_VERSION = 'run-v2';
 export const PHYSICS_VERSION = 'custom-physics-v1';
+// The score formula lives in the game (src/scoring/ScoreRules.cpp); this only names its version.
+export const RULES_VERSION = 'score-v2';
 
 const MAX_ENTRIES = 5;
 const MAX_RECEIPTS = 32;
@@ -19,20 +20,6 @@ const STAT_KEYS = [
     'passengersCollected',
     'passengersDelivered'
 ];
-const BODY_KEYS = [
-    'attemptId',
-    'formatVersion',
-    'levelId',
-    'physicsVersion',
-    'rulesVersion',
-    'statistics'
-];
-
-const exactKeys = (value, keys) =>
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    JSON.stringify(Object.keys(value).sort()) === JSON.stringify(keys);
 
 function parseLevelId(value) {
     if (typeof value !== 'string') throw new ApiError(400, 'INVALID_LEVEL');
@@ -42,31 +29,10 @@ function parseLevelId(value) {
     return { levelId: value, publicId: match[1] };
 }
 
-export function validateStatistics(value) {
-    if (!exactKeys(value, STAT_KEYS)) throw new ApiError(400, 'INVALID_STATISTICS');
-    if (!Object.values(value).every(Number.isSafeInteger))
-        throw new ApiError(400, 'INVALID_STATISTICS');
-    if (
-        value.initialParts < 1 ||
-        value.initialParts > 256 ||
-        value.passengersCollected < 0 ||
-        value.passengersCollected > 64 ||
-        value.passengersDelivered < 0 ||
-        value.passengersDelivered > value.passengersCollected ||
-        value.partsDelivered < 0 ||
-        value.partsDelivered > value.initialParts ||
-        value.driverTimeMs < 0 ||
-        value.driverTimeMs > 3600000
-    ) {
-        throw new ApiError(400, 'INVALID_STATISTICS');
-    }
-    const score = calculateScore(value);
-    if (!score.valid) throw new ApiError(400, 'INVALID_STATISTICS');
-    return score;
-}
+export const isObject = (value) =>
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 function parseSubmission(body) {
-    if (!exactKeys(body, BODY_KEYS)) throw new ApiError(400, 'INVALID_ATTEMPT');
     const level = parseLevelId(body.levelId);
     if (typeof body.attemptId !== 'string' || !ATTEMPT_ID.test(body.attemptId))
         throw new ApiError(400, 'INVALID_ATTEMPT');
@@ -76,7 +42,10 @@ function parseSubmission(body) {
         throw new ApiError(409, 'PHYSICS_VERSION_MISMATCH');
     if (body.formatVersion !== CAPTURE_FORMAT_VERSION)
         throw new ApiError(409, 'FORMAT_VERSION_MISMATCH');
-    return { ...level, score: validateStatistics(body.statistics) };
+    // the game calculates the score; the server stores and ranks it as it comes
+    if (!isObject(body.statistics) || !isObject(body.score))
+        throw new ApiError(400, 'INVALID_ATTEMPT');
+    return { ...level, score: body.score };
 }
 
 function compareEntries(first, second) {

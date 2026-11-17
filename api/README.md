@@ -11,8 +11,7 @@ api/
 ├── identity.mjs, leaderboard.mjs, recordings.mjs, publications.mjs
 │                  # reglas del dominio, sin HTTP
 ├── store.mjs      # DynamoDB (una sola tabla)
-├── objects.mjs    # S3
-└── scoring.mjs    # puntaje, igual que src/scoring/ScoreRules.cpp
+└── objects.mjs    # S3
 ```
 
 ## Rutas
