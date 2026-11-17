@@ -7,11 +7,7 @@ import {
     attemptFingerprint,
     isObject
 } from './leaderboard.mjs';
-import {
-    ORPHAN_GRACE_MS,
-    SAMPLE_INTERVAL_MS,
-    encodeRecording
-} from './recordings.mjs';
+import { encodeRecording } from './recordings.mjs';
 
 const MAX_ACTIVE_PUBLICATIONS = 5;
 const CATALOG_PAGE_SIZE = 10;
@@ -81,8 +77,6 @@ const publicationResponse = (level, idempotent = false) => ({
     levelId: `public:${level.id}`,
     name: level.name,
     status: level.visibility,
-    publishedAt: level.publishedAt,
-    verification: 'recorded-trace-only',
     idempotent
 });
 
@@ -149,25 +143,14 @@ export function createPublicationService(store, objects, clock = () => Date.now(
 
     async function rowsFor(items) {
         const identities = await store.getIdentities(items.map((item) => item.authorId));
-        const boards = await store.getLeaderboards(items.map((item) => `public:${item.levelId}`));
-        return items.map((item) => {
-            const champion = boards.get(`public:${item.levelId}`)?.entries?.[0] ?? null;
-            if (!champion) throw new Error('Published level without first score');
-            return {
-                id: item.levelId,
-                name: item.name,
-                author: {
-                    id: item.authorId,
-                    name: identities.get(item.authorId)?.name ?? null
-                },
-                publishedAt: item.publishedAt,
-                best: {
-                    total: champion.score.total,
-                    driverTimeMs: champion.statistics.driverTimeMs,
-                    initialParts: champion.statistics.initialParts
-                }
-            };
-        });
+        return items.map((item) => ({
+            id: item.levelId,
+            name: item.name,
+            author: {
+                id: item.authorId,
+                name: identities.get(item.authorId)?.name ?? null
+            }
+        }));
     }
 
     return {
@@ -213,13 +196,7 @@ export function createPublicationService(store, objects, clock = () => Date.now(
                 formatVersion: CAPTURE_FORMAT_VERSION,
                 physicsVersion: PHYSICS_VERSION,
                 rulesVersion: RULES_VERSION,
-                encoding: 'gzip',
-                sampleIntervalMs: SAMPLE_INTERVAL_MS,
-                sha256: encodedRun.sha256,
-                compressedBytes: encodedRun.compressedBytes,
-                uncompressedBytes: encodedRun.uncompressedBytes,
-                durationMs: parsed.capture.finishedAtMs,
-                createdAt: publishedAt
+                sha256: encodedRun.sha256
             };
             const packageValue = {
                 formatVersion: 'level-v1',
@@ -273,20 +250,18 @@ export function createPublicationService(store, objects, clock = () => Date.now(
                 runKey,
                 firstAttemptId: parsed.capture.attemptId,
                 catalogSk,
-                authorSk,
-                verification: 'recorded-trace-only'
+                authorSk
             };
 
             try {
                 await objects.putJson(levelKey, packageValue);
-                await objects.putRecording(runKey, encodedRun.body, recording);
+                await objects.putRecording(runKey, encodedRun.body);
                 await store.publishLevel({
                     level,
                     board,
                     payloadFingerprint,
                     publicationRequestId: parsed.publicationRequestId
                 });
-                await objects.markRecordingCurrent(runKey).catch(() => {});
                 return publicationResponse(level);
             } catch (error) {
                 const committed = await store.getPublicationReceipt(
@@ -354,23 +329,18 @@ export function createPublicationService(store, objects, clock = () => Date.now(
                 items: await rowsFor(matches.slice(0, CATALOG_PAGE_SIZE)),
                 cursor: remaining === 0
                     ? null
-                    : catalogCursor(nextStoreCursor, query, remaining),
-                searchScope: query ? 'latest-100' : 'all-recent-first',
-                inspected
+                    : catalogCursor(nextStoreCursor, query, remaining)
             };
         },
 
-        // status: 'public' or 'retired' to list only those (omitted lists both).
         // query: part of the name, normalized like the catalog search.
-        async mine(identity, cursor, status, queryValue) {
-            if (status !== undefined && !['public', 'retired'].includes(status))
-                throw new ApiError(400, 'INVALID_STATUS');
+        async mine(identity, cursor, queryValue) {
             const query = normalizeQuery(queryValue);
             let page;
             let items;
             do {
                 try {
-                    page = await store.queryAuthorLevels(identity.id, cursor, 20, status);
+                    page = await store.queryAuthorLevels(identity.id, cursor, 20, 'public');
                 } catch (error) {
                     if (error?.message === 'Invalid cursor')
                         throw new ApiError(400, 'INVALID_CURSOR');
@@ -382,15 +352,7 @@ export function createPublicationService(store, objects, clock = () => Date.now(
                 // A filtered page can be empty although more levels follow: keep reading.
             } while (!items.length && cursor);
             return {
-                activeCount: (await store.getAuthorState(identity.id))?.activePublications ?? 0,
-                limit: MAX_ACTIVE_PUBLICATIONS,
-                items: items.map((item) => ({
-                    id: item.levelId,
-                    name: item.name,
-                    status: item.visibility,
-                    publishedAt: item.publishedAt,
-                    retiredAt: item.retiredAt ?? null
-                })),
+                items: items.map((item) => ({ id: item.levelId, name: item.name })),
                 cursor
             };
         },
@@ -426,14 +388,7 @@ export function createPublicationService(store, objects, clock = () => Date.now(
                 }
                 throw error;
             }
-            const board = await store.getLeaderboard(`public:${id}`);
-            if (board?.championRecording?.key) {
-                await objects.markRecordingOrphan(
-                    board.championRecording.key,
-                    retiredAt + ORPHAN_GRACE_MS
-                ).catch(() => {});
-            }
-            return { id, status: 'retired', retiredAt };
+            return { id, status: 'retired' };
         },
 
         async copy(identity, idValue) {

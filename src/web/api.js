@@ -506,7 +506,7 @@ Module['api'] = (() => {
             if (catalogState.mine && status !== 'ready') throw new Error('NO_IDENTITY');
             const search = `query=${encodeURIComponent(catalogState.query)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
             const result = await request(catalogState.mine
-                ? `/me/levels?status=public&${search}`
+                ? `/me/levels?${search}`
                 : `/levels?${search}`);
             if (generation !== catalogGeneration) return;
             if (pushPrevious) catalogState.previous.push(catalogState.currentCursor);

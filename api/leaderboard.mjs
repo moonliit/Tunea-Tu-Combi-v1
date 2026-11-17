@@ -96,7 +96,6 @@ function submissionState(board, identityId, attemptId, idempotent) {
     const ownEntry = ownIndex >= 0 ? board.entries[ownIndex] : null;
     return {
         attemptId,
-        classified: ownEntry?.attemptId === attemptId,
         rank: ownEntry?.attemptId === attemptId ? ownIndex + 1 : null,
         previousBestRetained: Boolean(ownEntry && ownEntry.attemptId !== attemptId),
         idempotent
@@ -117,14 +116,12 @@ async function responseFor(store, levelId, board, submission = null) {
         name: identities.get(entry.combiId)?.name ?? null,
         attemptId: entry.attemptId,
         runRef: index === 0 && recording ? recording.key : null,
-        submittedAt: entry.submittedAt,
         statistics: entry.statistics,
         score: entry.score
     }));
     return {
         levelId,
         rulesVersion: RULES_VERSION,
-        verification: recording ? 'recorded-trace-only' : 'statistics-only',
         championRunRef: recording?.key ?? null,
         championRecording: recording
             ? { status: 'ready', ...recording }
@@ -142,8 +139,7 @@ const retryable = (error) =>
 export function createLeaderboardService(
     store,
     clock = () => Date.now(),
-    pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
-    objects = null
+    pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
 ) {
     const progress = createProgressService(store, clock);
 
@@ -233,12 +229,6 @@ export function createLeaderboardService(
                         next,
                         parsed.publicId
                     );
-                    if (board.championRecording && !next.championRecording && objects) {
-                        await objects.markRecordingOrphan(
-                            board.championRecording.key,
-                            clock() + 24 * 60 * 60 * 1000
-                        ).catch(() => {});
-                    }
                     return responseFor(
                         store,
                         parsed.levelId,

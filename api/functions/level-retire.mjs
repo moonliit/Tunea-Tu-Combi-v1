@@ -9,7 +9,7 @@ export const handler = route({
     path: /^\/api\/v1\/levels\/([^/]+)$/,
     session: 'identity',
     run: async ({ identity, params }) => {
-        const publications = await container.publications();
+        const publications = await container.publications({ objects: false });
         return respond(200, await publications.retire(identity, publicIdOf(params[0])));
     }
 });

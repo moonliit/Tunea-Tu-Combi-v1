@@ -7,7 +7,7 @@ export const handler = route({
     method: 'GET',
     path: /^\/api\/v1\/levels\/([^/]+)\/leaderboard$/,
     run: async ({ params }) => {
-        const leaderboard = await container.leaderboard({ objects: false });
+        const leaderboard = await container.leaderboard();
         return respond(200, await leaderboard.get(params[0]));
     }
 });
