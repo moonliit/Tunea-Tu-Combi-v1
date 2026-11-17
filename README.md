@@ -99,13 +99,13 @@ Las versiones editadas se prepararon en Audacity con la librería Bit Crusher y 
 
 ## Grabaciones del campeón
 
-Se muestrean a 20 Hz, con límites de 10 minutos, 2 MiB gzip y 32 MiB
-descomprimidos. Solo el campeón actual queda permanente. Los archivos huérfanos
-tienen 24 horas de gracia.
+Se muestrean a 20 Hz, con límites de 2 MiB gzip y 32 MiB descomprimidos. Cada
+partida ganada tiene un id propio (`attemptId`) y cada grabación tiene un hash
+(`sha256`), un código calculado con el contenido del archivo. Para mostrar al
+campeón, el juego toma esos dos datos del ranking y pide la grabación con ellos.
 
 ## Referencias de arquitectura
 - Lambda con Node.js y módulos `.mjs`:  https://docs.aws.amazon.com/lambda/latest/dg/nodejs-handler.html
 - API Gateway HTTP API con integración Lambda proxy:  https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html
 - S3 privado como origen de CloudFront mediante OAC: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html
 - Transacciones y escrituras condicionales en DynamoDB: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/transaction-apis.html
-- Ejecución programada de la limpieza con EventBridge: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-run-lambda-schedule.html

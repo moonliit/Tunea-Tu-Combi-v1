@@ -1,7 +1,6 @@
 # API (AWS Lambda)
 
-Una Lambda por cada llamada HTTP del juego, más una para la limpieza
-programada. Están en `functions/`.
+Una Lambda por cada llamada HTTP del juego. Están en `functions/`.
 
 ```text
 api/
@@ -11,8 +10,7 @@ api/
 ├── identity.mjs, leaderboard.mjs, recordings.mjs, publications.mjs
 │                  # reglas del dominio, sin HTTP
 ├── store.mjs      # DynamoDB (una sola tabla)
-├── objects.mjs    # S3
-└── scoring.mjs    # puntaje, igual que src/scoring/ScoreRules.cpp
+└── objects.mjs    # S3
 ```
 
 ## Rutas
@@ -35,15 +33,13 @@ El nivel va en la URL como `{levelId}`, que puede ser:
 | `leaderboard-get` | `GET /levels/{levelId}/leaderboard` | 200 |
 | `attempt-submit` | `PUT /levels/{levelId}/attempts/{attemptId}` | 201 si el intento es nuevo, 200 si ya existía |
 | `recording-upload` | `PUT /levels/{levelId}/attempts/{attemptId}/recording` | 201 si es nueva, 200 si ya existía |
-| `recording-champion-get` | `GET /levels/{levelId}/leaderboard/champion/recording` | 200, sin caché |
-| `recording-attempt-get` | `GET /levels/{levelId}/attempts/{attemptId}/recording?sha256=` | 200, caché de 1 h |
+| `recording-attempt-get` | `GET /levels/{levelId}/attempts/{attemptId}/recording?sha256=` | 200, caché de 1 h. El juego conoce el intento y el hash del campeón por el ranking |
 | `level-list` | `GET /levels?query=&cursor=` | 200 |
 | `level-get` | `GET /levels/{levelId}` | 200, o 404 |
 | `level-publish` | `POST /levels` | 201 con `Location`, 200 si ya estaba aplicado |
-| `level-list-mine` | `GET /me/levels?status=&query=&cursor=` | 200 |
+| `level-list-mine` | `GET /me/levels?query=&cursor=` | 200 |
 | `level-retire` | `DELETE /levels/{levelId}` | 200 |
 | `level-copy` | `POST /levels/{levelId}/copies` | 200, con el borrador en la respuesta |
-| `recordings-cleanup` | EventBridge, no es HTTP | - |
 
 - Las solicitudes que escriben piden `Origin` igual a `PUBLIC_ORIGIN` y la
   cabecera `x-combi-request: 1`. El `content-type` solo se pide si hay cuerpo.
@@ -54,8 +50,8 @@ El nivel va en la URL como `{levelId}`, que puede ser:
   un `official:<n>` responden 404 `LEVEL_NOT_FOUND`.
 - `levelId` y `attemptId` van en la URL, no en el cuerpo. `attempt-submit`
   rechaza un cuerpo que los traiga.
-- Las grabaciones por hash no cambian, así que se cachean 1 h. No más, porque al
-  retirar un nivel se borran a las 24 h.
+- Las grabaciones por hash no cambian, así que se cachean 1 h. Las grabaciones
+  reemplazadas o de niveles eliminados no se borran de S3.
 
 ## Variables y permisos
 
@@ -66,14 +62,12 @@ El nivel va en la URL como `{levelId}`, que puede ser:
 | `session-create` | x | | x | lectura y escritura transaccional | - |
 | `identity-rename` | x | | x | lectura y escritura transaccional | - |
 | `leaderboard-get` | x | | | lectura | - |
-| `attempt-submit` | x | x | x | lectura y escritura (también transaccional) | `PutObjectTagging` |
-| `recording-upload` | x | x | x | lectura y escritura | `PutObject`, `PutObjectTagging` |
-| `recording-champion-get` | x | x | | lectura | `GetObject`, `ListBucket` |
+| `attempt-submit` | x | | x | lectura y escritura (también transaccional) | - |
+| `recording-upload` | x | x | x | lectura y escritura | `PutObject` |
 | `recording-attempt-get` | x | x | | lectura | `GetObject`, `ListBucket` |
 | `level-list` | x | | | lectura | - |
 | `level-get` | x | x | | lectura | `GetObject`, `ListBucket` |
-| `level-publish` | x | x | x | lectura y escritura transaccional | `PutObject`, `PutObjectTagging`, `DeleteObject` |
+| `level-publish` | x | x | x | lectura y escritura transaccional | `PutObject`, `DeleteObject` |
 | `level-list-mine` | x | | | lectura | - |
-| `level-retire` | x | x | x | lectura y escritura transaccional | `PutObjectTagging` |
+| `level-retire` | x | | x | lectura y escritura transaccional | - |
 | `level-copy` | x | x | x | lectura | `GetObject`, `ListBucket` |
-| `recordings-cleanup` | x | x | | lectura | `ListBucket`, `GetObjectTagging`, `PutObjectTagging`, `DeleteObject` |

@@ -242,7 +242,8 @@ Module['api'] = (() => {
                     formatVersion: payload.formatVersion,
                     physicsVersion: payload.physicsVersion,
                     rulesVersion: payload.rulesVersion,
-                    statistics: payload.statistics
+                    statistics: payload.statistics,
+                    score: payload.localScore
                 })
                 : await request(`${levelPath(payload.levelId)}/leaderboard`);
             if (generation !== leaderboardGeneration) return;
@@ -254,7 +255,7 @@ Module['api'] = (() => {
                 championRunRef: result.championRunRef ?? '',
                 championRecording: result.championRecording ?? { status: 'unavailable' },
                 message: ownsRun
-                    ? 'Puntaje recalculado por el servidor. La física no fue verificada.'
+                    ? 'Puntaje enviado al ranking. La física no fue verificada.'
                     : 'Resultado local no enviado. La identidad de la partida ya no está disponible.'
             };
             const currentChampion = result.entries?.[0];
@@ -492,12 +493,7 @@ Module['api'] = (() => {
     }
     const publicationMessages = {
         ATTEMPT_ALREADY_PUBLISHED: 'Esta victoria ya fue usada para publicar.',
-        DRAFT_CHANGED_AFTER_WIN: 'El borrador cambió después de la victoria. Complétalo otra vez.',
         DRAFT_ALREADY_PUBLISHED: 'Este borrador ya originó una publicación. Crea una copia desde Comunidad para editarlo y volver a publicarlo.',
-        INVALID_CAPTURE: 'La grabación no cumple los límites de publicación.',
-        INVALID_GOAL_WINDOW: 'La grabación no confirma los tres segundos del chofer.',
-        INVALID_LEVEL: 'El nivel supera los límites permitidos o tiene datos inválidos.',
-        INVALID_LEVEL_NAME: 'Nombre de 3 a 40 letras, números, espacios, - o _.',
         PUBLICATION_LIMIT: 'Ya tienes cinco publicaciones activas. Elimina una antes de publicar.',
         RETRY_PUBLICATION: 'Hubo otra publicación simultánea. Vuelve a intentarlo.'
     };
@@ -510,7 +506,7 @@ Module['api'] = (() => {
             if (catalogState.mine && status !== 'ready') throw new Error('NO_IDENTITY');
             const search = `query=${encodeURIComponent(catalogState.query)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
             const result = await request(catalogState.mine
-                ? `/me/levels?status=public&${search}`
+                ? `/me/levels?${search}`
                 : `/levels?${search}`);
             if (generation !== catalogGeneration) return;
             if (pushPrevious) catalogState.previous.push(catalogState.currentCursor);

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { ApiError } from './identity.mjs';
-import { calculateScore, RULES_VERSION } from './scoring.mjs';
 import { officialLevelNumber } from './level-id.mjs';
 import { createProgressService } from './progress.mjs';
 
 export const CAPTURE_FORMAT_VERSION = 'run-v2';
 export const PHYSICS_VERSION = 'custom-physics-v1';
+// The score formula lives in the game (src/scoring/ScoreRules.cpp); this only names its version.
+export const RULES_VERSION = 'score-v2';
 
 const MAX_ENTRIES = 5;
 const MAX_RECEIPTS = 32;
@@ -19,20 +20,6 @@ const STAT_KEYS = [
     'passengersCollected',
     'passengersDelivered'
 ];
-const BODY_KEYS = [
-    'attemptId',
-    'formatVersion',
-    'levelId',
-    'physicsVersion',
-    'rulesVersion',
-    'statistics'
-];
-
-const exactKeys = (value, keys) =>
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    JSON.stringify(Object.keys(value).sort()) === JSON.stringify(keys);
 
 function parseLevelId(value) {
     if (typeof value !== 'string') throw new ApiError(400, 'INVALID_LEVEL');
@@ -42,31 +29,10 @@ function parseLevelId(value) {
     return { levelId: value, publicId: match[1] };
 }
 
-export function validateStatistics(value) {
-    if (!exactKeys(value, STAT_KEYS)) throw new ApiError(400, 'INVALID_STATISTICS');
-    if (!Object.values(value).every(Number.isSafeInteger))
-        throw new ApiError(400, 'INVALID_STATISTICS');
-    if (
-        value.initialParts < 1 ||
-        value.initialParts > 256 ||
-        value.passengersCollected < 0 ||
-        value.passengersCollected > 64 ||
-        value.passengersDelivered < 0 ||
-        value.passengersDelivered > value.passengersCollected ||
-        value.partsDelivered < 0 ||
-        value.partsDelivered > value.initialParts ||
-        value.driverTimeMs < 0 ||
-        value.driverTimeMs > 3600000
-    ) {
-        throw new ApiError(400, 'INVALID_STATISTICS');
-    }
-    const score = calculateScore(value);
-    if (!score.valid) throw new ApiError(400, 'INVALID_STATISTICS');
-    return score;
-}
+export const isObject = (value) =>
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 function parseSubmission(body) {
-    if (!exactKeys(body, BODY_KEYS)) throw new ApiError(400, 'INVALID_ATTEMPT');
     const level = parseLevelId(body.levelId);
     if (typeof body.attemptId !== 'string' || !ATTEMPT_ID.test(body.attemptId))
         throw new ApiError(400, 'INVALID_ATTEMPT');
@@ -76,7 +42,10 @@ function parseSubmission(body) {
         throw new ApiError(409, 'PHYSICS_VERSION_MISMATCH');
     if (body.formatVersion !== CAPTURE_FORMAT_VERSION)
         throw new ApiError(409, 'FORMAT_VERSION_MISMATCH');
-    return { ...level, score: validateStatistics(body.statistics) };
+    // the game calculates the score; the server stores and ranks it as it comes
+    if (!isObject(body.statistics) || !isObject(body.score))
+        throw new ApiError(400, 'INVALID_ATTEMPT');
+    return { ...level, score: body.score };
 }
 
 function compareEntries(first, second) {
@@ -127,7 +96,6 @@ function submissionState(board, identityId, attemptId, idempotent) {
     const ownEntry = ownIndex >= 0 ? board.entries[ownIndex] : null;
     return {
         attemptId,
-        classified: ownEntry?.attemptId === attemptId,
         rank: ownEntry?.attemptId === attemptId ? ownIndex + 1 : null,
         previousBestRetained: Boolean(ownEntry && ownEntry.attemptId !== attemptId),
         idempotent
@@ -148,14 +116,12 @@ async function responseFor(store, levelId, board, submission = null) {
         name: identities.get(entry.combiId)?.name ?? null,
         attemptId: entry.attemptId,
         runRef: index === 0 && recording ? recording.key : null,
-        submittedAt: entry.submittedAt,
         statistics: entry.statistics,
         score: entry.score
     }));
     return {
         levelId,
         rulesVersion: RULES_VERSION,
-        verification: recording ? 'recorded-trace-only' : 'statistics-only',
         championRunRef: recording?.key ?? null,
         championRecording: recording
             ? { status: 'ready', ...recording }
@@ -173,8 +139,7 @@ const retryable = (error) =>
 export function createLeaderboardService(
     store,
     clock = () => Date.now(),
-    pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
-    objects = null
+    pause = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
 ) {
     const progress = createProgressService(store, clock);
 
@@ -264,12 +229,6 @@ export function createLeaderboardService(
                         next,
                         parsed.publicId
                     );
-                    if (board.championRecording && !next.championRecording && objects) {
-                        await objects.markRecordingOrphan(
-                            board.championRecording.key,
-                            clock() + 24 * 60 * 60 * 1000
-                        ).catch(() => {});
-                    }
                     return responseFor(
                         store,
                         parsed.levelId,

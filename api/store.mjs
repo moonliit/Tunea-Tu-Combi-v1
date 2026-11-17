@@ -107,16 +107,6 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
             return new Map(items.map((item) => [item.id, item]));
         },
 
-        async getLeaderboards(levelIds) {
-            const items = await batchGet(
-                levelIds.map((id) => key(`LEADERBOARD#${id}`))
-            );
-            return new Map(items.map((item) => [
-                item.PK.slice('LEADERBOARD#'.length),
-                item
-            ]));
-        },
-
         async isPublicLevel(publicId) {
             return (await get(`LEVEL#${publicId}`))?.visibility === 'public';
         },
@@ -197,8 +187,7 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
                 current?.championRecording?.key === recording.key &&
                 current.entries?.[0]?.combiId === combiId &&
                 current.entries?.[0]?.attemptId === attemptId
-            ) return { idempotent: true, previous: current.championRecording };
-            const previous = current?.championRecording ?? null;
+            ) return { idempotent: true };
             const update = {
                 TableName: table,
                 Key: key(`LEADERBOARD#${levelId}`),
@@ -233,7 +222,7 @@ export function createStore(table, client = DynamoDBDocumentClient.from(new Dyna
             } else {
                 await client.send(new UpdateCommand(update));
             }
-            return { idempotent: false, previous };
+            return { idempotent: false };
         },
 
         async publishLevel({ level, board, payloadFingerprint, publicationRequestId }) {

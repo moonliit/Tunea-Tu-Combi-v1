@@ -25,10 +25,6 @@ Parameters:
     Default: 100
     MinValue: 1
     Description: Requests the whole API accepts in a short burst.
-  CleanupSchedule:
-    Type: String
-    Default: rate(6 hours)
-    Description: How often expired recordings are deleted from S3.
 
 Globals:
   Function:
@@ -330,9 +326,6 @@ Resources:
             - Effect: Allow
               Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
               Resource: !GetAtt Table.Arn
-            - Effect: Allow
-              Action: s3:PutObjectTagging
-              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
 
   RecordingUploadFunction:
     Type: AWS::Serverless::Function
@@ -350,27 +343,8 @@ Resources:
               Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
               Resource: !GetAtt Table.Arn
             - Effect: Allow
-              Action: [s3:PutObject, s3:PutObjectTagging]
+              Action: s3:PutObject
               Resource: !Sub '${ContentBucket.Arn}/recordings/*'
-
-  RecordingChampionGetFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Description: GET /api/v1/levels/{levelId}/leaderboard/champion/recording
-      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
-      CodeUri: ../build/api/
-      Handler: functions/recording-champion-get.handler
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
-              Resource: !GetAtt Table.Arn
-            - Effect: Allow
-              Action: s3:GetObject
-              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
-            - Effect: Allow
-              Action: s3:ListBucket
-              Resource: !GetAtt ContentBucket.Arn
 
   RecordingAttemptGetFunction:
     Type: AWS::Serverless::Function
@@ -443,9 +417,6 @@ Resources:
               Resource:
                 - !Sub '${ContentBucket.Arn}/levels/*'
                 - !Sub '${ContentBucket.Arn}/recordings/*'
-            - Effect: Allow
-              Action: s3:PutObjectTagging
-              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
 
   LevelListMineFunction:
     Type: AWS::Serverless::Function
@@ -472,9 +443,6 @@ Resources:
             - Effect: Allow
               Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem, dynamodb:ConditionCheckItem]
               Resource: !GetAtt Table.Arn
-            - Effect: Allow
-              Action: s3:PutObjectTagging
-              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
 
   LevelCopyFunction:
     Type: AWS::Serverless::Function
@@ -494,37 +462,6 @@ Resources:
             - Effect: Allow
               Action: s3:ListBucket
               Resource: !GetAtt ContentBucket.Arn
-
-  # Not an HTTP route: EventBridge starts it on a schedule.
-  RecordingsCleanupFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Description: Deletes expired recordings from S3
-      # build/api is staged by infra/deploy.sh: api/ with production dependencies only
-      CodeUri: ../build/api/
-      Handler: functions/recordings-cleanup.handler
-      Timeout: 300
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action: [dynamodb:GetItem, dynamodb:BatchGetItem, dynamodb:Query]
-              Resource: !GetAtt Table.Arn
-            - Effect: Allow
-              Action: s3:ListBucket
-              Resource: !GetAtt ContentBucket.Arn
-              Condition:
-                StringLike: { 's3:prefix': 'recordings/*' }
-            - Effect: Allow
-              Action: [s3:GetObjectTagging, s3:PutObjectTagging, s3:DeleteObject]
-              Resource: !Sub '${ContentBucket.Arn}/recordings/*'
-      EventInvokeConfig:
-        MaximumRetryAttempts: 1
-        MaximumEventAgeInSeconds: 3600
-      Events:
-        Schedule:
-          Type: Schedule
-          Properties:
-            Schedule: !Ref CleanupSchedule
 
   # ------------------------------------------------------------------ routes
   # For each function: how API Gateway reaches it (integration), which call
@@ -599,16 +536,6 @@ Resources:
   RecordingUploadPermission:
     Type: AWS::Lambda::Permission
     Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref RecordingUploadFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
-
-  RecordingChampionGetIntegration:
-    Type: AWS::ApiGatewayV2::Integration
-    Properties: { ApiId: !Ref HttpApi, IntegrationType: AWS_PROXY, PayloadFormatVersion: '2.0', IntegrationUri: !GetAtt RecordingChampionGetFunction.Arn }
-  RecordingChampionGetRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties: { ApiId: !Ref HttpApi, RouteKey: 'GET /api/v1/levels/{levelId}/leaderboard/champion/recording', Target: !Sub 'integrations/${RecordingChampionGetIntegration}' }
-  RecordingChampionGetPermission:
-    Type: AWS::Lambda::Permission
-    Properties: { Action: 'lambda:InvokeFunction', Principal: apigateway.amazonaws.com, FunctionName: !Ref RecordingChampionGetFunction, SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*' }
 
   RecordingAttemptGetIntegration:
     Type: AWS::ApiGatewayV2::Integration

@@ -42,18 +42,12 @@ export const container = {
         return createIdentityService(await store());
     }),
 
-    // objects: false for functions that never read or tag S3 objects
-    leaderboard: ({ objects = true } = {}) =>
-        memo(`leaderboard:${objects}`, async () => {
-            const { createLeaderboardService } = await import('./leaderboard.mjs');
-            return createLeaderboardService(
-                await store(),
-                undefined,
-                undefined,
-                objects ? await objectStore() : null
-            );
-        }),
+    leaderboard: () => memo('leaderboard', async () => {
+        const { createLeaderboardService } = await import('./leaderboard.mjs');
+        return createLeaderboardService(await store());
+    }),
 
+    // objects: false for functions that never read or write S3 objects
     publications: ({ objects = true } = {}) =>
         memo(`publications:${objects}`, async () => {
             const { createPublicationService } = await import('./publications.mjs');
