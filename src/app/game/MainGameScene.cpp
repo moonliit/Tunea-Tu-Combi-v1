@@ -35,8 +35,21 @@ constexpr float PreviewSplitHoldSeconds = 0.35f;
 constexpr float PreviewSplitPanSeconds = 0.55f;
 constexpr float PreviewSplitZoomInSeconds = 0.85f;
 
-Rectangle ResultsReturnButton(int width, int height) {
-    return UiButton::CenteredAtBottom(width, height, 210.0f, 64.0f, 20.0f);
+struct ResultsActions {
+    Rectangle retry;
+    Rectangle back;
+};
+
+ResultsActions GetResultsActions(int width, int height) {
+    Rectangle back = UiButton::CenteredAtBottom(
+        width, height, 210.0f, 64.0f, 20.0f
+    );
+    constexpr float gap = 14.0f;
+    Rectangle retry = back;
+    retry.x = (static_cast<float>(width) -
+        (retry.width + gap + back.width)) / 2.0f;
+    back.x = retry.x + retry.width + gap;
+    return {retry, back};
 }
 
 struct ExitConfirmDialogLayout {
@@ -48,6 +61,10 @@ struct ExitConfirmDialogLayout {
 ExitConfirmDialogLayout GetExitConfirmDialogLayout(int width, int height) {
     constexpr float dialogWidth = 610.0f;
     constexpr float dialogHeight = 200.0f;
+    constexpr float actionWidth = 186.0f;
+    constexpr float actionHeight = 80.0f;
+    constexpr float actionGap = 40.0f;
+    constexpr float actionTop = 110.0f;
 
     const Rectangle dialog{
         (static_cast<float>(width) - dialogWidth) / 2.0f,
@@ -55,11 +72,14 @@ ExitConfirmDialogLayout GetExitConfirmDialogLayout(int width, int height) {
         dialogWidth,
         dialogHeight
     };
+    const float actionsX = dialog.x +
+        (dialog.width - (2.0f * actionWidth + actionGap)) / 2.0f;
 
     return {
         dialog,
-        Rectangle{dialog.x + 50.0f, dialog.y + 110.0f, 186.0f, 80.0f},
-        Rectangle{dialog.x + 246.0f, dialog.y + 110.0f, 186.0f, 80.0f}
+        Rectangle{actionsX, dialog.y + actionTop, actionWidth, actionHeight},
+        Rectangle{actionsX + actionWidth + actionGap, dialog.y + actionTop,
+            actionWidth, actionHeight}
     };
 }
 
@@ -401,10 +421,13 @@ void MainGameScene::ProcessInput(float dt) {
         return;
     }
     if (m_stateMachine.IsResultsMode()) {
-        const Rectangle returnButton = ResultsReturnButton(
+        const ResultsActions actions = GetResultsActions(
             m_appContext->windowWidth, m_appContext->windowHeight
         );
-        if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(returnButton)) {
+        if (IsKeyPressed(KEY_ESCAPE) || UiButton::WasClicked(actions.retry)) {
+            m_appContext->audioController->PlayUiClick();
+            ResetToBuildMode();
+        } else if (IsKeyPressed(KEY_ENTER) || UiButton::WasClicked(actions.back)) {
             ReturnToLevelSelector();
         }
         return;
@@ -1456,6 +1479,7 @@ void MainGameScene::RenderDamageParticles() const {
 
 void MainGameScene::ResetToBuildMode() {
     m_appContext->audioController->StopVictory();
+    m_levelCompleted = false;
     m_elapsedMs = 0.0;
     m_goalWindow.Reset();
     m_previousPartPositions.clear();
@@ -2141,34 +2165,55 @@ void MainGameScene::RenderResults() const {
         );
     }
 
-    const Rectangle returnButton = ResultsReturnButton(width, height);
+    const ResultsActions actions = GetResultsActions(width, height);
     UiButton::DrawTextured(
-        returnButton,
-        m_appContext->textureLibrary->GetUi().resultsBack,
+        actions.retry,
+        ui.resultsRetry,
+        true,
+        "Reintentar"
+    );
+    UiButton::DrawTextured(
+        actions.back,
+        ui.resultsBack,
         true,
         "Volver"
     );
-    constexpr int enterSize = 11;
-    const char* enterLabel = "ENTER";
-    DrawTextFont(
-        enterLabel,
-        static_cast<int>(returnButton.x + returnButton.width -
-            MeasureTextFont(enterLabel, enterSize) - 10.0f),
-        static_cast<int>(returnButton.y + 8.0f),
-        enterSize,
-        bodyText
-    );
+    const auto drawShortcut = [bodyText](Rectangle button, const char* label) {
+        constexpr int fontSize = 11;
+        DrawTextFont(
+            label,
+            static_cast<int>(button.x + button.width -
+                MeasureTextFont(label, fontSize) - 10.0f),
+            static_cast<int>(button.y + 8.0f),
+            fontSize,
+            bodyText
+        );
+    };
+    drawShortcut(actions.retry, "ESC");
+    drawShortcut(actions.back, "ENTER");
     if (m_isEditableDraft && m_appContext->activeCustomLevel >= 0 &&
         m_appContext->customLevels->HasValidApproval(
             static_cast<std::size_t>(m_appContext->activeCustomLevel))) {
-        const char* publishMessage = "¡Ya puedes publicar tu nivel!";
+        constexpr int fontSize = 17;
+        constexpr int lineGap = 3;
+        const char* publishLines[] = {
+            "¡Ya puedes publicar",
+            "tu nivel!"
+        };
         const int messageX = static_cast<int>(
-            returnButton.x + returnButton.width + 18.0f
+            actions.back.x + actions.back.width + 18.0f
         );
-        const int messageY = static_cast<int>(returnButton.y + 22.0f);
-        DrawTextFont(publishMessage, messageX + 1,
-            messageY + 1, 17, BLACK);
-        DrawTextFont(publishMessage, messageX, messageY, 17, GOLD);
+        const int messageY = static_cast<int>(
+            actions.back.y +
+            (actions.back.height - 2 * fontSize - lineGap) / 2.0f
+        );
+        for (int line = 0; line < 2; ++line) {
+            const int y = messageY + line * (fontSize + lineGap);
+            DrawTextFont(publishLines[line], messageX + 1, y + 1,
+                fontSize, BLACK);
+            DrawTextFont(publishLines[line], messageX, y,
+                fontSize, GOLD);
+        }
     }
 }
 

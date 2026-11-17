@@ -192,6 +192,7 @@ void TextureLibrary::Initialize() {
     m_ui.menuCreatePlus = LoadSmoothTexture("assets/textures/ui/main_menu/buttons/add_level_plus.png");
     m_ui.menuBack = LoadButtonSkin("assets/textures/ui/main_menu/buttons/menu");
     m_ui.resultsBack = LoadButtonSkin("assets/textures/ui/results/volver");
+    m_ui.resultsRetry = LoadButtonSkin("assets/textures/ui/results/reintentar");
     m_ui.scoreTotalLabel = LoadSmoothTexture("assets/textures/ui/numbers/total.png");
     for (std::size_t index = 0; index < m_ui.scoreDigits.size(); ++index) {
         const std::string path = std::format(
@@ -280,6 +281,7 @@ void TextureLibrary::Shutdown() {
     UnloadTexture(m_ui.menuCreatePlus);
     UnloadUiSkin(m_ui.menuBack);
     UnloadUiSkin(m_ui.resultsBack);
+    UnloadUiSkin(m_ui.resultsRetry);
     UnloadTexture(m_ui.scoreTotalLabel);
     for (Texture2D& digit : m_ui.scoreDigits) {
         UnloadTexture(digit);

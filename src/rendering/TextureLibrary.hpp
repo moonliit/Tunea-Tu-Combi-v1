@@ -58,6 +58,7 @@ struct UiTextures {
     Texture2D menuCreatePlus{};
     UiButtonSkin menuBack;
     UiButtonSkin resultsBack;
+    UiButtonSkin resultsRetry;
     Texture2D scoreTotalLabel{};
     std::array<Texture2D, 10> scoreDigits{};
     Texture2D scoreMinus{};
